@@ -921,7 +921,7 @@
   function afterFrame() {
     for (const f of hooks.after) f();
     { const c = S.camera(); rcam.copy(c); rcam.userData.of = c; rcam.updateMatrixWorld(true); rcam.updateProjectionMatrix(); rcamOk = true; }
-    if (saved) { const c = sp().camera; c.position.copy(saved.p); c.quaternion.copy(saved.q); saved = null; }
+    if (saved) { const c = saved.cam || sp().camera; c.position.copy(saved.p); c.quaternion.copy(saved.q); saved = null; }   // trả mắt về đúng camera đã lưu
   }
 
   function moveCampus(dt, camera) {
@@ -1023,7 +1023,7 @@
     if (nt !== nearThing) { nearThing = nt; ev.emit('near-thing', nt); }
     if (opt.view === 'first') return;
     // ngôi thứ ba: camera sau lưng góc nhìn của người dùng, khoảng cách CỐ ĐỊNH (không tự phóng to/thu nhỏ); chỉ chặn không cho vượt trần
-    saved = { p: camera.position.clone(), q: camera.quaternion.clone() };
+    saved = { cam: camera, p: camera.position.clone(), q: camera.quaternion.clone() };
     const fl = space.floorOf(me.y + 0.1), base = me.y, ceil = Math.max(base, fl) + space.ceil(fl) - 0.2;
     const el = U.clamp(0.32 + api.pitch * 0.55, 0.02, 1.0);
     const want = api.rider ? Math.min(cam.dist.walk, 1.8) : cam.dist.walk;

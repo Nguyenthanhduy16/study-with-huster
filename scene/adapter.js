@@ -332,8 +332,13 @@
     SceneAPI.buildings = [{ id: 'library', name: 'Thư viện Tạ Quang Bửu', door: { x: 0, z: -1.2 }, out: { x: 0, z: 3.5, yaw: 0 }, label: { x: 0, y: 9.5, z: 4 } }];
 
     /* ---- mỗi khung hình ---- */
-    let last = performance.now();
+    let last = performance.now(), staleFrame = false;
     const frameFn = (dt, now, cam) => {
+      /* Cabin thang máy chuyển A ⇄ B: module cũ gọi show(module mới) GIỮA khung hình của nó rồi vẫn chạy nốt khung đó.
+         Bỏ qua phần còn lại của khung cũ — nếu không, web sẽ đọc camera của khu cũ như mắt của khu mới và sau khi vẽ
+         chép toạ độ khu cũ (lệch OFF) vào camera khu mới ⇒ nhân vật ra khỏi cabin, đứng ngoài tường toà nhà. */
+      staleFrame = !!(H.cur && H.cur.api && H.cur.api.camera && cam && H.cur.api.camera !== cam);
+      if (staleFrame) return;
       if (!switching) {
         const sp = H.cur === C ? 'campus' : H.cur === A ? 'A' : H.cur === B ? 'B' : 'D';
         if (sp !== cur && cur !== 'campus' && sp !== 'campus' && sp !== 'D' && cur !== 'D') { cur = sp; emit('space-changed', sp); } // đi thang máy A ⇄ B
@@ -349,7 +354,7 @@
       for (const f of listeners) f(dt, now, cam);
     };
     A.onFrame = B.onFrame = C.onFrame = frameFn;
-    A.afterFrame = B.afterFrame = C.afterFrame = () => { for (const f of after) f(); };
+    A.afterFrame = B.afterFrame = C.afterFrame = () => { if (staleFrame) { staleFrame = false; return; } for (const f of after) f(); };
     if (D) { D.onFrame = frameFn; D.afterFrame = A.afterFrame; }
 
     /* đi bộ ra khỏi cửa thư viện (bên trong) */
