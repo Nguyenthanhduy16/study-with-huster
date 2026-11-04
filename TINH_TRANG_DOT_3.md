@@ -22,7 +22,8 @@ Lệnh chung: `npm run check && npm test`.
 
 - Kiểm tra cú pháp JavaScript, đường dẫn tài nguyên HTML/CSS và header GLB.
 - `tools/kiem_tra_dieu_khien.mjs`: handler thật trong VM; WASD + kéo chuột, nhiều con trỏ, pinch, cần điều khiển, chat/focus, phím tắt và freeze.
-- `tools/kiem_tra_ghe.mjs`: 12 nhóm hồi quy ghế/đường đi/ghế đầy/NPC/tranh ghế/đứng dậy/đàn/không teleport. Dùng logic thật với bố cục kiểm thử; chưa xác nhận mọi ghế trong cảnh render.
+- `tools/kiem_tra_ghe.mjs`: 14 nhóm hồi quy ghế/đường đi/ghế đầy/NPC/tranh ghế/đứng dậy/đàn/không teleport, thêm điểm rẽ giữa đường và xử lý bị kẹt. Dùng logic thật với bố cục kiểm thử.
+- `tools/kiem_tra_ghe_render.mjs` (`npm run test:render`, cần playwright + Chromium): kiểm tra trong cảnh render thật (SwiftShader). Mỗi loại ghế ở mỗi tầng của A/B/sân thượng/sân (`--all` là mọi ghế): đi tới bằng goSit, nhấn E, bấm chuột; đo gốc nhân vật, khớp hông trên mặt ghế bằng tia, vật đè/xuyên bàn, hướng bàn, đứng dậy ra ô đi được, ghế tầng khác không dịch chuyển. Ảnh chụp lưu vào `--out`.
 - `tools/kiem_tra_tuong_tac.mjs`: 12 kiểm tra radial, phím/chạm/hủy, hoạt động đến muộn, bong bóng và xử lý lỗi WebGL.
 - `tools/test-network.mjs`: khoảng cách Presence, meta ghế/hoạt động, callback kênh cũ, piano/gói lỗi/nốt treo.
 - `tools/offline-features.test.mjs`: hồ sơ, giờ học/nghỉ, câu hỏi/đáp án/điểm sao, ví, chat/chống spam, hỏi đáp/góp ý và giới hạn phần thưởng mini-game.
@@ -40,9 +41,20 @@ Lệnh chung: `npm run check && npm test`.
 4. Đo tải tăng dần trên dịch vụ thật. Chưa có sức chứa đồng thời được xác nhận; broadcast nhân theo số người nhận.
 5. Đưa tệp tĩnh lên hosting sau cấu hình và kiểm tra. Phiên này chưa triển khai production.
 
+## Bổ sung: ngồi ghế trong cảnh render
+
+Chạy `node tools/kiem_tra_ghe_render.mjs --all` trên toàn bộ 491 chỗ ngồi và xem ảnh chụp đã tìm ra:
+
+- Nhiều ghế không ngồi được: tự đi trong thư viện bỏ điểm rẽ sớm (0,45 m) nên cắt góc bàn/hàng ghế. Bước đi chéo bị chặn thì nhân vật đứng im, đường bị hủy âm thầm. Đã giảm ngưỡng điểm rẽ xuống 0,2 m, trượt theo từng trục như trên sân, tìm lại đường một lần và báo cho người chơi nếu vẫn kẹt (không dịch chuyển).
+- Thuyền gỗ tầng 6: hai chỗ ở mỗi đầu nằm ngoài mép đệm. Đã dời vào trong.
+- Tầng 6: hai ghế đen đặt trùng ghế xanh/ghế bành. Đã bỏ chỗ trùng và ẩn món thừa.
+- Tầng 7: chậu cây đè lên lưng 4 ghế dãy bàn cong. Đã dời chậu ra phía kính.
+- Sân thượng: chậu cây góc giàn nằm ngay trước ghế dài. Đã sửa nguồn `tools/nguon/tang10.html` và tạo lại `scene/tang10.js`.
+
 ## Lệnh phát triển
 
 - `npm start`: máy chủ ngoại tuyến, cổng 3000.
 - `npm run dev`: Supabase giả lập, cổng 3000; dùng ?nguoi=1, ?nguoi=2, ?nguoi=3 cho các phiên riêng. Không dùng làm backend production.
 - `npm run check`: kiểm tra nguồn/tài nguyên.
 - `npm test`: các hồi quy Node nêu trên, không cần WebGL hoặc gói npm bên ngoài.
+- `npm run test:render`: kiểm tra ngồi ghế trong cảnh render thật (cổng 3101, tự bật máy chủ ngoại tuyến nếu cổng trống).

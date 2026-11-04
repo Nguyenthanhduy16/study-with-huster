@@ -152,4 +152,23 @@ await check('Sân dùng bán kính va chạm nhân vật, không nhầm floor=0 
   assert.ok(test.seatSpots(space, space.seats[0]).length);
   assert.ok(radii.every(r => r === 0.22));
 });
+await check('Điểm rẽ giữa đường chỉ bỏ qua khi đã sát (không cắt góc bàn/hàng ghế)', () => {
+  const space = makeSpace(); test.reset(space);
+  World.goSit(0); const r = test.route();
+  r.pts = [{ x: 0.35, z: 0 }, { x: 0.35, z: 3 }];
+  const d = test.followRoute(1 / 60);
+  assert.ok(d && d.x > 0.99, 'vẫn đi tới điểm rẽ cách 0,35 m');
+  World.me.x = 0.2; test.followRoute(1 / 60);
+  assert.equal(test.route().pts.length, 1, 'tới sát 0,15 m mới sang đoạn kế');
+});
+await check('Kẹt giữa đường: tìm lại đường một lần, vẫn kẹt thì báo và không dịch chuyển', () => {
+  const space = makeSpace(); test.reset(space);
+  World.goSit(0); const r = test.route(); r.pts = [{ x: 0, z: 5 }]; events.length = 0;
+  for (let k = 0; k < 120; k++) test.followRoute(1 / 60);       // đứng yên 2 giây
+  assert.ok(test.route() && test.route().replanned, 'tìm lại đường từ chỗ đang đứng');
+  for (let k = 0; k < 120; k++) test.followRoute(1 / 60);
+  assert.equal(test.route(), null);
+  assert.ok(events.some(e => e[0] === 'toast' && /vướng/.test(e[1])), 'có thông báo cho người chơi');
+  assert.equal(World.me.x, 0); assert.equal(World.me.z, 0); assert.equal(World.me.seat, -1);
+});
 console.log(`\n${passed} nhóm kiểm thử ghế ĐẠT (không thay thế kiểm tra hình ảnh WebGL).`);

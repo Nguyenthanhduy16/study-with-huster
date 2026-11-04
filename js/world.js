@@ -386,14 +386,28 @@
     showMarker(pts[pts.length - 1].x, me.y, pts[pts.length - 1].z);
     return true;
   }
+  /* bị vướng giữa đường: tìm lại đường một lần từ chỗ đang đứng; vẫn vướng thì báo cho người chơi (không dịch chuyển) */
+  function routeStuck() {
+    const space = sp(), g0 = route.goal;
+    if (!route.replanned && space && g0) {
+      const g = space.grid(space.kind === 'campus' ? 0 : space.floorOf(me.y + 0.1)), pts = g && g.path(me.x, me.z, g0.x, g0.z);
+      if (pts && pts.length) { route.pts = pts; route.replanned = true; route.stuck = 0; return null; }
+    }
+    route = null;
+    ev.emit('toast', 'Bị vướng đường nên chưa tới được chỗ đó. Hãy đi gần hơn rồi thử lại.');
+    return null;
+  }
   /* trả về hướng cần đi (đơn vị) hoặc null khi đã tới */
   function followRoute(dt) {
     if (!route) return null;
+    if (!route.goal && route.pts.length) route.goal = route.pts[route.pts.length - 1];
     let t = route.pts[0];
-    while (t && Math.hypot(t.x - me.x, t.z - me.z) < (route.pts.length === 1 ? route.near : 0.45)) { route.pts.shift(); t = route.pts[0]; }
+    // Điểm giữa đường chỉ coi là tới khi thật sát (0,2 m): bỏ điểm sớm ở góc bàn/hàng ghế
+    // làm đoạn kế tiếp cắt qua góc vật cản và nhân vật kẹt lại ở đó.
+    while (t && Math.hypot(t.x - me.x, t.z - me.z) < (route.pts.length === 1 ? route.near : 0.2)) { route.pts.shift(); t = route.pts[0]; }
     if (!t) { const d = route.done; route = null; d && d(); return null; }
     const moved = Math.hypot(me.x - route.lx, me.z - route.lz); route.lx = me.x; route.lz = me.z;
-    if (moved < 0.2 * dt) { if ((route.stuck += dt) > 1.6) { route = null; return null; } } else route.stuck = 0;
+    if (moved < 0.2 * dt) { if ((route.stuck += dt) > 1.6) return routeStuck(); } else route.stuck = 0;
     const dx = t.x - me.x, dz = t.z - me.z, l = Math.hypot(dx, dz);
     return { x: dx / l, z: dz / l };
   }
@@ -1001,7 +1015,13 @@
       api.keys.f = api.keys.b = api.keys.l = api.keys.r = api.keys.run = 0;
       const sp = 3 * (window.__WALK_K || 0.75) * dt, fl0 = space.floorOf(eye.y - 1.5);
       const tx = eye.x + r.x * sp, tz = eye.z + r.z * sp;
-      if (space.free(tx, tz, fl0) || space.camFree(tx, tz, eye.y - 1.6)) { eye.x = tx; eye.z = tz; } else route.stuck += dt;
+      // Trượt theo từng trục như trên sân: đường A* làm mượt có thể cắt sát góc bàn/ghế,
+      // đi chéo bị chặn thì vẫn trượt dọc mép thay vì đứng im rồi bỏ đường giữa chừng.
+      const okAt = (x, z) => space.free(x, z, fl0) || space.camFree(x, z, eye.y - 1.6);
+      if (okAt(tx, tz)) { eye.x = tx; eye.z = tz; }
+      else if (Math.abs(r.x) > 0.01 && okAt(tx, eye.z)) eye.x = tx;
+      else if (Math.abs(r.z) > 0.01 && okAt(eye.x, tz)) eye.z = tz;
+      else if (route) route.stuck += dt;
       if (space.module === S.spaces.B?.module || space.module === S.spaces.D?.module) { /* độ cao mắt do mô hình tự tính */ }
     }
     // phím + cần điều khiển → bộ đi bộ của mô hình (đi theo hướng camera, A/D đi ngang); ←/→ xoay góc nhìn

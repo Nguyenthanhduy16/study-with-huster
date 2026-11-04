@@ -8,6 +8,7 @@
     "start": "node tools/fake-supabase-server.mjs --port=3000 --offline --csp",
     "check": "node tools/check-source.mjs",
     "test": "node tools/kiem_tra_dieu_khien.mjs && node tools/kiem_tra_ghe.mjs && node tools/kiem_tra_tuong_tac.mjs && node tools/test-network.mjs && node --test tools/*.test.mjs",
-    "test:multiplayer": "node tools/kiem_tra_nhieu_nguoi.mjs"
+    "test:multiplayer": "node tools/kiem_tra_nhieu_nguoi.mjs",
+    "test:render": "node tools/kiem_tra_ghe_render.mjs --port=3101"
   }
 }
