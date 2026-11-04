@@ -1,0 +1,67 @@
+# Cấu hình Netlify cho Phòng ôn thi ảo (web tĩnh, không cần lệnh build).
+# Kéo thả cả thư mục vào https://app.netlify.com/drop, hoặc nối repo Git: Netlify tự đọc file này.
+
+[build]
+  publish = "."
+  command = ""
+
+# ---------- Bảo mật: áp dụng cho mọi trang ----------
+# CSP chỉ cho phép: file của chính trang web, Supabase (https + wss *.supabase.co) và thời tiết Open-Meteo.
+# Nếu dùng tên miền riêng cho Supabase (custom domain), thêm tên miền đó vào connect-src.
+# 'unsafe-inline' cần cho các đoạn <script>/<style> nhỏ viết thẳng trong index.html/admin.html.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+
+# ---------- Bộ nhớ đệm ----------
+# Trang và cấu hình: luôn hỏi lại máy chủ (sửa config.js là mọi người nhận ngay).
+# js/, css/, scene/*.js không đặt gì ⇒ Netlify mặc định "max-age=0, must-revalidate" + ETag (đúng ý: cập nhật là thấy).
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/admin.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+    X-Robots-Tag = "noindex"
+[[headers]]
+  for = "/config.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Thư viện đóng gói sẵn (ít khi đổi): giữ 30 ngày. Nếu nâng cấp thư viện, đổi tên file/thư mục.
+[[headers]]
+  for = "/vendor/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+[[headers]]
+  for = "/scene/vendor/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+# Mô hình 3D sân trước (~9,4 MB): giữ 1 ngày, sau đó dùng bản cũ trong lúc tải bản mới.
+[[headers]]
+  for = "/scene/exterior/thu-vien-ta-quang-buu.glb"
+  [headers.values]
+    Content-Type = "model/gltf-binary"
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+[[headers]]
+  for = "/scene/exterior/luoi-di-chuyen.json"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+# Thư mục công cụ/tài liệu không cần cho người dùng — chặn khỏi máy tìm kiếm.
+[[headers]]
+  for = "/tools/*"
+  [headers.values]
+    X-Robots-Tag = "noindex"

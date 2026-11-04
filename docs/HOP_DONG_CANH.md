@@ -61,11 +61,24 @@ python3 tools/patch_tang10.py
 2. Mở `tools/tao_luoi_san.html` qua máy chủ nhỏ, bấm tải về `luoi-di-chuyen.json` và chép vào `scene/exterior/`. (Nếu quên, web tự tính lại lúc mở, chậm hơn vài giây.)
 3. Nếu cửa chính dời chỗ, sửa `SceneAPI.buildings` và hộp `EXT.solids` trong `scene/adapter.js`.
 
-**Phòng thay đồ (khi bạn sửa trang Phòng thay đồ):** chép các file mới vào `avatar/src/` (giữ phần sửa cho Three r128 — xem chú thích `[r128]` trong `rig.js`, `textures.js`, `studio.js` và đoạn `EMBED` trong `main.js`), rồi
+**Phòng thay đồ (khi bạn sửa trang Phòng thay đồ):** bản gốc là thư mục `avatar-studio` (ES module, three bản mới). Cách đưa vào web:
+1. Chép `js/*.js`, `js/items/*.js`, `data/catalog.js` vào `avatar/src/` (cùng cấu trúc). **Không chép đè** `avatar/src/kit.js` (riêng của web).
+2. Làm lại các chỗ sửa cho Three r128 — tìm chú thích `[r128]` trong bản cũ (`git diff`):
+   - `rig.js`: bật `skinning` trong `attachSkinned`, hàm `linearize()` (đổi màu sRGB → tuyến tính);
+   - `studio.js`, `thumbs.js`: `outputEncoding = sRGBEncoding`, `NoToneMapping`, cường độ đèn kiểu cũ, gọi `linearize` sau khi dựng;
+   - `textures.js`: `t.encoding = sRGBEncoding` (thay `colorSpace`), thêm hàm `cachedImage` (`[game]`);
+   - `items/clothing.js`: màu đỉnh và uniform của áo phối màu phải `convertSRGBToLinear()`, shader dùng `vUv` thay `vMapUv`.
+   - `main.js`: chèn lại đoạn `EMBED` (nút "Huỷ" / "✓ Mặc vào phòng" gửi `postMessage` về web chính).
+3. Ảnh: chép `assets/textures/*` vào `avatar/assets/textures/` và đổi đường dẫn trong `catalog.js` thành `'avatar/assets/textures/…'` (tính từ gốc web).
+4. Giao diện: chép nội dung `css/studio.css` vào thẻ `<style>` của `phong-thay-do.html` (phông chữ lấy từ `vendor/fonts`, không dùng Google Fonts); phần HTML giữ nguyên các `id`.
+5. Đóng gói (esbuild cài ở thư mục tạm để không để lại `node_modules` trong dự án):
 ```bash
-npm i esbuild@0.21.5 && node tools/build_avatar.mjs
+mkdir -p /tmp/esb && (cd /tmp/esb && npm i --no-save esbuild@0.21.5)
+ln -s /tmp/esb/node_modules node_modules && node tools/build_avatar.mjs; rm node_modules
 ```
-để tạo lại `avatar/avatar-kit.js` và `avatar/phong-thay-do.js`.
+để tạo lại `avatar/avatar-kit.js` và `avatar/phong-thay-do.js`. Nếu bản mới dùng API three chưa có ở r128 (ví dụ `CapsuleGeometry` — đã vá trong `tools/build_avatar.mjs`), trình duyệt sẽ báo lỗi khi mở `phong-thay-do.html`.
+
+`avatar-kit.js` (`window.AvatarKit`) tự tải trước ảnh của tủ đồ (`AvatarKit.ready`), chuẩn hoá huy hiệu (cấu hình cũ "Tổ Ong" → nhận diện HUST, chỉ nhận logo có sẵn trong tủ đồ) và giữ màu cố định của dây đeo/vỏ thẻ; `AvatarKit.normalizeState(s)` đổi món không còn trong tủ đồ về món mặc định.
 
 **Sau mỗi lần cập nhật:** mở `tools/kiem_tra_canh.html` qua máy chủ nhỏ (`python3 -m http.server`), phải hiện **"Đạt yêu cầu"**; rồi mở `index.html` chơi thử: sân → cửa → các tầng → thang máy → tầng 10 → ngồi ghế, đàn, kính thiên văn.
 

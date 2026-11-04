@@ -18,6 +18,7 @@
     if (!s || !s.equipped) s = randomState();
     const out = { body: Object.assign({}, d.body, s.body || {}), equipped: Object.assign({}, d.equipped, s.equipped || {}), overrides: {} };
     for (const [id, ov] of Object.entries(s.overrides || {})) if (ITEMS.has(id) && ov && ov.colors) out.overrides[id] = { colors: ov.colors };
+    for (const k in out.equipped) { const id = out.equipped[k]; if (id && !(ITEMS.has(id) && ITEMS.get(id).slot === k)) out.equipped[k] = d.equipped[k] || null; }   // món không còn trong tủ đồ → món mặc định
     if (s.emblem) out.emblem = s.emblem;
     return out;
   }
@@ -68,6 +69,7 @@
   const queue = []; let busy = false;
   function enqueue(fn) { queue.push(fn); if (!busy) pump(); }
   function pump() {
+    if (K.isReady && !K.isReady()) { busy = true; K.ready.then(pump, pump); return; }   // chờ ảnh logo/huy hiệu của tủ đồ tải xong
     const fn = queue.shift(); if (!fn) { busy = false; return; }
     busy = true;
     setTimeout(() => { try { fn(); } catch (e) { console.error(e); } pump(); }, 30);
@@ -78,6 +80,85 @@
     'vay': { d: 2.2, icon: '👋', label: 'Vẫy tay' }, 'co-vu': { d: 2.4, icon: '🙌', label: 'Cổ vũ' }, 'thich': { d: 1.8, icon: '👍', label: 'Thích' },
     'cui-chao': { d: 1.6, icon: '🙇', label: 'Cúi chào' }, 'vuon-vai': { d: 3.0, icon: '🤸', label: 'Vươn vai' }
   };
+  /* hoạt động kéo dài (cầm đồ + tư thế lặp) tới khi người chơi đi, chọn cái khác hoặc bấm "Dừng" */
+  const ACTS = {
+    'doc': { icon: '📖', label: 'Đọc sách' },
+    'dien-thoai': { icon: '📱', label: 'Bấm điện thoại' },
+    'laptop': { icon: '💻', label: 'Dùng laptop' }
+  };
+  /* ---- đạo cụ dựng bằng khối đơn giản (đơn vị: mét của bộ xương, gắn vào xương thân) ---- */
+  const PROP_MAT = {};
+  const pmat = (c, o) => { const k = c + JSON.stringify(o || {}); return PROP_MAT[k] || (PROP_MAT[k] = new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.65 }, o || {}))); };
+  const PROP_GEO = {};
+  const box = (w, h, d) => { const k = w + ':' + h + ':' + d; if (!PROP_GEO[k]) { PROP_GEO[k] = new THREE.BoxGeometry(w, h, d); PROP_GEO[k].userData.keep = true; } return PROP_GEO[k]; };
+  const BOOK_COVERS = ['#2f5d9e', '#a8432f', '#2f7a4f', '#7a3f8f', '#c58a1e'];
+  function buildProp(kind, seed) {
+    const g = new THREE.Group(); g.name = 'act-prop';
+    const add = (geo, m, x, y, z, rx, ry, rz, parent) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx || 0, ry || 0, rz || 0); o.castShadow = true; (parent || g).add(o); return o; };
+    if (kind === 'doc') {                      // sách mở hình chữ V, gáy sách chạy theo trục Z của sách
+      const cover = pmat(BOOK_COVERS[Math.abs(seed | 0) % BOOK_COVERS.length]), paper = pmat('#f6f1e4', { roughness: 0.9 }), ink = pmat('#9aa0ad', { roughness: 0.9 });
+      for (const s of [1, -1]) {
+        const half = new THREE.Group(); half.rotation.z = s * 0.16; g.add(half);
+        add(box(0.13, 0.006, 0.19), cover, s * 0.065, -0.006, 0, 0, 0, 0, half);
+        add(box(0.122, 0.014, 0.18), paper, s * 0.063, 0.004, 0, 0, 0, 0, half);
+        for (let i = 0; i < 6; i++) add(box(0.09, 0.001, 0.007), ink, s * 0.065, 0.0115, -0.06 + i * 0.024, 0, 0, 0, half);
+      }
+    } else if (kind === 'dien-thoai') {
+      add(box(0.072, 0.009, 0.15), pmat('#22252c', { roughness: 0.35 }), 0, 0, 0);
+      add(box(0.064, 0.002, 0.136), pmat('#7fc4ff', { emissive: '#3b8fe0', emissiveIntensity: 0.9, roughness: 0.2 }), 0, 0.0055, 0);
+    } else if (kind === 'laptop') {          // phía người dùng = −Z, bản lề ở +Z
+      const al = pmat('#b9bec8', { metalness: 0.4, roughness: 0.4 });
+      add(box(0.32, 0.018, 0.22), al, 0, 0, 0);
+      add(box(0.28, 0.003, 0.1), pmat('#2b2f38'), 0, 0.0095, 0.025);
+      add(box(0.09, 0.002, 0.05), pmat('#9298a4'), 0, 0.0095, -0.07);
+      const hinge = new THREE.Group(); hinge.position.set(0, 0.009, 0.108); hinge.rotation.x = 0.32; g.add(hinge);
+      add(box(0.32, 0.21, 0.01), al, 0, 0.105, 0, 0, 0, 0, hinge);
+      add(box(0.29, 0.18, 0.002), pmat('#9fd0ff', { emissive: '#4a8fd8', emissiveIntensity: 0.85, roughness: 0.25 }), 0, 0.108, -0.006, 0, 0, 0, hinge);
+    }
+    return g;
+  }
+  const _o = new THREE.Object3D(), _v = new THREE.Vector3();
+  const POLE_L = new THREE.Vector3(0.6, -1, -0.35), POLE_R = new THREE.Vector3(-0.6, -1, -0.35);
+  /* pos/rot: đạo cụ trong toạ độ xương thân (gốc ở khớp hông, +Z phía trước, +X bên trái nhân vật)
+     L/R: cổ tay trái/phải trong toạ độ đạo cụ · head: cúi đầu · tap: tay nào gõ */
+  const ACT_PLACE = {
+    'doc': {
+      stand: { pos: [0, 0.24, 0.3], rot: [-0.8, 0, 0], L: [0.17, -0.03, -0.02], R: [-0.17, -0.03, -0.02], head: 0.4 },
+      desk: { pos: [0, 0.22, 0.31], rot: [-0.8, 0, 0], L: [0.17, -0.03, -0.02], R: [-0.17, -0.03, -0.02], head: 0.38 },
+      lap: { pos: [0, 0.22, 0.3], rot: [-0.8, 0, 0], L: [0.17, -0.03, -0.02], R: [-0.17, -0.03, -0.02], head: 0.38 },
+      lie: { pos: [0, 0.45, 0.33], rot: [-1.05, 0, 0], L: [0.17, -0.03, -0.02], R: [-0.17, -0.03, -0.02], head: 0.12 }
+    },
+    'dien-thoai': {
+      stand: { pos: [-0.03, 0.21, 0.27], rot: [-0.8, 0, 0.1], R: [-0.015, -0.02, 0.0], L: [0.04, -0.02, 0.03], head: 0.5, tap: 'L' },
+      desk: { pos: [-0.03, 0.2, 0.28], rot: [-0.8, 0, 0.1], R: [-0.015, -0.02, 0.0], L: [0.04, -0.02, 0.03], head: 0.48, tap: 'L' },
+      lap: { pos: [-0.03, 0.2, 0.28], rot: [-0.8, 0, 0.1], R: [-0.015, -0.02, 0.0], L: [0.04, -0.02, 0.03], head: 0.48, tap: 'L' },
+      lie: { pos: [-0.03, 0.46, 0.3], rot: [-1.0, 0, 0.1], R: [-0.015, -0.02, 0.0], L: [0.04, -0.02, 0.03], head: 0.15, tap: 'L' }
+    },
+    'laptop': {
+      stand: { pos: [0.02, 0.17, 0.28], rot: [-0.05, 0.1, 0], L: [0.03, -0.035, 0.02], R: [-0.06, 0.03, -0.1], head: 0.34, tap: 'R' },
+      desk: { pos: [0, 0.25, 0.42], rot: [-0.06, 0, 0], L: [0.08, 0.03, -0.12], R: [-0.08, 0.03, -0.12], head: 0.3, tap: 'both' },
+      lap: { pos: [0, 0.08, 0.3], rot: [-0.06, 0, 0], L: [0.08, 0.03, -0.12], R: [-0.08, 0.03, -0.12], head: 0.4, tap: 'both' },
+      lie: { pos: [0, 0.2, 0.26], rot: [0.8, 0, 0], L: [0.08, 0.03, -0.12], R: [-0.08, 0.03, -0.12], head: 0.15, tap: 'both' }
+    }
+  };
+  /* IK hai đoạn: đưa cổ tay tới điểm T (toạ độ của xương thân), khuỷu tay hướng theo P (cũng theo xương thân) */
+  const _t = new THREE.Vector3(), _w0 = new THREE.Vector3(), _e = new THREE.Vector3(), _p = new THREE.Vector3(), _c = new THREE.Vector3();
+  const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+  function reach(j, side, T, pole, w) {
+    const sh = j['shoulder' + side], el = j['elbow' + side], wr = j['wrist' + side]; if (!sh || !el || !wr) return;
+    const L1 = Math.abs(el.position.y) || 0.28, L2 = Math.abs(wr.position.y) || 0.25;
+    _t.copy(T).sub(sh.position);
+    const d = Math.max(Math.abs(L1 - L2) + 0.03, Math.min(L1 + L2 - 0.004, _t.length()));
+    const bend = Math.PI - Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2))));
+    _w0.set(0, -L1 - L2 * Math.cos(bend), L2 * Math.sin(bend)).normalize();
+    _t.normalize(); _q.setFromUnitVectors(_w0, _t);
+    // xoay quanh trục vai→cổ tay để khuỷu tay chỉ về phía "pole" (ra ngoài, xuống dưới)
+    _e.set(0, -1, 0).applyQuaternion(_q); _e.addScaledVector(_t, -_e.dot(_t));
+    _p.copy(pole).addScaledVector(_t, -pole.dot(_t));
+    if (_e.lengthSq() > 1e-6 && _p.lengthSq() > 1e-6) { const a = Math.atan2(_t.dot(_c.crossVectors(_e, _p)), _e.dot(_p)); _q2.setFromAxisAngle(_t, a); _q.premultiply(_q2); }
+    sh.quaternion.slerp(_q, w);
+    el.rotation.x += (-bend - el.rotation.x) * w; el.rotation.y *= 1 - w; el.rotation.z *= 1 - w;
+  }
   /* ảnh thẻ sinh viên (tên + MSSV đã che) để hiện trong hồ sơ */
   function cardImage(style, name, mssv, w = 340) {
     const st = normState(style), em = st.emblem || CAT.defaults.emblem;
@@ -142,6 +223,7 @@
       for (const s of K.SLOT_ORDER) this.buildSlot(s, em);
       this.inner.add(rig.root);
       this.heldObj = null; if (this.heldKind) this.mountHeld();
+      this.propObj = null; if (this.act) this.mountProp();
       if (this.ph) { this.inner.remove(this.ph); this.ph.geometry.dispose(); this.ph = null; }
       this.applyDetail();
       this.update(0, 0);
@@ -178,7 +260,7 @@
       obj.traverse(o => {
         if (o.geometry && !o.geometry.userData.keep && o.geometry !== HITBOX) o.geometry.dispose();
         const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-        for (const m of ms) { if (m === HITMAT) continue; if (m.map) m.map.dispose(); m.dispose(); }
+        for (const m of ms) { if (m === HITMAT || m.userData.keep) continue; if (m.map) m.map.dispose(); m.dispose(); }
       });
     }
     /* gần: hiện đủ chi tiết; xa: chỉ còn người + tóc + quần áo (ít lệnh vẽ) */
@@ -187,6 +269,7 @@
       if (!this.rig) return;
       for (const [slot, sl] of Object.entries(this.slots)) if (FAR_HIDE.has(slot)) for (const p of sl.parts) p.obj.visible = this.near;
       const face = this.rig.joints.head.getObjectByName('face'); if (face) face.visible = this.near;
+      if (this.act && this.slots.handheld) for (const p of this.slots.handheld.parts) p.obj.visible = false;   // đang đọc sách/dùng máy: cất đồ cầm tay của tủ đồ
     }
     setSit(on, desk = true, kind) { this.sit = on; this.desk = desk; this.lie = kind === 'lounger'; if (this.ring) this.ring.visible = !on; this.hit.scale.y = on ? 0.75 : 1; }
     /* hoạt ảnh bằng xương: đứng thở, đi, ngồi (gõ bàn phím khi có bàn) */
@@ -194,7 +277,9 @@
     update(dt, speed) {
       this.basePose(dt, speed);
       const j = this.rig && this.rig.joints; if (!j) return;
-      if (this.heldObj && !this.emo && (this.heldKind === 'coffee' || this.heldKind === 'water' || this.heldKind === 'mango') && !(this.sit && this.desk)) { j.shoulderR.rotation.x -= 0.35; j.elbowR.rotation.x -= 0.95; }
+      if (this.heldObj) this.heldObj.visible = !this.act;           // đang đọc sách / dùng máy thì cất ly cà phê
+      if (this.heldObj && !this.emo && !this.act && (this.heldKind === 'coffee' || this.heldKind === 'water' || this.heldKind === 'mango') && !(this.sit && this.desk)) { j.shoulderR.rotation.x -= 0.35; j.elbowR.rotation.x -= 0.95; }
+      this.applyAct(dt, j);
       this.applyEmote(dt, j);
       this.applyLook(dt, j);
       this.blink(dt);
@@ -225,6 +310,51 @@
       g.position.set(0, -0.06, 0.035); g.rotation.x = k === 'stick' ? -0.15 : 0;
       K.linearize(g); g.traverse(o => { o.userData.avatar = this; });
       this.rig.joints.wristR.add(g); this.heldObj = g;
+    }
+    /* ---- hoạt động kéo dài: 'doc' (đọc sách) | 'dien-thoai' (bấm điện thoại) | 'laptop' (dùng laptop) | null (dừng) ---- */
+    setAct(kind) {
+      kind = ACTS[kind] ? kind : null;
+      if (kind === this.act) return;
+      if (kind) this.actPose = kind;
+      this.act = kind; this.actSeed = (this.actSeed || Math.floor(Math.random() * 97)) + 1;
+      if (this.propObj) { this.propObj.parent && this.propObj.parent.remove(this.propObj); this.propObj = null; }
+      if (kind && this.rig) this.mountProp();
+      this.applyDetail();
+    }
+    mountProp() {
+      if (!this.act || !this.rig) return;
+      const g = buildProp(this.act, this.actSeed);
+      K.linearize && K.linearize(g);
+      g.traverse(o => { o.userData.avatar = this; if (o.material) o.material.userData.keep = true; });
+      this.rig.joints.torso.add(g); this.propObj = g;
+    }
+    /* chỗ đặt đạo cụ (toạ độ xương thân) + điểm cổ tay (toạ độ đạo cụ) theo tư thế: đứng · ngồi bàn · ngồi không bàn · nằm */
+    actPlace(kind) {
+      const post = this.sit ? (this.lie ? 'lie' : this.desk ? 'desk' : 'lap') : 'stand';
+      const P = ACT_PLACE[kind] || ACT_PLACE.doc;
+      return P[post] || P.stand;
+    }
+    applyAct(dt, j) {
+      const want = this.act ? 1 : 0;
+      this.actW = (this.actW || 0) + (want - (this.actW || 0)) * Math.min(1, dt * 6);
+      if (!this.act && this.actW < 0.02) { this.actW = 0; return; }
+      const kind = this.act || this.actPose; if (!kind) return;
+      const P = this.actPlace(kind), w = this.actW, t = this.phase;
+      const o = this.propObj || _o;
+      o.position.set(P.pos[0], P.pos[1], P.pos[2]); o.rotation.set(P.rot[0], P.rot[1], P.rot[2]); o.updateMatrix();
+      if (this.propObj) { const s = 0.4 + 0.6 * Math.min(1, w * 1.5); this.propObj.scale.setScalar(s); }
+      for (const side of ['L', 'R']) {
+        const h = P[side]; if (!h) continue;
+        let dy = 0, dx = 0;
+        if (P.tap === side || P.tap === 'both') {            // gõ phím / chạm màn hình
+          const f = side === 'L' ? 0 : 1.7, burst = Math.sin(t * 0.8 + f) > -0.3 ? 1 : 0.2;
+          dy = Math.max(0, Math.sin(t * 13 + f)) * 0.012 * burst; dx = Math.sin(t * 2.1 + f) * 0.012;
+        }
+        _v.set(h[0] + dx, h[1] + dy, h[2]).applyMatrix4(o.matrix);
+        reach(j, side, _v, side === 'L' ? POLE_L : POLE_R, w);
+      }
+      j.head.rotation.x += (P.head + Math.sin(t * 0.6) * 0.02 - j.head.rotation.x) * w;
+      j.head.rotation.y *= 1 - 0.7 * w;
     }
     /* cử chỉ: kind = 'vay' | 'co-vu' | 'thich' | 'cui-chao' | 'vuon-vai' | 'choc' (chọc xoài) | 'an' (ăn) */
     playEmote(kind) { const E = EMOTES[kind] || EMOTES_HIDDEN[kind]; this.emo = { kind, t: 0, d: E ? E.d : 2 }; }
@@ -318,7 +448,7 @@
       j.elbowL.rotation.x = -0.12 - 0.25 * a; j.elbowR.rotation.x = -0.12 - 0.25 * a + ((this.pose && this.pose.elbowR) || 0);
       j.head.rotation.set(Math.sin(t * 0.7) * 0.03, Math.sin(t * 0.45 + 1) * 0.14 * (1 - a), 0);
     }
-    headY() { return (this.sit ? 1.32 : 1.82) * ((this.state && this.state.body.height) || 0.97); }
+    headY() { return (this.sit ? (this.lie ? 1.0 : 1.32) : 1.82) * ((this.state && this.state.body.height) || 0.97); }
     dispose() { this.disposed = true; this.root.parent && this.root.parent.remove(this.root); if (this.rig) this.disposeTree(this.rig.root); }
   }
 
@@ -350,5 +480,5 @@
     };
   }
 
-  window.AV2 = { Avatar, Preview, normState, randomState, seeded, cardImage, EMOTES, catalog: CAT };
+  window.AV2 = { Avatar, Preview, normState, randomState, seeded, cardImage, EMOTES, ACTS, catalog: CAT };
 })();

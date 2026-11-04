@@ -261,16 +261,16 @@
     loadNotices(); if (net.mode === 'online') loadDms();
     renderTab(); updateActions(); updateZoneLabel();
     if (U.isSmall()) $('#po-side').classList.add('closed');
-    if (!store.get('tip:controls')) {
-      store.set('tip:controls', 1);
-      setTimeout(() => toast(U.isTouch ? '👆 Chạm xuống sàn để tự đi tới · chạm vào ghế để ngồi · kéo cần điều khiển để đi, vuốt để xoay.' : '🖱️ Bấm xuống sàn để tự đi tới · bấm vào ghế để ngồi · W A S D để đi (Shift chạy) · kéo chuột để xoay · cuộn để phóng to.', '', 8000), 1200);
+    if (!store.get('tip:controls2')) {
+      store.set('tip:controls2', 1);
+      setTimeout(() => toast(U.isTouch ? '👆 Chạm xuống sàn để tự đi tới · chạm vào ghế để ngồi · kéo cần điều khiển để đi, vuốt để xoay · giữ nút ✋ để vẫy tay, đọc sách, dùng laptop…' : '🖱️ Bấm xuống sàn để tự đi tới · bấm vào ghế để ngồi · W A S D để đi (Shift chạy) · kéo chuột để xoay · giữ Q để mở vòng hành động (vẫy tay, đọc sách, laptop…).', '', 9000), 1200);
     }
   }
   function presMeta() {
     const m = World.me;
     const hide = A.profile && A.profile.hide_status, pr = A.profile || {};
     const cup = pr.cup && T(pr.cup.until) > Date.now() ? { k: pr.cup.kind, u: T(pr.cup.until) } : null;
-    return { cup, via: store.get('via:day', ''), q: A.queue ? A.queue.ts : null, zone: m.zone, seat: m.seat, sts: m.seatTs, st: hide ? 'hoc' : currentState(), pl: hide ? '' : m.place, sty: m.style, p: [+m.x.toFixed(1), +m.z.toFixed(1), +m.yaw.toFixed(2), +m.y.toFixed(1)], sr: A.profile && A.profile.total ? A.profile.total.stars : 0 };
+    return { act: A.act || null, cup, via: store.get('via:day', ''), q: A.queue ? A.queue.ts : null, zone: m.zone, seat: m.seat, sts: m.seatTs, st: hide ? 'hoc' : currentState(), pl: hide ? '' : m.place, sty: m.style, p: [+m.x.toFixed(1), +m.z.toFixed(1), +m.yaw.toFixed(2), +m.y.toFixed(1)], sr: A.profile && A.profile.total ? A.profile.total.stars : 0 };
   }
   function setProfile(p) {
     if (!p) return;
@@ -306,6 +306,14 @@
       npcDialog(def);
     });
     E.on('emote', k => net.sendEmote(k));
+    /* [act] hoạt động kéo dài của mình (đọc sách / điện thoại / laptop / dừng):
+       - phát ngay cho người cùng khu qua kênh cử chỉ: k = 'act:<loại>:<thời điểm>' ('act::<t>' = dừng)
+         (máy bản cũ nhận được chỉ bỏ qua vì không phải tên cử chỉ)
+       - ghi vào hiện diện { act: { k, t } } để người vào sau / đổi khu cũng thấy */
+    E.on('act', a => { A.act = a; net.sendEmote('act:' + (a.k || '') + ':' + a.t); net.presence.update({ act: a }); updateActions(); });
+    /* ghế ngay cạnh (world.js phát 'near-seat' với số ghế hoặc null) → lời nhắc "🪑 Ngồi xuống [E]" */
+    E.on('near-seat', idx => { const v = idx == null || idx < 0 ? null : idx; if (v !== A.nearSeat) { A.nearSeat = v; updateActions(); } });
+    { const wb = $('#po-wheel-btn'); if (wb) Wheel.bindButton(wb); }
     Games.ev.on('trash', async t => {
       const r = await net.pickTrash().catch(e => ({ ok: false, error: e.message }));
       if (r && r.ok) { Games.removeTrash(t); toast(`🌱 +1 Điểm tình nguyện ảo (hôm nay ${r.today}/30). Cảm ơn bạn giữ sân sạch!`, 'gold'); if (A.profile) { A.profile.volunteer = r.total; A.profile.volunteer_today = r.today; } }
@@ -314,7 +322,12 @@
     $('#po-observe-x').onclick = () => World.setObserve(false);
     $('#po-mini-x').onclick = () => { World.setOpt({ minimap: false }); updateMini(); };
     $('#po-mini-btn').onclick = () => { World.setOpt({ minimap: true }); updateMini(); };
-    E.on('building-click', id => buildingDialog(id));
+    // nhãn toà nhà: không dịch chuyển nữa — nhân vật đi bộ tới cửa chính rồi tự bước vào
+    E.on('building-click', id => {
+      if (World.me.space !== 'campus') return;
+      World.gotoBuildingDoor(id);
+      if (World.me.mode === 'campus') toast('🚶 Đang đi bộ tới cửa chính ' + ((BUILDING_ROOMS[id] || {}).name || '') + '…', '', 3000);
+    });
     E.on('avatar-click', uid => profileDialog(uid));
     E.on('toast', m => toast(m));
   }
@@ -325,30 +338,22 @@
     document.title = z.short + ' · Phòng ôn thi ảo';
   }
 
+  /* Lời nhắc theo ngữ cảnh (KHÔNG còn nút dịch chuyển): nhân vật tự đi bộ tới mọi nơi —
+     cửa chính ⇄ sân, thang máy/cầu thang giữa các tầng. Chỉ hiện nút khi đứng cạnh thứ dùng được. */
   function updateActions() {
     const box = $('#po-actions'), m = World.me;
-    const btn = (label, fn, cls = '', title) => h('button.po-btn' + cls, { onclick: fn, title: title || '' }, label);
+    const kb = k => U.isTouch ? null : h('kbd', null, k);
+    const btn = (label, fn, cls = '', title, key) => h('button.po-btn.po-ctx' + cls, { onclick: fn, title: title || '', 'aria-label': (title || label) }, label, kb(key));
     const items = [];
-    const toCampus = () => World.go('campus', { from: 'library' });
-    if (m.mode === 'campus') {
-      items.push(btn('📚 Vào thư viện', () => World.nearBuilding() ? World.enterLibrary() : World.gotoBuildingDoor('library')));
-      items.push(btn('🏛️ Phòng trong thư viện', () => buildingDialog('library'), '.ghost'));
-      items.push(h('button.po-btn.ghost.po-soon', { disabled: true, title: 'Cả khuôn viên trường sẽ mở ở đợt sau' }, '🌳 Dạo sân trường · Sắp mở'));
-    } else if (m.mode === 'seat') {
-      items.push(btn('🧍 Đứng dậy', () => World.standUp(), '.ghost', 'Hoặc bấm W / ↑'));
-      if (m.space !== 'campus') {
-        items.push(btn('🔄 Đổi chỗ', () => { World.changeSeat(null); toast('Đã đổi sang chỗ khác. Mẹo: bấm thẳng vào một ghế trống để ngồi.'); }, '.ghost'));
-        items.push(btn('🚪 Ra sân', toCampus, '.ghost'));
-      } else items.push(btn('📚 Vào thư viện', () => { World.standUp(); World.gotoBuildingDoor('library'); }));
-    } else if (m.mode === 'walk') {
-      items.push(btn('🪑 Ngồi ghế gần nhất', () => World.sitNearest()));
-      items.push(btn('🏛️ Các tầng', () => buildingDialog('library'), '.ghost'));
-      items.push(btn('🚪 Ra sân', toCampus, '.ghost'));
+    if (m.mode === 'seat') {
+      items.push(btn('🧍 Đứng dậy', () => World.standUp(), '.ghost', 'Đứng dậy (hoặc bấm W / ↑)', 'W'));
+    } else if (m.mode === 'walk' || m.mode === 'campus') {
+      if (A.nearSeat != null && A.nearSeat >= 0) items.push(btn('🪑 Ngồi xuống', () => World.goSit(A.nearSeat), '', 'Ngồi vào ghế ngay cạnh (phím E)', 'E'));
     } else if (m.mode === 'piano') {
-      items.push(btn(m.special === 'scope' ? '🔭 Rời kính thiên văn' : m.special === 'gaze' ? '🧍 Ngồi dậy' : '🧍 Rời đàn', () => World.standUp()));
+      items.push(btn(m.special === 'scope' ? '🔭 Rời kính thiên văn' : m.special === 'gaze' ? '🧍 Ngồi dậy' : '🧍 Rời đàn', () => World.standUp(), '', 'Hoặc bấm Esc', 'Esc'));
     }
     if (m.mode === 'walk' && World.nearThing() === 'scope') items.unshift(btn('🔭 Nhìn qua kính thiên văn', () => World.special('scope')));
-    if ((m.mode === 'walk' || m.mode === 'seat') && World.nearThing() === 'piano') items.unshift(btn('🎹 Ngồi chơi đàn', () => World.sitPiano()));
+    if ((m.mode === 'walk' || m.mode === 'seat') && World.nearThing() === 'piano') items.unshift(btn('🎹 Ngồi chơi đàn', () => World.sitPiano(), '', 'Ngồi vào đàn piano (phím E)', 'E'));
     if (m.mode === 'seat' && World.seatKind() === 'lounger') items.unshift(btn('✨ Nằm ngắm sao', () => World.special('gaze')));
     if (A.play && m.space === 'campus' && !Games.busy) {
       const nt = World.nearThing();
@@ -356,9 +361,12 @@
       if (nt === 'via') items.unshift(btn(A.queue ? '🙏 Đang xếp hàng…' : '🙏 Xin vía chăm chỉ', viaJoin));
       if (nt === 'photo') items.unshift(btn('📸 Chụp ảnh với chữ HUST', takePhoto));
     }
-    if (window.AV2 && (m.mode === 'campus' || m.mode === 'walk' || m.mode === 'seat')) items.push(btn('😊', emoteBar, '.ghost.po-emo-btn', 'Cử chỉ: vẫy tay, cổ vũ…'));
+    const act = World.actOf && World.actOf(net.me.id);
+    if (act && window.AV2 && AV2.ACTS[act]) items.push(btn('⏹ Dừng ' + AV2.ACTS[act].label.toLowerCase(), () => World.setAct(net.me.id, null), '.line', 'Dừng hoạt động (hoặc bước đi)', '0'));
     if (new URLSearchParams(location.search).has('quan-sat') && m.mode !== 'idle') items.push(btn('👁️ Quan sát', observeLogin, '.line'));
     box.replaceChildren(...items);
+    const wb = $('#po-wheel-btn'); if (wb) wb.hidden = !(window.AV2 && (m.mode === 'campus' || m.mode === 'walk' || m.mode === 'seat'));
+    if (Wheel.open && !(m.mode === 'campus' || m.mode === 'walk' || m.mode === 'seat')) Wheel.close();
     $('#po-joy').hidden = !(U.isTouch && (m.mode === 'campus' || m.mode === 'walk' || m.mode === 'seat'));
   }
   /* =================================================================
@@ -404,6 +412,7 @@
 
   /* ---- 🥭 hái xoài ---- */
   function mangoGame() {
+    World.setAct(net.me.id, null);
     if (!Games.mangoStart()) return;
     updateActions();
     let prog = 0, done = false, last = Date.now();
@@ -467,7 +476,7 @@
       h('p.po-muted', null, 'Giờ bạn muốn làm gì tiếp?'),
       h('div.po-dlg-foot', null,
         h('button.po-btn.line', { onclick: close }, '🌳 Đi dạo tiếp'),
-        h('button.po-btn', { onclick: () => { close(); if (A.play) togglePlay(); World.go('lib_a'); } }, '📚 Lên thư viện ôn thi'))));
+        h('button.po-btn', { onclick: () => { close(); if (A.play) togglePlay(); World.gotoBuildingDoor('library'); toast('🚶 Đi bộ tới cửa chính thư viện — bước qua cửa là vào sảnh.', '', 4000); } }, '📚 Lên thư viện ôn thi'))));
   }
 
   /* ---- 🙏 xin vía chăm chỉ: xếp hàng trước anh thủ khoa ---- */
@@ -503,6 +512,7 @@
 
   /* ---- 📸 chụp ảnh với chữ HUST ---- */
   async function takePhoto() {
+    World.setAct(net.me.id, null);
     if (Games.busy) return; Games.busy = true; updateActions();
     $('#po-side').classList.add('closed');
     Games.photoPose([...World.others.values()]);
@@ -526,15 +536,166 @@
     showImage('📸 Ảnh lưu niệm', out, 'anh-luu-niem-thu-vien.jpg', 'Ảnh chụp trong Phòng ôn thi ảo. Bạn có thể tải về và chia sẻ.');
   }
 
-  /* thanh cử chỉ */
-  function emoteBar() {
-    let bar = $('#po-emo-bar');
-    if (bar) { bar.remove(); return; }
-    bar = h('div#po-emo-bar.po-emo-bar.po-card', null, Object.entries(AV2.EMOTES).map(([k, e]) =>
-      h('button', { title: e.label, onclick: () => { if (!World.emote(net.me.id, k)) toast('Đợi một chút rồi làm cử chỉ tiếp nhé.'); bar.remove(); } }, h('span', null, e.icon), h('em', null, e.label))));
-    $('.po-bottom').prepend(bar);
-    setTimeout(() => addEventListener('pointerdown', function off(ev) { if (!bar.contains(ev.target) && !ev.target.closest('.po-emo-btn')) { bar.remove(); removeEventListener('pointerdown', off); } }), 0);
-  }
+  /* =================================================================
+     VÒNG HÀNH ĐỘNG NHANH (radial menu) — giữ Q hoặc giữ nút ✋ ở góc phải dưới:
+     rê chuột / kéo ngón tay về một ô rồi thả để chọn · bấm nhanh Q / chạm nút: vòng đứng yên, bấm vào ô ·
+     phím 1–8 chọn nhanh, 0 dừng hoạt động, Esc đóng.
+     ================================================================= */
+  const Wheel = (() => {
+    const ITEMS = [
+      { k: 'vay', type: 'emo' }, { k: 'doc', type: 'act' }, { k: 'dien-thoai', type: 'act' }, { k: 'laptop', type: 'act' },
+      { k: 'co-vu', type: 'emo' }, { k: 'thich', type: 'emo' }, { k: 'cui-chao', type: 'emo' }, { k: 'vuon-vai', type: 'emo' }
+    ];
+    const N = ITEMS.length, STEP = Math.PI * 2 / N;
+    const W = { open: false };
+    let root = null, ring = null, hub = null, hubT = null, hint = null, paths = [], btns = [], st = null, mouse = null;
+    const info = it => (it.type === 'act' ? AV2.ACTS : AV2.EMOTES)[it.k] || { icon: '?', label: it.k };
+    const can = () => { const m = World.me.mode; return window.AV2 && (m === 'campus' || m === 'walk' || m === 'seat'); };
+    const busyUi = () => !$('#po-modal').hidden || !$('#po-login').hidden || document.body.classList.contains('po-piano');
+    function build() {
+      const NS = 'http://www.w3.org/2000/svg';
+      root = h('div#po-wheel.po-wheel', { hidden: true, role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Vòng hành động nhanh' });
+      ring = h('div.po-wheel-ring');
+      const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '-100 -100 200 200'); svg.setAttribute('aria-hidden', 'true');
+      const R = 98, r = 38, gap = 0.035;
+      ITEMS.forEach((it, i) => {
+        const a0 = -Math.PI / 2 + (i - 0.5) * STEP + gap, a1 = -Math.PI / 2 + (i + 0.5) * STEP - gap;
+        const P = (rad, a) => `${(Math.cos(a) * rad).toFixed(2)} ${(Math.sin(a) * rad).toFixed(2)}`;
+        const d = `M ${P(r, a0)} L ${P(R, a0)} A ${R} ${R} 0 0 1 ${P(R, a1)} L ${P(r, a1)} A ${r} ${r} 0 0 0 ${P(r, a0)} Z`;
+        const path = document.createElementNS(NS, 'path'); path.setAttribute('d', d); path.setAttribute('class', 'po-wheel-sl'); svg.appendChild(path); paths.push(path);
+        const E = info(it), a = -Math.PI / 2 + i * STEP;
+        const b = h('button.po-wheel-it' + (it.type === 'act' ? '.act' : ''), {
+          type: 'button', 'aria-label': `${i + 1}. ${E.label}${it.type === 'act' ? ' (làm tới khi bạn đi hoặc bấm Dừng)' : ''}`,
+          style: { left: (50 + Math.cos(a) * 34) + '%', top: (50 + Math.sin(a) * 34) + '%' },
+          onclick: e => { e.stopPropagation(); choose(i); }
+        }, h('span.ic', null, E.icon), h('em', null, E.label), h('i', null, String(i + 1)));
+        btns.push(b);
+      });
+      hub = h('button.po-wheel-hub', { type: 'button', onclick: e => { e.stopPropagation(); hubAction(); } }, h('span.ic'), hubT = h('em'));
+      ring.append(svg, ...btns, hub);
+      hint = h('div.po-wheel-hint');
+      root.append(ring, hint);
+      root.addEventListener('click', e => {
+        if (!st || st.mode !== 'toggle') return;
+        const dx = e.clientX - st.cx, dy = e.clientY - st.cy, i = sectorAt(dx, dy, true);
+        if (i >= 0) choose(i); else if (Math.hypot(dx, dy) < st.R * 0.38) hubAction(); else close();
+      });
+      root.addEventListener('pointermove', e => { if (st && st.mode === 'toggle') { const i = sectorAt(e.clientX - st.cx, e.clientY - st.cy, true); setSel(i); } });
+      document.body.append(root);
+    }
+    /* góc → ô (0 = trên cùng, theo chiều kim đồng hồ) */
+    function sectorAt(dx, dy, ringOnly) {
+      const d = Math.hypot(dx, dy);
+      if (ringOnly) { if (d < st.R * 0.38 || d > st.R * 1.25) return -1; }
+      else if (d < 26) return -1;
+      const a = Math.atan2(dy, dx) + Math.PI / 2;
+      return ((Math.round(a / STEP) % N) + N) % N;
+    }
+    function setSel(i) {
+      if (!st || st.sel === i) return; st.sel = i;
+      paths.forEach((p, k) => p.classList.toggle('on', k === i)); btns.forEach((b, k) => b.classList.toggle('on', k === i));
+      drawHub();
+    }
+    function drawHub() {
+      const act = World.actOf(net.me.id);
+      const it = st && st.sel >= 0 ? ITEMS[st.sel] : null;
+      const E = it ? info(it) : null;
+      hub.querySelector('.ic').textContent = E ? E.icon : act ? '⏹' : '✕';
+      hubT.textContent = E ? (it.type === 'act' && act === it.k ? 'Dừng ' + E.label.toLowerCase() : E.label) : act ? 'Dừng ' + AV2.ACTS[act].label.toLowerCase() : 'Đóng';
+      hub.setAttribute('aria-label', act ? 'Dừng hoạt động đang làm' : 'Đóng vòng hành động');
+      hub.classList.toggle('stop', !E && !!act);
+      btns.forEach((b, k) => b.classList.toggle('cur', ITEMS[k].type === 'act' && ITEMS[k].k === act));
+    }
+    function open(mode, src, x, y, pid, ts) {
+      if (W.open || !can() || busyUi()) return false;
+      if (!root) build();
+      const vw = innerWidth, vh = innerHeight, R = Math.max(110, Math.min(165, Math.min(vw, vh) / 2 - 22));
+      let cx = vw / 2, cy = vh / 2;
+      if (src === 'key' && mouse) { cx = U.clamp(mouse.x, R + 12, vw - R - 12); cy = U.clamp(mouse.y, R + 12, vh - R - 40); }
+      st = { mode, src, pid, sel: -2, t: ts || performance.now(), cx, cy, R, ax: x != null ? x : cx, ay: y != null ? y : cy, moved: false };
+      ring.style.width = ring.style.height = (R * 2) + 'px';
+      ring.style.left = (cx - R) + 'px'; ring.style.top = (cy - R) + 'px';
+      hint.style.top = (cy + R + 10) + 'px'; hint.style.left = cx + 'px';
+      setSel(-1);
+      hintText();
+      root.hidden = false; W.open = true; document.body.classList.add('po-wheel-on');
+      requestAnimationFrame(() => root.classList.add('in'));
+      return true;
+    }
+    function hintText() {
+      hint.textContent = st.mode === 'hold'
+        ? (st.src === 'key' ? 'Rê chuột về một ô rồi thả Q · phím 1–8 · Esc để huỷ' : 'Kéo ngón tay về một ô rồi thả')
+        : (U.isTouch ? 'Chạm vào một ô để chọn · chạm ra ngoài để đóng' : 'Bấm vào một ô hoặc phím 1–8 · 0 để dừng · Esc hoặc Q để đóng');
+    }
+    function close() {
+      if (!W.open) return;
+      W.open = false; st = null; root.classList.remove('in'); root.hidden = true; document.body.classList.remove('po-wheel-on');
+    }
+    function hubAction() { if (World.actOf(net.me.id)) stopAct(); close(); }
+    function stopAct() { if (World.actOf(net.me.id)) { World.setAct(net.me.id, null); toast('⏹ Đã dừng.', '', 1800); } }
+    function choose(i) {
+      const it = ITEMS[i]; close(); if (!it) return;
+      const E = info(it);
+      if (it.type === 'emo') { if (!World.emote(net.me.id, it.k)) toast(World.me.mode === 'piano' ? 'Rời đàn rồi mới làm cử chỉ được nhé.' : 'Đợi một chút rồi làm cử chỉ tiếp nhé.'); return; }
+      if (World.actOf(net.me.id) === it.k) { stopAct(); return; }
+      if (World.setAct(net.me.id, it.k)) toast(`${E.icon} ${E.label} — bước đi hoặc chọn "Dừng" để cất đi.`, '', 3500);
+      else toast('Lúc này chưa làm được việc đó.');
+    }
+    function moveHold(x, y) {
+      if (!st || st.mode !== 'hold') return;
+      if (Math.hypot(x - st.ax, y - st.ay) > 10) st.moved = true;
+      setSel(sectorAt(x - st.ax, y - st.ay, false));
+    }
+    /* thả: có ô đang sáng → chọn; bấm nhanh (theo thời điểm của sự kiện, không phụ thuộc khung hình chậm) → vòng đứng yên */
+    function release(ts) {
+      if (!st || st.mode !== 'hold') return;
+      const quick = (ts || performance.now()) - st.t < 320 && !st.moved;
+      if (st.sel >= 0) choose(st.sel);
+      else if (quick) { st.mode = 'toggle'; hintText(); setSel(-1); }
+      else close();
+    }
+    /* ---- phím ---- */
+    const typing = e => { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); };
+    addEventListener('pointermove', e => { mouse = { x: e.clientX, y: e.clientY }; if (st && st.mode === 'hold' && (st.src === 'key' || e.pointerId === st.pid)) moveHold(e.clientX, e.clientY); }, true);
+    addEventListener('keydown', e => {
+      if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.code === 'KeyQ') {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (e.repeat) return;
+        if (W.open && st.mode === 'toggle') { close(); return; }
+        if (!W.open && !open('hold', 'key', null, null, null, e.timeStamp) && World.me.mode === 'piano') toast('Rời đàn rồi mới mở vòng hành động được nhé.');
+        return;
+      }
+      if (!W.open) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); return; }
+      const n = /^Digit([0-9])$/.exec(e.code) || /^Numpad([0-9])$/.exec(e.code);
+      if (n) { e.preventDefault(); e.stopImmediatePropagation(); const d = +n[1]; if (d === 0) { stopAct(); close(); } else if (d <= N) choose(d - 1); return; }
+      if (e.key === 'Enter' && st && st.sel >= 0) { e.preventDefault(); choose(st.sel); }
+    }, true);
+    addEventListener('keyup', e => { if (e.code === 'KeyQ' && W.open && st && st.src === 'key') { e.stopImmediatePropagation(); release(e.timeStamp); } }, true);
+    addEventListener('keydown', e => {                       // phím 0 = dừng hoạt động (khi vòng đang đóng)
+      if (W.open || typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if ((e.code === 'Digit0' || e.code === 'Numpad0') && World.actOf && World.actOf(net.me.id) && World.me.mode !== 'piano') { stopAct(); }
+    });
+    addEventListener('blur', () => { if (st && st.mode === 'hold') close(); });
+    addEventListener('resize', () => close());
+    /* ---- nút tròn (chuột + chạm) ---- */
+    function bindButton(b) {
+      b.addEventListener('pointerdown', e => {
+        if (e.button > 0) return;
+        e.preventDefault();
+        if (W.open) { close(); return; }
+        if (!open('hold', 'pointer', e.clientX, e.clientY, e.pointerId, e.timeStamp)) return;
+        try { b.setPointerCapture(e.pointerId); } catch (_) { }
+      });
+      const up = e => { if (st && st.src === 'pointer' && e.pointerId === st.pid) release(e.timeStamp); };
+      b.addEventListener('pointerup', up);
+      b.addEventListener('pointercancel', e => { if (st && st.src === 'pointer' && e.pointerId === st.pid) close(); });
+      b.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !W.open) { e.preventDefault(); open('toggle', 'kbd'); setTimeout(() => btns[0] && btns[0].focus(), 0); } });
+    }
+    W.close = close; W.bindButton = bindButton; W.items = ITEMS;
+    return W;
+  })();
   function updateMini() {
     const m = World.me, on = m.mode !== 'idle' && m.mode !== 'piano' && m.mode !== 'observe';
     $('#po-mini').hidden = !(on && World.opt.minimap);
@@ -583,6 +744,7 @@
       World.setPresence(list);
       wantNames(list.map(p => p.uid));
       for (const p of list) if (p.sr != null && p.uid !== net.me.id) World.setInfo(p.uid, { stars: p.sr });
+      if (World.setAct) for (const p of list) if (p.uid !== net.me.id && p.act && typeof p.act === 'object') World.setAct(p.uid, p.act.k, p.act.t);   // [act]
       const n = list.length;
       $('#po-online b').textContent = n;
       $('#po-online span').textContent = n > 1 ? 'đang học' : 'đang online';
@@ -590,7 +752,14 @@
       if (A.tab === 'people' && A.drawPeople && !$('#po-side').classList.contains('closed')) drawPeopleSoon();
     });
     E.on('pos', p => World.onPos(p));
-    E.on('emote', p => p && p.u !== net.me.id && World.emote(p.u, p.k));
+    E.on('emote', p => {
+      if (!p || p.u === net.me.id) return;
+      const m = typeof p.k === 'string' && /^act:([a-z-]*):(\d+)$/.exec(p.k);   // [act] hoạt động kéo dài của bạn khác
+      if (m) World.setAct && World.setAct(p.u, m[1] || null, +m[2]);
+      else World.emote(p.u, p.k);
+    });
+    // [piano-net] tiếng đàn của bạn khác ở tầng 6–7: gom/gửi nốt mình chơi + phát nốt người khác (js/piano-net.js)
+    if (window.PianoNet && !A.pianoNet) A.pianoNet = PianoNet.init({ net, World, Sound, getApi: () => SceneAPI.spaces.B.module.api, nameOf: u => (A.names.get(u) || {}).name, toast }) || 1;
     E.on('message', m => onMessage(m));
     E.on('message-hidden', id => { $$(`.po-msg[data-id="${id}"]`).forEach(e => e.remove()); A.chatCache = (A.chatCache || []).filter(x => x.id !== id); });
     E.on('profile', p => {
@@ -1116,7 +1285,9 @@
             h('b', null, (ST_ICON[x.p.st] ? ST_ICON[x.p.st] + ' ' : '') + x.name),
             h('div.po-muted.po-small', null, '📍 ' + loc + (d != null && d < 1e5 ? ' · cách ' + d + ' m' : ''))),
           h('div.po-person-act', null,
-            x.w ? h('button.po-btn.sm', { title: 'Đến chỗ bạn ấy', onclick: () => { World.goToPerson(x.p.uid); if (U.isSmall()) $('#po-side').classList.add('closed'); } }, '🚶') : null,
+            x.w ? (sameFloor(x.p.zone, x.w)
+              ? h('button.po-btn.sm', { title: 'Đi bộ tới chỗ bạn ấy', 'aria-label': 'Đi bộ tới chỗ ' + x.name, onclick: () => { if (goTo(x.p.zone, x.w, x.name) && U.isSmall()) $('#po-side').classList.add('closed'); } }, '🚶')
+              : h('button.po-btn.line.sm', { title: 'Bạn ấy ở tầng/khu khác — xem đường đi', 'aria-label': 'Xem đường tới chỗ ' + x.name, onclick: () => goTo(x.p.zone, x.w, x.name) }, '🧭')) : null,
             here ? h('button.po-btn.line.sm', { title: 'Nhắc tên trong chat', onclick: () => { A.tag = { uid: x.p.uid, name: x.name }; A.chan = 'zone'; A.tab = 'chat'; renderTab(); } }, '@') : null,
             net.mode === 'online' ? h('button.po-btn.line.sm', { title: 'Nhắn riêng', onclick: () => openDm(x.p.uid) }, '✉️') : null));
       };
@@ -1127,12 +1298,14 @@
         ...npcs.map(n => h('div.po-person.npc', null,
           h('div', { style: { minWidth: 0 } }, h('b', null, n.def.icon + ' ' + n.def.name + ' '), h('span.po-npc', null, 'NPC'),
             h('div.po-muted.po-small', null, '📍 ' + n.def.where + (n.open ? '' : ' · đã hết giờ làm (8:00–21:00)'))),
-          n.open ? h('div.po-person-act', null, h('button.po-btn.sm', { title: 'Đến chỗ', onclick: () => World.goNear(n.def.zone, n.at) }, '🚶')) : null)));
+          n.open ? h('div.po-person-act', null, sameFloor(n.def.zone, n.at)
+            ? h('button.po-btn.sm', { title: 'Đi bộ tới', onclick: () => { if (goTo(n.def.zone, n.at, n.def.name) && U.isSmall()) $('#po-side').classList.add('closed'); } }, '🚶')
+            : h('button.po-btn.line.sm', { title: 'Ở tầng/khu khác — xem đường đi', onclick: () => goTo(n.def.zone, n.at, n.def.name) }, '🧭')) : null)));
     };
     q.addEventListener('input', draw);
     A.drawPeople = draw;
     pane.replaceChildren(
-      h('p.po-muted.po-small', { style: { margin: 0 } }, 'Ai đang học và đang ở đâu. Bấm 🚶 để tới chỗ bạn ấy, @ để nhắc tên trong chat, ✉️ để nhắn riêng. Bạn nào bật "Ẩn trạng thái & vị trí" thì không hiện vị trí.'),
+      h('p.po-muted.po-small', { style: { margin: 0 } }, 'Ai đang học và đang ở đâu. 🚶 tự đi bộ tới bạn ở cùng tầng; 🧭 chỉ đường khi bạn ấy ở tầng/khu khác. @ để nhắc tên trong chat, ✉️ để nhắn riêng. Bạn nào bật "Ẩn trạng thái & vị trí" thì không hiện vị trí.'),
       q, list);
     draw();
   }
@@ -1324,31 +1497,39 @@
     if (!opts.noClose) { const k = e => { if (e.key === 'Escape') { close(); removeEventListener('keydown', k); } }; addEventListener('keydown', k); }
     return close;
   }
+  /* ---- tới chỗ một bạn / NPC: KHÔNG dịch chuyển. Cùng khu & cùng tầng → tự đi bộ tới; khác tầng/khu → chỉ đường ---- */
+  function sameFloor(zone, at) {
+    const m = World.me, sp = World.sp && World.sp();
+    if (!at || zone !== m.zone || !sp) return false;
+    return sp.kind === 'campus' || Math.abs(sp.floorOf((at.y || 0) + 0.1) - sp.floorOf(m.y + 0.1)) < 0.5;
+  }
+  function placeName(zone, at) {
+    const Z = ZONES[zone] || {}, sp = SceneAPI.spaces[Z.space];
+    let pl = ''; try { pl = sp && sp.place && at ? sp.place(at.x, at.y || 0, at.z) : ''; } catch (_) { }
+    return Z.space === 'campus' ? (pl || Z.name) : 'Thư viện · ' + (pl || Z.short);
+  }
+  function routeHint(zone, at) {
+    const from = (ZONES[World.me.zone] || {}).space, to = (ZONES[zone] || {}).space;
+    const sp = SceneAPI.spaces[to];
+    let pl = ''; try { pl = sp && sp.place && at ? sp.place(at.x, at.y || 0, at.z) : ''; } catch (_) { }
+    const fl = to === 'D' ? 'tầng 10 (sân thượng)' : (pl.match(/Tầng \d+/) || [''])[0].toLowerCase() || (pl === 'Phòng 401' ? 'tầng 4' : '');
+    if (to === 'campus') return from === 'campus' ? '' : 'Xuống sảnh tầng 1 rồi đi ra cửa chính để ra sân nhé.';
+    if (from === 'campus') return 'Đi bộ vào cửa chính thư viện' + (fl && fl !== 'tầng 1' ? ', rồi đi thang máy ở sảnh lên ' + fl : '') + ' nhé.';
+    return fl ? 'Đi thang máy' + (to === 'A' && from === 'A' ? ' (hoặc cầu thang bộ)' : '') + ' tới ' + fl + ' nhé.' : 'Đi thang máy tới đó nhé.';
+  }
+  function goTo(zone, at, name) {
+    const m = World.me;
+    if (!at || !ZONES[zone]) { toast('Chưa biết ' + name + ' đang ở đâu.'); return false; }
+    if (sameFloor(zone, at)) {
+      if (m.mode === 'piano') { toast('Rời đàn trước rồi hãy đi nhé.'); return false; }
+      if (m.mode === 'seat') World.standUp();
+      if (World.walkTo(at.x, at.z, null, 1.3)) { toast('🚶 Đang đi bộ tới chỗ ' + name + '…', '', 2500); return true; }
+      return false;
+    }
+    toast('📍 ' + name + ' đang ở ' + placeName(zone, at) + '. ' + routeHint(zone, at), '', 8000);
+    return false;
+  }
   function countIn(zone) { return A.presence.filter(p => p.zone === zone).length; }
-  function buildingDialog(id) {
-    const b = BUILDING_ROOMS[id]; if (!b) return;
-    modal(close => h('div.po-dlg', null, h('button.x', { onclick: close }, '✕'),
-      h('h2', null, (id === 'library' ? '📚 ' : '🏢 ') + b.name),
-      h('p.po-muted.po-small', null, 'Chọn khu để vào ngồi học. Trong thư viện, bấm xuống sàn để đi, đi thang máy để lên tầng khác, bấm vào ghế bất kỳ để ngồi.'),
-      h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
-        b.zones.map(z => h('div.po-row', { style: { border: '1px solid var(--line)', borderRadius: '12px', padding: '10px 12px' } },
-          h('div', null, h('b', null, ZONES[z].name), h('div.po-muted.po-small', null, '👥 ' + countIn(z) + ' người đang học')),
-          A.zone === z ? h('span.po-muted.po-small', null, 'Bạn đang ở đây') : h('button.po-btn.sm', { onclick: () => { close(); World.go(z); } }, 'Vào phòng'))),
-        (b.soon || []).map(s => h('div.po-row', { style: { border: '1px dashed var(--line)', borderRadius: '12px', padding: '10px 12px', opacity: .7 } }, h('b', null, s), h('span.po-small', null, 'Sắp mở')))),
-      World.me.space === 'campus' ? h('div.po-dlg-foot', null, h('button.po-btn.line.sm', { onclick: () => { close(); World.gotoBuildingDoor(id); } }, '🚶 Đi bộ vào cửa chính')) : null));
-  }
-  function buildingsDialog() {
-    modal(close => h('div.po-dlg', null, h('button.x', { onclick: close }, '✕'), h('h2', null, '🏛️ Các toà nhà'),
-      h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' } },
-        Object.entries(BUILDING_ROOMS).map(([id, b]) => {
-          const n = b.zones.reduce((a, z) => a + countIn(z), 0);
-          return h('div.po-row', { style: { border: '1px solid var(--line)', borderRadius: '12px', padding: '10px 12px' } },
-            h('div', null, h('b', null, b.name), h('div.po-muted.po-small', null, '👥 ' + n + ' người · ' + b.zones.length + ' phòng')),
-            h('div', { style: { display: 'flex', gap: '6px' } },
-              h('button.po-btn.line.sm', { onclick: () => { close(); World.gotoBuildingDoor(id); } }, 'Đi tới'),
-              h('button.po-btn.sm', { onclick: () => { close(); b.zones.length > 1 ? buildingDialog(id) : World.go(b.zones[0]); } }, 'Vào')));
-        }))));
-  }
   /* thẻ sinh viên của một người (như thẻ đeo trên nhân vật) — MSSV luôn ở dạng đã che */
   function cardThumb(uid, name, mssvMasked) {
     if (!window.AV2) return h('div', { style: { fontSize: '40px' } }, '🧑‍🎓');
@@ -1381,7 +1562,12 @@
         h('div.po-kpi', null, h('b', null, d.today_stars), h('span', null, 'Sao hôm nay'))),
       h('div.po-sec', { style: { marginTop: '12px' } }, h('h3', null, '💌 Gửi lời động viên riêng'), sel,
         h('div', { style: { display: 'flex', gap: '8px', justifyContent: 'space-between', flexWrap: 'wrap' } },
-          World.whereIs(uid) && d.zone ? h('button.po-btn.line.sm', { onclick: () => { close(); World.goToPerson(uid); } }, '🚶 Đến chỗ bạn ấy') : null,
+          (() => {                                         // chỉ đi bộ khi cùng tầng; khác tầng/khu thì chỉ đường
+            const pr = A.presence.find(x => x.uid === uid), w = pr && pr.pl !== '' ? World.whereIs(uid) : null;
+            if (!w || !d.zone) return null;
+            return sameFloor(pr.zone, w) ? h('button.po-btn.line.sm', { onclick: () => { close(); goTo(pr.zone, w, d.name); } }, '🚶 Đi tới chỗ bạn ấy')
+              : h('button.po-btn.line.sm', { onclick: () => goTo(pr.zone, w, d.name) }, '🧭 Bạn ấy ở đâu?');
+          })(),
           h('button.po-btn.line.sm', { onclick: () => { close(); A.tag = { uid, name: d.name }; A.chan = 'zone'; A.tab = 'chat'; $('#po-side').classList.remove('closed'); renderTab(); } }, '@ Nhắc tên'),
           net.mode === 'online' ? h('button.po-btn.line.sm', { onclick: () => { close(); openDm(uid); } }, '✉️ Nhắn riêng') : null,
           h('button.po-btn.line.sm', { onclick: () => { close(); A.tab = 'me'; $('#po-side').classList.remove('closed'); renderTab(); setTimeout(() => { const s = $('.po-pane[data-pane=me] select'); const t = $('.po-pane[data-pane=me] textarea'); if (s && t) { s.value = 'bao_cao'; t.value = 'Báo cáo người dùng "' + d.name + '" (' + d.mssv + '): '; t.focus(); } }, 50); } }, '⚑ Báo cáo'),

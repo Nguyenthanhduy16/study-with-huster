@@ -747,7 +747,8 @@ function seatList(){const out=[];
   for(const s of SEATS){const c=Math.cos(s.ry),sn=Math.sin(s.ry);
     if(s.n==='bench')for(const lx of [-.45,.45])out.push({x:s.x+c*lx,y:0,z:s.z-sn*lx,ry:s.ry,kind:'bench'});
     else if(s.n==='lounger')out.push({x:s.x,y:0,z:s.z+.35,ry:s.ry,kind:'lounger'});
-    else out.push({x:s.x,y:-.1,z:s.z,ry:s.ry+PI,kind:'beanbag'});}
+    /* gối lười: tựa lưng ở phía −z của gối → nhìn về +z (trước đây bị quay ngược, ngồi lún vào trong gối); hông ở giữa gối */
+    else out.push({x:s.x+sn*.1,y:.06,z:s.z+c*.1,ry:s.ry,kind:'beanbag'});}
   /* ghế cong quanh đài ngắm sao: nhìn vào giữa đài */
   {const {x,z,r,h}=SD,rb=r-.45;for(let i=0;i<6;i++){const th=.45+(i+.5)*(PI-.9)/6;out.push({x:x+rb*Math.sin(th),y:h,z:z+rb*Math.cos(th),ry:th+PI,kind:'bench'});}}
   return out;}

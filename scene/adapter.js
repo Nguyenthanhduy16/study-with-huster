@@ -31,6 +31,9 @@
   const emit = (n, ...a) => (ev[n] || []).forEach(f => f(...a));
   let H, cur = 'campus', switching = false, night = 0;
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  /* Nhân vật ngồi (js/avatar2.js) có khớp hông cao 0,53 m trên gốc nhân vật và lùi 0,1 m về sau; mặt ghế chuẩn (ghế tựa
+     thư viện) cao ≈0,49 m. Ghế có mặt ngồi cao/thấp khác thì đặt y = mặt ngồi − SEAT_TOP để hông vừa chạm mặt ghế. */
+  const SEAT_TOP = 0.49;
   /* đường dẫn gốc của web (để trang công cụ trong tools/ cũng tải được file GLB) */
   const ROOT = ((document.currentScript && document.currentScript.src) || '').replace(/scene\/adapter\.js.*$/, '');
 
@@ -175,11 +178,26 @@
     root.traverse(o => { if (o.isMesh && NIGHT[o.material.name] && !seenM.has(o.material)) { seenM.add(o.material); EXT.nightMats.push([o.material, ...NIGHT[o.material.name]]); } });
     EXT.dimMats = [];
     root.traverse(o => { if (o.isMesh && o.material.isMeshStandardMaterial && !seenM.has(o.material)) { seenM.add(o.material); EXT.dimMats.push([o.material, o.material.color.clone()]); } });
-    // ghế đá trên sân: mỗi ghế dài 1,8 m → 3 chỗ, tựa lưng ở phía ngoài
+    // ghế đá trên sân: mỗi ghế dài 1,8 m → 3 chỗ. Đọc hình của từng ghế (ghế sân trước nằm dọc theo z, ghế vườn xoài
+    // nằm dọc theo x): các thanh gỗ thấp nhất là mặt ngồi, thanh cao hơn là tựa lưng → quay mặt ngược phía tựa lưng.
     root.traverse(o => {
-      if (!/^GheDai_/.test(o.name)) return;
-      const b = new THREE.Box3().setFromObject(o), cx = (b.min.x + b.max.x) / 2, side = cx < 0 ? 1 : -1;  // nhìn vào giữa sân
-      for (const dz of [-0.6, 0, 0.6]) { const z = (b.min.z + b.max.z) / 2 + dz, x = cx + side * 0.05; EXT.seats.push({ x, y: EXT.grid.floorAt(x - side * 0.6, z), z, ry: side > 0 ? Math.PI / 2 : -Math.PI / 2, floor: 0, kind: 'bench' }); }
+      if (!/^GheDai_/.test(o.name) || (o.parent && /^GheDai_/.test(o.parent.name))) return;
+      const b = new THREE.Box3().setFromObject(o), alongX = b.max.x - b.min.x > b.max.z - b.min.z;
+      const parts = []; o.traverse(k => { if (k.isMesh) parts.push(new THREE.Box3().setFromObject(k)); });
+      const long = bb => alongX ? bb.max.x - bb.min.x : bb.max.z - bb.min.z, mid = bb => alongX ? (bb.min.z + bb.max.z) / 2 : (bb.min.x + bb.max.x) / 2;
+      const slats = parts.filter(p => long(p) > 1.2);                     // thanh gỗ chạy dọc ghế
+      if (!slats.length) return;
+      const top = Math.min(...slats.map(p => p.max.y));                   // mặt ngồi = thanh dọc thấp nhất
+      const seatS = slats.filter(p => p.max.y < top + 0.04), backS = slats.filter(p => p.max.y > top + 0.08);
+      const sc = seatS.reduce((a, p) => a + mid(p), 0) / seatS.length;    // giữa mặt ngồi (theo bề ngang ghế)
+      const bc = backS.length ? backS.reduce((a, p) => a + mid(p), 0) / backS.length : null;
+      const face = bc != null ? Math.sign(sc - bc) || 1 : (sc > 0 ? -1 : 1);   // hướng nhìn: ngược phía tựa lưng (không có tựa: nhìn vào giữa sân)
+      const ry = alongX ? (face > 0 ? 0 : Math.PI) : (face > 0 ? Math.PI / 2 : -Math.PI / 2);
+      const c = alongX ? (b.min.x + b.max.x) / 2 : (b.min.z + b.max.z) / 2, y = top - SEAT_TOP;
+      for (const d of [-0.6, 0, 0.6]) {
+        const s = sc + face * 0.05;                                        // hông (lùi 0,1 m sau gốc nhân vật) ngay giữa mặt ngồi
+        EXT.seats.push(alongX ? { x: c + d, y, z: s, ry, floor: 0, kind: 'bench' } : { x: s, y, z: c + d, ry, floor: 0, kind: 'bench' });
+      }
     });
     // khối đặc để camera không chui vào toà nhà (hộp bao đơn giản, rẻ hơn bắn tia vào lưới)
     EXT.solids = [
@@ -202,7 +220,8 @@
     const mA = new THREE.Matrix4().copy(A.group.matrixWorld).invert().multiply(A.api.roomG.matrixWorld);
     const v = new THREE.Vector3();
     const expand = (s, out, floorOf) => {
-      const push = (x, z, kind) => out.push({ x, y: s.y, z, ry: s.ry, floor: floorOf(s.y), kind });
+      const lift = /^island/.test(s.n) ? 0.04 : 0;                       // "đảo thuyền" tầng 6: mặt ngồi cao 0,53 m
+      const push = (x, z, kind) => out.push({ x, y: s.y + lift, z, ry: s.ry, floor: floorOf(s.y), kind });
       if (/^sofa/.test(s.n)) for (const lx of [-0.5, 0, 0.5]) push(s.x + Math.cos(s.ry) * lx, s.z - Math.sin(s.ry) * lx, 'sofa');
       else push(s.x, s.z, /^arm/.test(s.n) ? 'arm' : /^(bench|booth|island)/.test(s.n) ? 'bench' : /^cube/.test(s.n) ? 'stool' : 'chair');
     };
@@ -220,9 +239,10 @@
     const seatsB = [];
     for (const s of log) if (s.tag === 'B') expand(s, seatsB, levelB);
     // ghế đàn piano (tầng 6): ngồi vào là mở bàn phím đàn
-    { const P = B.api.PIANO, a = P.localToWorld(V(0, 0, 1.0)), c = P.localToWorld(V(0, 0, 0));
+    // ghế băng của đàn: tâm cách thân đàn 0,78 m, mặt ngồi cao 0,54 m → gốc nhân vật 0,70 m (hông lùi 0,1 m vào giữa ghế)
+    { const P = B.api.PIANO, a = P.localToWorld(V(0, 0, 0.70)), c = P.localToWorld(V(0, 0, 0));
       B.group.worldToLocal(a); B.group.worldToLocal(c);
-      seatsB.push({ x: a.x, y: B.api.groundY(a.x, a.z), z: a.z, ry: Math.atan2(c.x - a.x, c.z - a.z), floor: 0, kind: 'piano' }); }
+      seatsB.push({ x: a.x, y: B.api.groundY(a.x, a.z) + 0.54 - SEAT_TOP, z: a.z, ry: Math.atan2(c.x - a.x, c.z - a.z), floor: 0, kind: 'piano' }); }
 
     /* ---- lưới đi được theo từng tầng (lấy mẫu lười, khi cần) ---- */
     const gridCache = {};

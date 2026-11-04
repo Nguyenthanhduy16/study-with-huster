@@ -3,17 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Phòng thay đồ · Phòng ôn thi ảo</title>
+<title>HUST · Phòng thay đồ sinh viên · Phòng ôn thi ảo</title>
 <link rel="stylesheet" href="vendor/fonts/fonts.css">
 <style>
-/* Bố cục: sân khấu "vở ô ly" bên trái, tủ đồ dạng bảng bên phải; điện thoại xếp dọc. */
+/* Chép từ css/studio.css của "Phòng thay đồ" (bản HUST) — phông chữ lấy từ vendor/fonts thay cho Google Fonts.
+   Bố cục: sân khấu "vở ô ly" bên trái, tủ đồ dạng bảng bên phải; điện thoại xếp dọc. */
 :root {
   --paper: #fbfaf5;
   --panel: #ffffff;
   --text: #1f1c2b;
   --muted: #676279;
-  --ink: #4b2e9a;          /* mực tím */
-  --ink-soft: #ece7fb;
+  --ink: #b3141d;          /* đỏ HUST */
+  --ink-soft: #fbe9eb;
   --grid: #cfdcf2;          /* dòng kẻ ô ly */
   --grid-strong: #a9bfe6;
   --margin: #e9a3a3;        /* lề đỏ */
@@ -27,14 +28,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --paper: #171926; --panel: #1f2232; --text: #ebe8f4; --muted: #a39eb6;
-    --ink: #b7a4ff; --ink-soft: #2c2847; --grid: #262b40; --grid-strong: #323a58;
+    --ink: #ff939b; --ink-soft: #42252d; --grid: #262b40; --grid-strong: #323a58;
     --margin: #6e3d48; --gold: #f0bd52; --border: #30344a; --focus: #7aa7ff;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #171926; --panel: #1f2232; --text: #ebe8f4; --muted: #a39eb6;
-  --ink: #b7a4ff; --ink-soft: #2c2847; --grid: #262b40; --grid-strong: #323a58;
+  --ink: #ff939b; --ink-soft: #42252d; --grid: #262b40; --grid-strong: #323a58;
   --margin: #6e3d48; --gold: #f0bd52; --border: #30344a; --focus: #7aa7ff;
   color-scheme: dark;
 }
@@ -248,7 +249,7 @@ dialog::backdrop { background: rgba(20, 16, 36, .45); }
 <body>
 <div class="app">
   <header class="topbar">
-    <div class="brand"><h1>Phòng thay đồ</h1><span>Nhân vật 3D sinh viên</span></div>
+    <div class="brand"><h1>Phòng thay đồ</h1><span>HUST · Nhân vật 3D sinh viên</span></div>
     <div class="actions">
       <button class="btn ghost" id="btn-random" type="button">Phối ngẫu nhiên</button>
       <button class="btn ghost" id="btn-spin" type="button" aria-pressed="false">Xoay vòng</button>

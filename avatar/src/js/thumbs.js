@@ -21,7 +21,7 @@ export class ThumbMaker {
     this.renderer.outputEncoding = THREE.sRGBEncoding; // [r128]
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.scene = new THREE.Scene();
-    this.scene.add(new THREE.HemisphereLight('#ffffff', '#b5a990', 0.75));
+    this.scene.add(new THREE.HemisphereLight('#ffffff', '#b5a990', 0.75)); // [r128] cường độ đèn kiểu cũ
     const d = new THREE.DirectionalLight('#ffffff', 0.85);
     d.position.set(2, 3, 3);
     this.scene.add(d);
@@ -55,7 +55,7 @@ export class ThumbMaker {
     const imgs = await loadImageSet(item.textures);
     const res = BUILDERS[item.slot]({ item, rig: this.rig, imgs, emblemCanvas: ctx.emblemCanvas, cardCanvas: ctx.cardCanvas, emblem: ctx.emblem });
     res.parts = mountParts(this.rig, res.parts);
-    for (const p of res.parts) linearize(p.obj);
+    for (const p of res.parts) linearize(p.obj); // [r128]
     for (const p of res.parts) if (p.obj.userData.belt) p.obj.visible = false;
     this.rig.root.updateMatrixWorld(true);
     const box = new THREE.Box3();

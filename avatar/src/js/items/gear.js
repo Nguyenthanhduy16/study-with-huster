@@ -455,7 +455,7 @@ function ribbon(points, width, mat) {
 }
 
 export function buildCard(ctx) {
-  const { item, rig, cardCanvas, emblem } = ctx;
+  const { item, rig, cardCanvas, emblem, emblemCanvas } = ctx;
   const type = item.options?.type || 'day-deo';
   const b = rig.build;
   const g = new THREE.Group();
@@ -468,27 +468,43 @@ export function buildCard(ctx) {
 
   const makeCard = (scale, holder) => {
     const c = new THREE.Group();
-    const w = 0.12 * scale, h = 0.0757 * scale;
+    const portrait = cardCanvas.height > cardCanvas.width;
+    const w = (portrait ? 0.0757 : 0.12) * scale, h = (portrait ? 0.12 : 0.0757) * scale;
+    c.userData.holderHeight = h + (holder === 'silicone' ? 0.026 : 0.012);
     if (holder === 'silicone') {
-      // vỏ silicone màu, ô cửa sổ trong suốt, khe ngón cái phía dưới
-      const frame = rbox(w + 0.016, h + 0.022, 0.008, 0.008, lowpolyMat(holderColor, { roughness: 0.6 }), 3);
-      frame.position.y = -0.003;
-      c.add(frame);
-      const slot = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.005, 0.002), lowpolyMat(shade(holderColor, -0.3)));
-      slot.position.set(0, h / 2 + 0.002, 0.0042);
-      c.add(slot);
+      // Vỏ đỏ bo góc, khung nổi và cửa sổ thẻ, theo bộ dây đeo tham chiếu.
+      const roundedPath = (Path, width, height, radius) => {
+        const p = new Path(), x = -width / 2, y = -height / 2;
+        p.moveTo(x + radius, y); p.lineTo(x + width - radius, y);
+        p.quadraticCurveTo(x + width, y, x + width, y + radius);
+        p.lineTo(x + width, y + height - radius); p.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        p.lineTo(x + radius, y + height); p.quadraticCurveTo(x, y + height, x, y + height - radius);
+        p.lineTo(x, y + radius); p.quadraticCurveTo(x, y, x + radius, y); return p;
+      };
+      const outerW = w + 0.024, outerH = h + 0.026;
+      const plastic = lowpolyMat(holderColor, { roughness: 0.42 });
+      const outline = roundedPath(THREE.Shape, outerW, outerH, 0.009);
+      outline.holes.push(roundedPath(THREE.Path, w - 0.002, h - 0.002, 0.003));
+      const geometry = new THREE.ExtrudeGeometry(outline, { depth: 0.005, steps: 1, bevelEnabled: true, bevelThickness: 0.0008, bevelSize: 0.0008, bevelSegments: 2, curveSegments: 10 });
+      const frame = new THREE.Mesh(geometry, plastic); frame.position.z = -0.002; frame.name = 'red-card-frame'; c.add(frame);
+      const backing = rbox(outerW - 0.002, outerH - 0.002, 0.002, 0.008, plastic, 3);
+      backing.position.z = -0.004; c.add(backing);
+      const slotMat = lowpolyMat(shade(holderColor, -0.38));
+      const slot = rbox(0.026, 0.004, 0.001, 0.0018, slotMat, 3);
+      slot.position.set(0, outerH / 2 - 0.006, 0.0038); slot.name = 'holder-attachment-slot'; c.add(slot);
+      c.userData.attachmentLocal = slot.position.toArray();
     } else {
       c.add(rbox(w + 0.012, h + 0.012, 0.005, 0.004, new THREE.MeshStandardMaterial({ color: '#eef3f8', transparent: true, opacity: 0.35, roughness: 0.1 })));
     }
     const face = decal(cardTex, w, h, { transparent: false });
-    face.position.z = 0.0045;
+    face.position.z = holder === 'silicone' ? 0.0022 : 0.0045;
     c.add(face);
     return c;
   };
 
   if (type === 'day-deo') {
     const ribbonMat = new THREE.MeshStandardMaterial({
-      map: toTexture(ribbonTexture(`${(emblem?.name || '').toUpperCase()}  ·  ${emblem?.wordmark || ''}`, main, textColor)),
+      map: toTexture(ribbonTexture((emblem?.name || 'Đại học Bách khoa Hà Nội').toUpperCase(), main, textColor, { logo: emblemCanvas, wordmark: emblem?.wordmark || 'HUST' })),
       side: DS, roughness: 0.7,
     });
     for (const s of [-1, 1]) {
@@ -497,16 +513,27 @@ export function buildCard(ctx) {
         [s * 0.034, 0.31, chestZ(0.31) + 0.004], [s * 0.008, 0.25, chestZ(0.25) + 0.008],
       ], 0.02, ribbonMat));
     }
-    // móc kim loại
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.008, 0.0025, 4, 10), metal);
-    ring.position.set(0, 0.246, chestZ(0.25) + 0.01);
-    g.add(ring);
-    const hook = new THREE.Mesh(new THREE.CapsuleGeometry(0.0045, 0.018, 2, 6), metal);
-    hook.position.set(0, 0.229, chestZ(0.23) + 0.012);
-    g.add(hook);
+    // Hai đầu gập có đinh tán bạc, khoen tròn và móc càng cua rỗng.
+    const hardwareZ = chestZ(0.25) + 0.013;
+    for (const side of [-1, 1]) {
+      const rivet = new THREE.Mesh(new THREE.CylinderGeometry(0.0028, 0.0028, 0.0014, 12), metal);
+      rivet.rotation.x = Math.PI / 2; rivet.position.set(side * 0.008, 0.257, hardwareZ); g.add(rivet);
+    }
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.008, 0.0013, 6, 24), metal);
+    ring.position.set(0, 0.244, hardwareZ); ring.name = 'lanyard-split-ring'; g.add(ring);
+    const swivel = new THREE.Mesh(new THREE.CylinderGeometry(0.0027, 0.0027, 0.009, 10), metal);
+    swivel.position.set(0, 0.231, hardwareZ); g.add(swivel);
+    const hook = tube([[0, 0.228, hardwareZ], [-0.007, 0.224, hardwareZ], [-0.009, 0.213, hardwareZ],
+      [-0.004, 0.207, hardwareZ], [0.005, 0.208, hardwareZ], [0.009, 0.217, hardwareZ], [0.006, 0.223, hardwareZ]], 0.00135, metal);
+    hook.name = 'lanyard-lobster-clasp'; g.add(hook);
+    const gate = tube([[0.006, 0.223, hardwareZ], [0.005, 0.215, hardwareZ], [0.003, 0.209, hardwareZ]], 0.0009, metal);
+    g.add(gate);
     const card = makeCard(1, 'silicone');
-    card.position.set(0, 0.168, chestZ(0.17) + 0.016);
     card.rotation.x = -0.06;
+    const attachment = new THREE.Vector3(...card.userData.attachmentLocal).applyEuler(card.rotation);
+    // Giữ móc trùng khe trên cạnh ngắn/dài tương ứng, không giữ tâm thẻ cố định.
+    card.position.set(0, 0.211 - attachment.y, hardwareZ - attachment.z);
+    card.name = 'student-card-holder';
     g.add(card);
   } else {
     const card = makeCard(0.85, 'clear');
@@ -515,7 +542,7 @@ export function buildCard(ctx) {
     card.rotation.set(-0.1, 0.32, 0);
     g.add(card);
     const clip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.025, 0.006), metal);
-    clip.position.set(x - 0.004, 0.325, chestZ(0.32) + 0.008);
+    clip.position.set(x - 0.004, card.position.y + card.userData.holderHeight / 2 + 0.005, chestZ(0.32) + 0.008);
     clip.rotation.y = 0.32;
     g.add(clip);
   }

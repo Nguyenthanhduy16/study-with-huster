@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { DIM, trunkRadius, lowpolyMat } from '../rig.js';
 import { smin, ellipsoid, roundCone, torusY, surfaceNets, relax, skinByDistance, segT } from '../sdf.js';
-import { composeGarment, composePlain, composeSleeve, composeTopAtlas, toTexture, shade } from '../textures.js';
+import { composeGarment, composePlain, composeSleeve, composeTopAtlas, toTexture, shade, drawEmblem } from '../textures.js';
 
 const TAU = Math.PI * 2;
 const wrap = (u) => u - Math.floor(u);
@@ -59,6 +59,34 @@ function skinnedPart(geo, mat) {
   const m = new THREE.SkinnedMesh(geo, mat);
   m.castShadow = true;
   return { skinned: m };
+}
+
+// Thân áo theo thân người; chỉ phần tay áo được nhận trọng số xương tay.
+// Khoảng cách tới mọi xương sẽ khiến bàn tay ở gần hông kéo cả gấu áo/váy.
+function skinTop(geo, M, options) {
+  const fullArm = DIM.upperArm + DIM.foreArm;
+  const sleeveLen = options.sleeve === 'long' ? fullArm - 0.025 : options.sleeve === 'none' ? 0 : 0.15;
+  skinByDistance(geo, M.segments.filter((segment) => segment.bone === 0 || (segment.bone >= 2 && segment.bone <= 7)));
+  const p = geo.attributes.position, indices = geo.attributes.skinIndex, weights = geo.attributes.skinWeight;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const side = x >= 0 ? 'L' : 'R', arm = M.arms[side], base = side === 'L' ? 2 : 5;
+    const along = segT(x, y, z, arm.sh, arm.wr) * fullArm;
+    const armDistance = Math.max(M.arm(side, x, y, z, 0.012, { upTo: sleeveLen, withHand: false }), along - sleeveLen);
+    const blend = sleeveLen ? smooth(-0.018, 0.018, M.trunk(x, y, z, 0.014) - armDistance) : 0;
+    const armWeights = [0, 0, 0];
+    for (let k = 0; k < 4; k++) {
+      const bone = indices.array[i * 4 + k];
+      if (bone >= base && bone <= base + 2) armWeights[bone - base] += weights.array[i * 4 + k];
+    }
+    const sum = armWeights[0] + armWeights[1] + armWeights[2];
+    indices.setXYZW(i, 0, base, base + 1, base + 2);
+    weights.setXYZW(i, 1 - blend,
+      blend * (sum ? armWeights[0] / sum : 1),
+      blend * (sum ? armWeights[1] / sum : 0),
+      blend * (sum ? armWeights[2] / sum : 0));
+  }
+  return geo;
 }
 
 // ---------------------------------------------------------- TÓC
@@ -146,7 +174,8 @@ function topGeometry(M, o) {
   const field = (x, y, z) => {
     // áo bỏ ngoài: dày hơn quanh hông để phủ kín cạp quần
     const flare = o.tucked ? 0 : 0.013 * smooth(P + 0.15, P + 0.08, y);
-    let d = M.trunk(x, y, z, base + flare);
+    const waistTaper = o.waistFit ? 0.005 * Math.exp(-(((y - P - 0.17) / 0.13) ** 2)) : 0;
+    let d = M.trunk(x, y, z, base + flare - waistTaper);
     for (const s of ['L', 'R']) {
       d = smin(d, M.deltoid(s, x, y, z, base * 0.6), 0.04);
       if (!o.tucked) {
@@ -165,11 +194,23 @@ function topGeometry(M, o) {
       }
     }
     d = Math.max(d, hemY - y);       // gấu
-    d = Math.max(d, y - neckY(z));   // cổ
+    // lỗ cổ tròn quanh cổ (không cắt phẳng → vai áo phủ kín tới chân cổ)
+    d = Math.max(d, -Math.max(Math.hypot(x, (z - 0.004) * 1.08) - 0.058, neckY(z) - 0.03 - y));
+    d = Math.max(d, y - (P + 0.56));
     if (o.vneck) d = Math.max(d, -Math.max(P + 0.395 + 1.5 * Math.abs(x) - y, 0.03 - z));
-    if (o.collar === 'polo' || o.collar === 'shirt') {
-      d = smin(d, torusY(x, y, z, [0, P + 0.497, 0.004], 0.064, 0.014, 1.06, 0.92), 0.012);
-    } else if (o.collar === 'crew') {
+    if (!o.sportsCollar && (o.collar === 'polo' || o.collar === 'shirt')) {
+      d = smin(d, torusY(x, y, z, [0, P + 0.51, 0.004], 0.066, 0.016, 1.06, 0.94), 0.01);
+      // hai vạt cổ bẻ xuống ngực
+      for (const s of [-1, 1]) {
+        const cx = s * 0.038, cy = P + 0.47, cz = trunkRadius(0.47) * M.b.sz + base + 0.01;
+        const ux = x - cx, uy = y - cy, uz = z - cz;
+        // xoay vạt cho dốc theo ngực và chĩa mũi xuống giữa
+        const a = 0.55, r = s * 0.5;
+        const y1 = uy * Math.cos(a) - uz * Math.sin(a), z1 = uy * Math.sin(a) + uz * Math.cos(a);
+        const x2 = ux * Math.cos(r) - y1 * Math.sin(r), y2 = ux * Math.sin(r) + y1 * Math.cos(r);
+        d = smin(d, ellipsoid(x2, y2, z1, [0, 0, 0], [0.03, 0.04, 0.008]), 0.006);
+      }
+    } else if (!o.sportsCollar && o.collar === 'crew') {
       d = smin(d, torusY(x, y, z, [0, neckY(0.06) - 0.004, 0.006], 0.057, 0.0085, 1.02, 0.95), 0.008);
     } else if (o.collar === 'stand') {
       const ring = Math.max(Math.abs(Math.hypot(x, (z - 0.004) * 1.05) - 0.064) - 0.009, Math.abs(y - (P + 0.515)) - 0.032);
@@ -182,61 +223,195 @@ function topGeometry(M, o) {
   };
   const g = surfaceNets(field, [-0.43, P - 0.2, -0.27], [0.43, P + 0.64, 0.25], 0.0095);
   relax(g, 1, 0.4);
-  skinByDistance(g, M.segments);
+  skinTop(g, M, o);
 
   return perTriangleUV(g, (x, y, z, cx, cy, cz) => {
-    if (sleeveLen > 0) {
+    // Áo raglan dùng một hệ UV cho toàn bộ thân/tay; màu mảng được tính
+    // theo vị trí trên lưới để tránh đường phân loại tam giác tay áo bị răng cưa.
+    if (sleeveLen > 0 && !o.sportsCollar) {
       for (const s of ['L', 'R']) {
         const A = M.arms[s];
         if (Math.sign(cx) !== A.s) continue;
         const tFrac = segT(cx, cy, cz, A.sh, A.wr);
-        if (tFrac > 0.06 && M.arm(s, cx, cy, cz) < M.trunk(cx, cy, cz) - 0.01) {
+        const bomberSeamX = M.shoulderX - 0.035 + 0.045 * (1 - smooth(P + 0.23, P + 0.39, cy));
+        const sleeveRegion = o.bomber ? Math.abs(cx) > bomberSeamX : M.arm(s, cx, cy, cz) < M.trunk(cx, cy, cz) - 0.01;
+        if (tFrac > (o.bomber ? -0.09 : 0.06) && sleeveRegion) {
           const st = segT(x, y, z, A.sh, A.wr);
           const ax = A.sh[0] + (A.wr[0] - A.sh[0]) * st, az = A.sh[2] + (A.wr[2] - A.sh[2]) * st;
           const th = Math.atan2(x - ax, z - az);
           const ul = wrap(s === 'L' ? (th + Math.PI / 2) / TAU : (th - Math.PI / 2) / TAU);
           const f = clamp01((st * fullArm) / Math.max(sleeveLen, 0.01));
-          return [(s === 'L' ? 0 : 0.5) + 0.5 * ul, 0.5 * (1 - f), 0.5, s === 'L' ? 0 : 0.5, true];
+          const v = o.bomber ? 0.002 + 0.496 * (1 - f) : 0.5 * (1 - f);
+          return [(s === 'L' ? 0 : 0.5) + 0.5 * ul, v, 0.5, s === 'L' ? 0 : 0.5, true];
         }
       }
     }
     const th = Math.atan2(x / M.b.sx, z / M.b.sz);
     const v = clamp01((y - hemY) / (neckY(z) - hemY));
-    return [wrap(0.25 + th / TAU), 0.5 + 0.5 * v, 1, 0, false];
+    return [wrap(0.25 + th / TAU), o.bomber ? 0.502 + 0.496 * v : 0.5 + 0.5 * v, 1, 0, false];
   });
 }
 
+// Cổ thể dục: hai lá cổ bẻ phẳng và nẹp chữ V bắt chéo, ôm theo mặt ngực.
+// Tách phần này khỏi UV để cổ luôn xanh và hai viền trắng luôn liền nét.
+function sportsCollar(M, blue, white) {
+  const group = new THREE.Group();
+  const blueMat = lowpolyMat(blue, { flatShading: false, side: THREE.DoubleSide });
+  const whiteMat = lowpolyMat(white, { flatShading: false, side: THREE.DoubleSide });
+  const frontZ = (x, y, lift = 0) => {
+    const r = trunkRadius(y), rx = r * M.b.sx + 0.014;
+    return r * M.b.sz * Math.sqrt(Math.max(0.04, 1 - (x / rx) ** 2)) + 0.022 + lift;
+  };
+  const mesh = (verts, indices, material) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.setIndex(indices); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, material); m.castShadow = true; group.add(m);
+  };
+  const strip = (a, b, width, material, lift = 0, offset = 0) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+    const nx = -dy / len, ny = dx / len, vertices = [], indices = [];
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16;
+      for (const side of [-1, 1]) {
+        const d = offset + side * width * 0.5;
+        const x = a[0] + dx * t + nx * d, y = a[1] + dy * t + ny * d;
+        vertices.push(x, y, frontZ(x, y, lift));
+      }
+      if (i) { const p = i * 2; indices.push(p - 2, p - 1, p, p - 1, p + 1, p); }
+    }
+    mesh(vertices, indices, material);
+  };
+  for (const side of [-1, 1]) {
+    const points = [[side * 0.038, 0.502], [side * 0.076, 0.508], [side * 0.112, 0.468], [side * 0.069, 0.449]];
+    mesh(points.flatMap(([x, y]) => [x, y, frontZ(x, y, 0.004)]), [0, 1, 2, 0, 2, 3], blueMat);
+    // Hai đường trắng ở mép ngoài lá cổ, giống phần bo dệt trên áo mẫu.
+    const a = [side * 0.074, 0.500], b = [side * 0.104, 0.468];
+    for (const offset of [-0.003, 0.003]) strip(a, b, 0.0018, whiteMat, 0.006, offset);
+  }
+  for (const side of [-1, 1]) {
+    const a = [side * 0.066, 0.491], b = [-side * 0.006, side < 0 ? 0.386 : 0.378];
+    const lift = side < 0 ? 0.003 : 0.005;
+    strip(a, b, 0.018, blueMat, lift);
+    for (const offset of [-0.0048, 0.0048]) strip(a, b, 0.0022, whiteMat, lift + 0.001, offset);
+  }
+  return group;
+}
+
 export function buildTop(ctx) {
-  const { item, rig, imgs, emblemCanvas, emblem } = ctx;
+  const { item, rig, imgs, emblem } = ctx;
+  const emblemCanvas = imgs.badge ? drawEmblem({
+    ...emblem, logo: item.textures.badge, logoCrop: item.badgeCrop, logoClip: item.badgeClip,
+  }) : ctx.emblemCanvas;
   const o = item.options || {};
   const M = rig.model;
   const main = item.colors.main, accent = item.colors.accent || shade(main, -0.25);
   const trim = item.colors.trim || '#ffffff';
   const printColor = item.colors.print || '#ffffff';
 
-  const keyOpts = { sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck };
-  const geo = cached(`top|${M.name}|${JSON.stringify(keyOpts)}`, () => topGeometry(M, o));
+  const keyOpts = { sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck, sportsCollar: o.sportsCollar, bomber: o.bomber, waistFit: o.waistFit };
+  let geo = cached(`top|${M.name}|${JSON.stringify(keyOpts)}`, () => topGeometry(M, o));
+  if (o.sportsCollar || o.bomber) {
+    // Chỉ nhân bản hình học cho áo phối màu; đổi màu không sửa lưới dùng chung.
+    geo = geo.clone(); geo.userData.keep = false;
+    const pos = geo.attributes.position, colors = new Float32Array(pos.count * 3), panelMix = new Float32Array(pos.count);
+    // [r128] Color('#hex') của r128 không tự đổi sRGB → tuyến tính như bản mới; màu đỉnh phải đổi tay
+    const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
+    const blue = lin(accent), white = lin('#ffffff'), bodyColor = lin(main);
+    for (let i = 0; i < pos.count; i++) {
+      const x = Math.abs(pos.getX(i)) / M.b.sx;
+      const y = pos.getY(i) - M.P[1];
+      const seamX = Math.min(0.165, 0.059 + Math.max(0, 0.50 - y) * 0.65) + Math.max(0, 0.23 - y) * 2.5;
+      const bomberSeamX = M.shoulderX - 0.035 + 0.045 * (1 - smooth(0.23, 0.39, y));
+      const blend = o.bomber ? smooth(bomberSeamX - 0.006, bomberSeamX + 0.006, Math.abs(pos.getX(i))) : smooth(seamX - 0.003, seamX + 0.003, x);
+      const c = (o.bomber ? bodyColor : white).clone().lerp(blue, blend);
+      panelMix[i] = blend;
+      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    if (o.bomber) geo.setAttribute('panelMix', new THREE.BufferAttribute(panelMix, 1));
+  }
 
   const bodyCanvas = composeGarment({
     color: main, accent, imgs, trim, printColor,
     emblem: item.emblem ? emblemCanvas : null, emblemPos: item.emblem,
     stripes: o.stripes, placket: o.placket, zipper: o.zipper, zipperColor: item.colors.zipper, pocket: o.pocket, kangaroo: o.kangaroo,
     patternScale: o.patternScale,
-    piping: o.piping, sidePiping: o.sidePiping, weltPockets: o.weltPockets, hemBand: o.hemBand,
-    vneck: o.vneck ? [accent, trim] : null, plaid: o.plaid, breton: o.breton,
+    piping: o.piping, shoulderPiping: o.shoulderPiping, sidePiping: o.sidePiping, weltPockets: o.weltPockets, hemBand: o.hemBand,
+    vneck: o.vneck && !o.sportsCollar ? [accent, trim] : null, plaid: o.plaid, breton: o.breton,
     wordmark: o.wordmark, wordmarkText: emblem?.wordmark, wordmarkBack: o.wordmarkBack,
     archText: o.arch ? (emblem?.name || '') : null, archSub: o.arch ? emblem?.short : null,
   });
-  if (o.collarAccent) { // cổ áo phối màu
+  if (!o.sportsCollar && (o.collar === 'polo' || o.collar === 'shirt')) { // cổ bẻ: đậm hơn thân một chút để nổi khối
+    const c = bodyCanvas.getContext('2d');
+    c.fillStyle = shade(o.collarAccent ? accent : main, -0.05); c.fillRect(0, 0, 1024, 12);
+  }
+  if (o.collarAccent && !o.sportsCollar) { // cổ áo phối màu
     const c = bodyCanvas.getContext('2d');
     c.fillStyle = accent; c.fillRect(0, 0, 1024, 18);
+  }
+  if (o.poloTrim) {
+    const c = bodyCanvas.getContext('2d');
+    c.fillStyle = item.colors.ribAccent || '#1f2a44'; c.fillRect(0, 3, 1024, 4);
+    c.fillStyle = trim; c.fillRect(0, 8, 1024, 3);
+  }
+  if (o.bomber) {
+    const c = bodyCanvas.getContext('2d');
+    c.fillStyle = main; c.fillRect(0, 0, 1024, 25); c.fillRect(0, 512 * 0.92, 1024, 512 * 0.08);
+    c.fillStyle = trim;
+    for (const y of [5, 15, 512 * 0.94, 512 * 0.973]) c.fillRect(0, y, 1024, y < 25 ? 4 : 5);
+    // Nẹp bấm bạc thay cho khoá kéo; nẹp che các sọc bo ở chính giữa.
+    c.fillStyle = shade(main, -0.03); c.fillRect(244, 0, 24, 512);
+    for (let y = 22; y < 506; y += 78) {
+      c.fillStyle = '#7c828a'; c.beginPath(); c.arc(256, y, 5.2, 0, TAU); c.fill();
+      c.fillStyle = '#dce0e4'; c.beginPath(); c.arc(255, y - 1, 3.8, 0, TAU); c.fill();
+    }
+    if (o.weltPockets) {
+      c.strokeStyle = trim; c.lineWidth = 10;
+      for (const side of [-1, 1]) { c.beginPath(); c.moveTo(256 + side * 95, 512 * 0.65); c.lineTo(256 + side * 114, 512 * 0.86); c.stroke(); }
+    }
   }
   const sleeveColor = o.accentSleeves ? accent : main;
   const sl = { cuff: o.cuffs && o.sleeve === 'long', hem: o.sleeve === 'short', sleeveStripes: o.sleeveStripes, trim, plaid: o.plaid, breton: o.breton, patternScale: o.patternScale };
   const sleeveImgs = o.accentSleeves ? {} : { pattern: imgs.pattern };
-  const left = composeSleeve(sleeveColor, sleeveImgs, { ...sl, emblem: o.sleeveEmblem ? emblemCanvas : null });
-  const right = composeSleeve(sleeveColor, sleeveImgs, sl);
-  const parts = [skinnedPart(geo, garmentMaterial(composeTopAtlas(bodyCanvas, left, right)))];
+  // viền vai chạy dọc mặt ngoài-sau của tay áo (tránh miếng huy hiệu)
+  // kích thước huy hiệu tay áo theo mét → px (ô tay áo bị kéo giãn khác nhau theo 2 chiều)
+  const sleeveLen = o.sleeve === 'long' ? DIM.upperArm + DIM.foreArm - 0.025 : 0.15;
+  const pxU = 512 / (TAU * 0.064 * M.L), pxV = 512 / sleeveLen;
+  const emblemBox = [0.055 * pxU, 0.055 * pxV, 0.03 * pxV];
+  const left = composeSleeve(sleeveColor, sleeveImgs, { ...sl, piping: o.shoulderPiping, pipingU: 0.68, emblem: o.sleeveEmblem ? emblemCanvas : null, emblemBox });
+  const right = composeSleeve(sleeveColor, sleeveImgs, { ...sl, piping: o.shoulderPiping, pipingU: 0.32 });
+  if (o.poloTrim || o.bomber) for (const sleeve of [left, right]) {
+    const c = sleeve.getContext('2d');
+    if (o.bomber) {
+      c.fillStyle = main; c.fillRect(0, 512 * 0.89, 512, 512 * 0.11);
+      c.fillStyle = trim;
+      for (const y of [512 * 0.918, 512 * 0.965]) c.fillRect(0, y, 512, 7);
+    } else {
+      c.fillStyle = item.colors.ribAccent || '#1f2a44'; c.fillRect(0, 512 * 0.94, 512, 9);
+      c.fillStyle = trim; c.fillRect(0, 512 * 0.965, 512, 8);
+    }
+  }
+  const material = garmentMaterial(composeTopAtlas(bodyCanvas, left, right), { vertexColors: !!o.sportsCollar });
+  if (o.bomber) {
+    // Pha mảng màu sau khi lấy mẫu atlas, thay vì đổi ô atlas theo từng
+    // tam giác: đường ráp vai liền nét và logo/chữ in giữ đúng màu gốc.
+    material.userData.bomberPanels = { main, accent };
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.bomberBody = { value: new THREE.Color(main).convertSRGBToLinear() }; // [r128]
+      shader.uniforms.bomberSleeve = { value: new THREE.Color(accent).convertSRGBToLinear() }; // [r128]
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float panelMix;\nvarying float vPanelMix;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvPanelMix = panelMix;');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vPanelMix;\nuniform vec3 bomberBody;\nuniform vec3 bomberSleeve;').replace('#include <map_fragment>', `#include <map_fragment>
+        #ifdef USE_MAP
+          vec3 atlasBase = vUv.y < 0.5 ? bomberSleeve : bomberBody; // [r128] vUv (bản mới: vMapUv)
+          vec3 panelColor = mix(bomberBody, bomberSleeve, vPanelMix);
+          diffuseColor.rgb *= panelColor / max(atlasBase, vec3(0.001));
+        #endif`);
+    };
+    material.customProgramCacheKey = () => 'hust-bomber-panels-v1';
+  }
+  const parts = [skinnedPart(geo, material)];
+  if (o.sportsCollar) parts.push({ joint: 'torso', obj: sportsCollar(M, accent, trim) });
 
   if (o.collar === 'hood' && !o.zipper) { // dây rút mũ hoodie
     const g = new THREE.Group();
@@ -252,6 +427,10 @@ export function buildTop(ctx) {
 }
 
 // ---------------------------------------------------------- QUẦN / VÁY
+function bottomHemY(G, o) {
+  return o.length === 'shorts' ? G.kn[1] + 0.16 : G.an[1] + (o.length === 'capri' ? 0.16 : 0.035);
+}
+
 function bottomGeometry(M, o) {
   const P = M.P[1];
   const fitT = { slim: 0.008, regular: 0.013, wide: 0.02 }[o.fit || 'regular'];
@@ -282,19 +461,38 @@ function bottomGeometry(M, o) {
           lg = M.leg(s, x, y, z, fitT + 0.008, { thighOnly: true, flare: 0.02 });
           lg = Math.max(lg, (G.kn[1] + 0.16) - y);
         } else {
-          const flare = o.fit === 'wide' ? 0.03 : (o.cuff ? -0.012 : 0.002);
+          // Quần thể thao ống suông: giữ độ rộng từ gối tới gấu, không bo cổ chân.
+          const flare = o.track ? (o.cuff ? -0.008 : 0.023) : (o.fit === 'wide' ? 0.03 : (o.cuff ? -0.012 : 0.002));
           lg = M.leg(s, x, y, z, fitT, { flare });
           lg = Math.max(lg, (G.an[1] + (length === 'capri' ? 0.16 : 0.035)) - y);
         }
         d = smin(d, lg, 0.03);
       }
     }
+    if (o.track && length === 'shorts' && !o.skirt && y < P - 0.17) {
+      // Tách rõ hai cửa ống của quần sooc rộng; phép hợp mềm không được
+      // nối kín khoảng giữa hai đùi thành một gấu chung như chân váy.
+      const gap = 0.012 * M.b.sx * smooth(P - 0.17, P - 0.31, y);
+      d = Math.max(d, gap - Math.abs(x));
+    }
     return Math.max(d, y - waistTop);
   };
   const g = surfaceNets(field, [-0.36, -0.02, -0.25], [0.36, P + 0.1, 0.25], o.skirt ? 0.0085 : 0.0095);
   relax(g, 1, 0.4);
-  skinByDistance(g, M.segments);
+  // Quần/váy chỉ theo thân và chân, không chịu tác động của tay hay đầu.
+  skinByDistance(g, M.segments.filter((segment) => segment.bone === 0 || segment.bone >= 8));
   return perTriangleUV(g, (x, y, z, cx, cy) => {
+    if (o.track && !o.skirt) {
+      // Mỗi chân có một nửa atlas riêng; u=0/1 chỉ nằm ở đường may NGOÀI.
+      // Ở phần hông, trục chân chuyển dần về giữa chậu để sọc nối tới cạp.
+      const G = M.legs[cx >= 0 ? 'L' : 'R'];
+      const axisX = G.hp[0] * (1 - smooth(P - 0.18, P - 0.035, y));
+      const th = Math.atan2(x - axisX, z);
+      const u = wrap((th - G.s * Math.PI / 2) / TAU);
+      const origin = G.s > 0 ? 0 : 0.5;
+      const hemY = bottomHemY(G, o);
+      return [origin + u * 0.5, clamp01((y - hemY) / (waistTop - hemY)), 0.5, origin, true];
+    }
     if (!o.skirt && cy < P - 0.1) {
       const G = M.legs[cx >= 0 ? 'L' : 'R'];
       const th = Math.atan2(x - G.hp[0], z);
@@ -306,16 +504,104 @@ function bottomGeometry(M, o) {
   });
 }
 
+// Atlas riêng cho quần thể thao: sọc trắng ở mép ngoài của từng ống quần,
+// chữ HUST chỉ in một lần ở đùi trái, không lặp xuống ống chân.
+function trackPantsCanvas(main, accent, imgs, o, M, printColor) {
+  const W = 1024, H = 1024, half = W / 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const c = canvas.getContext('2d');
+  const fabric = composePlain(main, imgs, { patternScale: o.patternScale });
+  const G = M.legs.L;
+  const hemY = bottomHemY(G, o), waistY = M.P[1] + 0.078;
+  const py = (y) => (1 - (y - hemY) / (waistY - hemY)) * H;
+  for (let side = 0; side < 2; side++) {
+    const x = side * half;
+    c.drawImage(fabric, x, 0, half, H);
+    if (o.sideStripe) {
+      // Dải phối vẫn ôm đường may ngoài, nhích nhẹ về phía trước để thấy
+      // rõ cả hai sọc khi nhìn thẳng thay vì chỉ thấy một đường ở bóng viền.
+      const stripeWidth = o.trackStripeWidth ?? 0.08;
+      const bias = Math.min(o.trackStripeBias ?? 0.035, stripeWidth * 0.45);
+      c.fillStyle = accent;
+      for (let row = 0; row < H; row++) {
+        const worldY = hemY + (1 - (row + 0.5) / H) * (waistY - hemY);
+        // Vòng hông lớn hơn vòng ống chân: giảm bề rộng góc tại cạp để
+        // giữ sọc hẹp đều, không nở thành hai mảng trắng lớn bên hông.
+        const fit = 1 - 0.60 * smooth(M.P[1] - 0.18, M.P[1] - 0.035, worldY);
+        const center = side === 0 ? 1 - bias * fit : bias * fit;
+        const start = center - stripeWidth * fit / 2, end = center + stripeWidth * fit / 2;
+        c.fillRect(x + Math.max(0, start) * half, row, (Math.min(1, end) - Math.max(0, start)) * half, 1);
+        if (start < 0) c.fillRect(x + (1 + start) * half, row, -start * half, 1);
+        if (end > 1) c.fillRect(x, row, (end - 1) * half, 1);
+      }
+    }
+  }
+  if (o.elasticWaist) {
+    const bandH = py(waistY - 0.043);
+    c.fillStyle = 'rgba(0,0,0,0.10)'; c.fillRect(0, 0, W, bandH);
+    c.strokeStyle = 'rgba(0,0,0,0.18)'; c.lineWidth = 2;
+    for (let y = 8; y < bandH; y += 12) {
+      c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke();
+    }
+    c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1;
+    for (let x = 0; x < W; x += 7) {
+      c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 2, bandH); c.stroke();
+    }
+  }
+  if (o.zipPockets) {
+    for (let side = 0; side < 2; side++) {
+      const x = half * (side + (side === 0 ? 0.89 : 0.11));
+      const slant = side === 0 ? -1 : 1;
+      const y0 = py(waistY - 0.07), y1 = py(waistY - 0.205);
+      c.strokeStyle = shade(main, -0.05); c.lineWidth = 9;
+      c.beginPath(); c.moveTo(x, y0); c.lineTo(x + slant * 12, y1); c.stroke();
+      c.strokeStyle = shade(main, 0.10); c.lineWidth = 2;
+      c.beginPath(); c.moveTo(x + 2, y0); c.lineTo(x + slant * 12 + 2, y1); c.stroke();
+      c.fillStyle = '#4b5361'; c.fillRect(x - 3, y0 - 3, 6, 10);
+    }
+  }
+  // Đường may gấu / bo gấu theo chiều dài thực, không lặp lại trên ống.
+  c.fillStyle = 'rgba(0,0,0,0.10)';
+  const hemH = (o.cuff ? 0.045 : 0.012) / (waistY - hemY) * H;
+  c.fillRect(0, H - hemH, W, hemH);
+  c.fillRect(0, H - hemH - 3, W, 2);
+  if (o.sideTag) {
+    const x = half * 1.13, y = py(M.P[1] - 0.17);
+    c.fillStyle = '#161918'; c.fillRect(x - 10, y, 20, 61);
+    c.fillStyle = '#f5f4ee'; c.font = '800 12px "Be Vietnam Pro", system-ui, sans-serif';
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    [...'HUST'].forEach((ch, i) => c.fillText(ch, x, y + 9 + i * 14));
+  }
+  if (o.wordmark) {
+    const printY = o.wordmarkVertical ? hemY + 0.075 : M.P[1] - 0.15;
+    const y = py(printY);
+    c.fillStyle = printColor;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (o.wordmarkVertical) {
+      c.save(); c.translate(half * 0.86, y); c.rotate(-Math.PI / 2);
+      c.font = '800 34px "Be Vietnam Pro", system-ui, sans-serif';
+      c.fillText('HUST', 0, 0, 146); c.restore();
+    } else {
+      c.font = 'italic 800 28px "Be Vietnam Pro", system-ui, sans-serif';
+      c.fillText('HUST', half * 0.78, y, 112);
+    }
+  }
+  return canvas;
+}
+
 export function buildBottom(ctx) {
   const { item, rig, imgs } = ctx;
   const o = item.options || {};
   const M = rig.model;
   const main = item.colors.main, accent = item.colors.accent || shade(main, 0.4);
-  const keyOpts = { skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff };
+  const keyOpts = { skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff, track: o.track };
   const geo = cached(`bottom|${M.name}|${JSON.stringify(keyOpts)}`, () => bottomGeometry(M, o));
-  const plain = composePlain(main, imgs, { denim: o.denim, sideStripe: o.sideStripe ? accent : null, patternScale: o.patternScale });
-  const mat = garmentMaterial(plain, { roughness: o.denim ? 0.95 : 0.88 });
-  mat.map.wrapT = THREE.RepeatWrapping;
+  const plain = o.track
+    ? trackPantsCanvas(main, accent, imgs, o, M, item.colors.print || accent)
+    : composePlain(main, imgs, { denim: o.denim, sideStripe: o.sideStripe ? accent : null, patternScale: o.patternScale });
+  const mat = garmentMaterial(plain, { roughness: o.fleece ? 0.98 : (o.denim ? 0.95 : 0.88) });
+  mat.map.wrapT = o.track ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
   const parts = [skinnedPart(geo, mat)];
 
   const b = M.b, kz = Math.min(b.sx, b.sz);

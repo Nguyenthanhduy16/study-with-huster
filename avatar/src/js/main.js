@@ -23,7 +23,22 @@ function h(tag, attrs = {}, ...kids) {
 }
 
 function loadSaved() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (_) { return null; }
+  try {
+    const state = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (!state) return null;
+    // Đổi nhận diện mặc định cũ, giữ trang phục và nội dung người dùng tự chỉnh.
+    const e = state.emblem;
+    if (e) {
+      const legacy = e.name === 'Trường Đại học Kỹ thuật Tổ Ong' || e.wordmark === 'TỔ ONG' || e.short === 'KTO';
+      if (e.name === 'Trường Đại học Kỹ thuật Tổ Ong') e.name = CATALOG.defaults.emblem.name;
+      if (e.short === 'KTO') e.short = CATALOG.defaults.emblem.short;
+      if (e.wordmark === 'TỔ ONG') e.wordmark = CATALOG.defaults.emblem.wordmark;
+      if (legacy && e.year === '2026') e.year = CATALOG.defaults.emblem.year;
+      if (legacy && e.accent === '#f6e7c8') e.accent = CATALOG.defaults.emblem.accent;
+    }
+    if (state.card?.school === 'Trường Đại học Kỹ thuật Tổ Ong') state.card.school = CATALOG.defaults.card.school;
+    return state;
+  } catch (_) { return null; }
 }
 function save(state) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -97,6 +112,7 @@ const TABS = [
   { id: 'emblem', label: 'Huy hiệu' },
 ];
 let current = 'top';
+const collectionFilter = { top: 'all', bottom: 'all' };
 
 function renderTabs() {
   const nav = $('#tabs');
@@ -110,7 +126,7 @@ function renderTabs() {
 
 function thumbCtx() {
   const s = studio.state;
-  return { body: s.body, emblemCanvas: studio.emblemCanvas, cardCanvas: studio.cardCanvas, emblem: s.emblem, emblemKey: JSON.stringify(s.emblem) + (s.card?.name || '') };
+  return { body: s.body, emblemCanvas: studio.emblemCanvas, cardCanvas: studio.cardCanvas, emblem: s.emblem, emblemKey: JSON.stringify(s.emblem) + (s.card?.name || '') + '|' + (s.card?.orientation || 'landscape') };
 }
 
 // ------------------------------------------------------------ bảng điều khiển
@@ -155,7 +171,7 @@ function itemCard(item, equipped, onPick) {
   return h('button', { class: 'item', 'aria-pressed': String(equipped), onclick: onPick },
     fig,
     h('span', { class: 'item-name' }, item.name),
-    item.group === 'truong' ? h('span', { class: 'tag' }, 'Data trường') : null,
+    item.group === 'truong' ? h('span', { class: 'tag' }, item.collection === 'hust-phuong-thao' ? 'Phương Thảo' : 'HUST') : null,
   );
 }
 
@@ -168,7 +184,10 @@ async function busy(fn) {
 
 function slotPanel(slot) {
   const equippedId = studio.state.equipped[slot.id];
-  const items = studio.itemsForSlot(slot.id);
+  const allItems = studio.itemsForSlot(slot.id);
+  const hasCollection = allItems.some((it) => it.collection === 'hust-phuong-thao');
+  const filter = collectionFilter[slot.id] || 'all';
+  const items = filter === 'shop' ? allItems.filter((it) => it.collection === 'hust-phuong-thao') : allItems;
   const grid = h('div', { class: 'grid' });
   if (slot.allowNone) {
     grid.append(h('button', { class: 'item none', 'aria-pressed': String(!equippedId), onclick: async () => { await busy(() => studio.equip(slot.id, null)); renderPanel(); } },
@@ -177,19 +196,41 @@ function slotPanel(slot) {
   for (const it of items) {
     grid.append(itemCard(it, it.id === equippedId, async () => { await busy(() => studio.equip(slot.id, it.id)); renderPanel(); }));
   }
-  const parts = [section(slot.label, grid)];
+  const parts = [];
+  if (hasCollection) {
+    parts.push(section('Bộ sưu tập HUST',
+      segmented([['all', 'Tất cả'], ['shop', 'Đồng phục Phương Thảo']], filter, (value) => { collectionFilter[slot.id] = value; renderPanel(); }, 'Lọc bộ sưu tập'),
+      h('p', { class: 'hint' }, `${allItems.filter((it) => it.collection === 'hust-phuong-thao').length} mẫu trong bộ sưu tập · chọn từng món để phối đồ.`),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn ghost small', onclick: () => equipUniform('ao-thun-truong') }, 'Bộ GDTC · áo cộc'),
+        h('button', { class: 'btn ghost small', onclick: () => equipUniform('ao-khoac-gio') }, 'Bộ GDTC · áo khoác'),
+      ),
+    ));
+  }
+  parts.push(section(slot.label, grid));
   const item = equippedId ? studio.resolveItem(equippedId) : null;
   if (item) parts.push(customizer(item));
   if (slot.id === 'card') parts.push(cardEditor());
   return h('div', { class: 'stack' }, parts);
 }
 
+async function equipUniform(top) {
+  await busy(async () => {
+    await studio.equip('bottom', 'quan-the-thao-hust');
+    await studio.equip('top', top);
+  });
+  studio.focus('full');
+  renderPanel();
+}
+
 function customizer(item) {
   const rows = [];
   const base = CATALOG.items.find((i) => i.id === item.id);
-  rows.push(h('div', { class: 'field' }, h('span', { class: 'label' }, item.colors.accent ? 'Màu chính' : 'Màu'),
+  if (base.source?.url) rows.push(h('a', { href: base.source.url, target: '_blank', rel: 'noopener noreferrer', class: 'hint' }, 'Xem mẫu tham khảo · May Phương Thảo ↗'));
+  if (base.fixedColors) rows.push(h('p', { class: 'note' }, 'Dây đeo và vỏ thẻ giữ màu đỏ theo mẫu HUST.'));
+  if (!base.fixedColors) rows.push(h('div', { class: 'field' }, h('span', { class: 'label' }, item.colors.accent ? 'Màu chính' : 'Màu'),
     swatches(base.palette || [base.colors.main], item.colors.main, async (c) => { await studio.setItemColor(item.id, 'main', c); refreshThumbs(); }, `Màu ${item.name}`)));
-  if (item.colors.accent) {
+  if (item.colors.accent && !base.fixedColors) {
     const accents = [base.colors.accent, '#ffffff', '#202125', item.colors.main === '#ffffff' ? '#4b2e9a' : '#f0b53a'];
     rows.push(h('div', { class: 'field' }, h('span', { class: 'label' }, 'Màu phối'),
       swatches([...new Set(accents)], item.colors.accent, async (c) => { await studio.setItemColor(item.id, 'accent', c); refreshThumbs(); }, `Màu phối ${item.name}`)));
@@ -258,22 +299,22 @@ function emblemPanel() {
     return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, label), input);
   };
   return h('div', { class: 'stack' },
-    section('Huy hiệu tự tạo',
+    section('Huy hiệu HUST',
       h('div', { class: 'emblem-wrap' }, preview,
         h('div', { class: 'stack tight' },
-          text('em-name', 'Tên trường (hư cấu hoặc đã được phép)', 'name'),
-          text('em-short', 'Chữ viết tắt trên huy hiệu (tối đa 4)', 'short', { maxlength: '4' }),
+          text('em-name', 'Tên trường', 'name'),
+          e.logo ? null : text('em-short', 'Chữ viết tắt trên huy hiệu (tối đa 4)', 'short', { maxlength: '4' }),
           text('em-word', 'Chữ in trên áo và dây đeo', 'wordmark', { maxlength: '14' }),
-          text('em-year', 'Năm thành lập', 'year', { inputmode: 'numeric', maxlength: '4' }),
+          e.logo ? null : text('em-year', 'Năm thành lập', 'year', { inputmode: 'numeric', maxlength: '4' }),
         )),
-      h('div', { class: 'field' }, h('span', { class: 'label' }, 'Hình dạng'), segmented(SHAPES, e.shape, async (v) => { await update({ shape: v }); renderPanel(); }, 'Hình dạng')),
-      h('div', { class: 'field' }, h('span', { class: 'label' }, 'Biểu tượng'), segmented(MOTIFS, e.motif, async (v) => { await update({ motif: v }); renderPanel(); }, 'Biểu tượng')),
+      h('button', { class: 'btn ghost small', onclick: async () => { await update({ logo: e.logo ? null : CATALOG.defaults.emblem.logo, logoCrop: CATALOG.defaults.emblem.logoCrop }); renderPanel(); } }, e.logo ? 'Tự thiết kế huy hiệu' : 'Dùng logo Bách khoa đã gửi'),
+      e.logo ? null : h('div', { class: 'field' }, h('span', { class: 'label' }, 'Hình dạng'), segmented(SHAPES, e.shape, async (v) => { await update({ shape: v }); renderPanel(); }, 'Hình dạng')),
+      e.logo ? null : h('div', { class: 'field' }, h('span', { class: 'label' }, 'Biểu tượng'), segmented(MOTIFS, e.motif, async (v) => { await update({ motif: v }); renderPanel(); }, 'Biểu tượng')),
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Màu nền'), swatches(['#b3141d', '#7a1c26', '#1f2a44', '#1d5c4a', '#4b2e9a', '#20242c'], e.main, async (c) => { await update({ main: c }); renderPanel(); }, 'Màu nền huy hiệu')),
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Màu viền'), swatches(['#f6e7c8', '#ffffff', '#f0b53a', '#9fd3ff', '#1f2a44'], e.accent, async (c) => { await update({ accent: c }); renderPanel(); }, 'Màu viền huy hiệu')),
     ),
-    section('Vì sao không dùng logo thật',
-      h('p', { class: 'note' }, 'Logo chữ, con dấu, tên và mẫu thẻ của trường là tài sản được bảo hộ. Ở đây chỉ giữ những thứ chung ai cũng dùng được — màu đỏ, viền trắng, dáng áo khoác gió, dây đeo thẻ — còn chữ in, huy hiệu và hoa văn dây đeo đều được vẽ mới.'),
-      h('p', { class: 'note' }, 'Nếu web của bạn là dự án chính thức của trường, cách chắc chắn nhất là xin phép dùng logo bằng văn bản rồi đặt ảnh logo vào ô "Hình in" của từng món.'),
+    section('Nhận diện HUST',
+      h('p', { class: 'note' }, 'Các áo dùng huy hiệu tròn đỏ–trắng. Riêng áo GDTC trắng–xanh giữ logo chữ nhật đỏ–vàng. Huy hiệu ở phần này dùng cho phụ kiện và thẻ sinh viên mẫu; chữ HUST và màu trang phục có thể chỉnh riêng.'),
     ),
   );
 }
@@ -300,6 +341,8 @@ function cardEditor() {
   headerCb.addEventListener('change', () => update({ drawHeader: headerCb.checked }));
 
   return section('Nội dung thẻ (dữ liệu mẫu)',
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Kiểu thẻ'),
+      segmented([['landscape', 'Thẻ ngang'], ['portrait', 'Thẻ dọc']], c.orientation || 'landscape', async (orientation) => { await update({ orientation }); renderPanel(); }, 'Hướng thẻ')),
     preview,
     h('div', { class: 'two' },
       text('card-name', 'Họ và tên', 'name'), text('card-id', 'MSSV', 'id'),
@@ -317,7 +360,7 @@ function cardEditor() {
         h('label', { class: 'btn small', for: 'card-tpl' }, c.template ? 'Đổi nền' : 'Tải nền thẻ'), tplIn,
         c.template ? h('button', { class: 'btn ghost small', onclick: async () => { await update({ template: null }); renderPanel(); } }, 'Gỡ nền') : null,
       )),
-    h('label', { class: 'check', for: headerId }, headerCb, h('span', {}, 'Vẽ dải tên trường + huy hiệu ở đầu thẻ')),
+    h('label', { class: 'check', for: headerId }, headerCb, h('span', {}, 'Hiện tên trường và logo ở đầu thẻ')),
     h('p', { class: 'hint' }, 'Dấu "MẪU" luôn được in lên thẻ để không ai nhầm với thẻ thật. Không dùng MSSV, ảnh hay mã vạch của sinh viên thật.'),
   );
 }
@@ -339,7 +382,7 @@ function randomize() {
     const optional = ['hat', 'eyewear', 'handheld', 'mask', 'audio'].includes(slot.id);
     st.equipped[slot.id] = optional && Math.random() < 0.45 ? null : pick(items).id;
     const it = items.find((i) => i.id === st.equipped[slot.id]);
-    if (it?.palette) st.overrides[it.id] = { ...(st.overrides[it.id] || {}), colors: { ...(st.overrides[it.id]?.colors || {}), main: pick(it.palette) } };
+    if (it?.palette && !it.fixedColors) st.overrides[it.id] = { ...(st.overrides[it.id] || {}), colors: { ...(st.overrides[it.id]?.colors || {}), main: pick(it.palette) } };
   }
   st.body.skin = pick(CATALOG.skinTones);
   busy(() => studio.setState(st)).then(renderPanel);

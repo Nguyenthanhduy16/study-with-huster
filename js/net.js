@@ -194,6 +194,7 @@
         leave() { }
       },
       joinZone(z) { zone = z; }, leaveZone() { }, sendPos() { }, sendEmote() { },
+      sendPiano() { },   // [piano-net] ngoại tuyến: không ai nghe
       status: () => 'offline'
     };
   }
@@ -205,44 +206,189 @@
     const ev = U.emitter();
     const sb = window.supabase.createClient(url, key, {
       auth: { persistSession: true, autoRefreshToken: true, storageKey: 'pota-auth' },
-      realtime: { params: { eventsPerSecond: 8 } }
+      realtime: { params: { eventsPerSecond: 10 }, heartbeatIntervalMs: 25000 }
     });
     const me = { id: null };
     let cfg = null, presCh = null, zoneCh = null, msgCh = null, dbCh = null, presMeta = {}, status = 'connecting';
     let curZone = null;
+    /* số đếm tin realtime của máy này (xem trong Console: __potaNet.rt) — để ước lượng lưu lượng */
+    const rt = { sent: {}, recv: {}, since: Date.now() };
+    const cnt = (o, k) => { o[k] = (o[k] || 0) + 1; };
 
+    /* lỗi thường gặp ⇒ câu tiếng Việt dễ hiểu */
+    function friendly(e) {
+      const m = String((e && (e.message || e.error_description || e.msg)) || e || '');
+      if (/rate limit|too many|429/i.test(m)) return 'Quá nhiều lượt vào từ cùng một mạng trong thời gian ngắn. Hãy thử lại sau ít phút. (Ban tổ chức: nâng giới hạn "anonymous sign-ins" trong Supabase → Authentication → Rate Limits.)';
+      if (/anonymous sign-ins are disabled|signups not allowed|anonymous/i.test(m)) return 'Máy chủ chưa bật đăng nhập ẩn danh. (Ban tổ chức: Supabase → Authentication → Sign In / Providers → bật "Allow anonymous sign-ins".)';
+      if (/failed to fetch|networkerror|load failed|network request failed|fetch/i.test(m)) return 'Không tới được máy chủ: kiểm tra kết nối mạng, hoặc dự án Supabase đang tạm dừng.';
+      if (/jwt|invalid api key|no api key/i.test(m)) return 'Khoá kết nối máy chủ không đúng (ban tổ chức kiểm tra SUPABASE_URL / SUPABASE_ANON_KEY trong config.js).';
+      return m || 'Lỗi máy chủ';
+    }
+    const isNetErr = e => (e && e.net) || /failed to fetch|networkerror|load failed|network request failed|fetch|timeout|503|502|504/i.test(String((e && e.message) || e || ''));
     async function rpc(name, args) {
       const { data, error } = await sb.rpc(name, args || {});
-      if (error) { console.warn('RPC', name, error); throw new Error(error.message || 'Lỗi máy chủ'); }
+      if (error) { console.warn('RPC', name, error); const e = new Error(friendly(error)); e.net = isNetErr(error); throw e; }
       return data;
     }
+    /* thử lại vài lần khi lỗi mạng (lúc mở trang, mạng di động hay chập chờn) */
+    async function retry(fn, n = 3) {
+      for (let i = 0; ; i++) {
+        try { return await fn(); } catch (e) { if (i >= n - 1 || !isNetErr(e)) throw e; await U.sleep(800 * (i + 1) * (i + 1)); }
+      }
+    }
+
+    /* ----- trạng thái kết nối: gộp từ các kênh + sự kiện mạng của trình duyệt -----
+       'connecting' (lần đầu) · 'online' · 'reconnecting' (mất kết nối, đang tự nối lại) · 'nonet' (máy đang mất mạng) */
+    const chOk = {}, chGen = {};
+    let everOnline = false, stTimer = null;
     const setStatus = s => { if (s !== status) { status = s; ev.emit('status', s); } };
-    /* Supabase giới hạn ~5 lần cập nhật hiện diện / 30 giây cho mỗi người ⇒ gộp lại, tối đa 1 lần / 8 giây */
-    const pushTrack = U.throttle(() => { if (presCh) presCh.track(Object.assign({}, presMeta, { ts: Date.now() })).catch(() => { }); }, APP.presenceGapMs || 8000);
+    function recompute() {
+      let s;
+      const vals = Object.values(chOk);
+      if (navigator.onLine === false) s = 'nonet';
+      else if (vals.some(v => v === false)) s = everOnline ? 'reconnecting' : 'connecting';
+      else if (vals.some(v => v === true)) s = 'online';
+      else s = everOnline ? 'reconnecting' : 'connecting';
+      if (s === 'online') { everOnline = true; clearTimeout(stTimer); stTimer = null; setStatus(s); return; }
+      /* trễ 1,5 giây trước khi báo xấu: tránh nháy "đang kết nối lại" khi chỉ đổi khu */
+      if (!stTimer) stTimer = setTimeout(() => { stTimer = null; const v = Object.values(chOk); setStatus(navigator.onLine === false ? 'nonet' : v.some(x => x === false) || !v.some(x => x === true) ? (everOnline ? 'reconnecting' : 'connecting') : 'online'); }, 1500);
+    }
+    /* trả về hàm nhận trạng thái của channel.subscribe(); bỏ qua thông báo của kênh cũ đã thay */
+    function watch(name, onJoined) {
+      const g = chGen[name] = (chGen[name] || 0) + 1;
+      chOk[name] = null;
+      return (s, err) => {
+        if (chGen[name] !== g) return;
+        if (s === 'SUBSCRIBED') { chOk[name] = true; if (onJoined) try { onJoined(); } catch (e) { console.error(e); } }
+        else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') { chOk[name] = false; if (err) console.warn('Realtime', name, s, err.message || err); }
+        else if (s === 'CLOSED') delete chOk[name];
+        recompute();
+      };
+    }
+    /* mạng trở lại / mở lại tab sau khi ngủ: nối lại ngay thay vì chờ bộ hẹn giờ (có thể bị trình duyệt làm chậm) */
+    let hiddenAt = 0;
+    function wake() {
+      try { if (!sb.realtime.conn) sb.realtime.connect(); } catch (_) { }
+      if (presCh && chOk.pres === true) doTrack(true);
+      recompute();
+    }
+    addEventListener('online', wake);
+    addEventListener('offline', recompute);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 20e3) wake();
+      hiddenAt = 0;
+    });
+
+    /* ----- hiện diện (presence) -----
+       Mỗi lần track() Supabase gửi cho MỌI người trong kênh ⇒ chỉ gửi khi nội dung thật sự đổi,
+       gộp lại tối đa 1 lần / presenceGapMs (giãn thêm khi đông), và không gửi vị trí nghỉ khi chỉ có mình trong khu. */
+    let presList = [], lastTracked = '', lastTrackAt = 0, trackTimer = null;
+    const presGap = () => (APP.presenceGapMs || 8000) * (presList.length > 150 ? 3 : presList.length > 60 ? 2 : 1);
+    async function doTrack(force) {
+      if (!presCh || chOk.pres !== true) return;          // chưa vào kênh: SUBSCRIBED sẽ tự gửi
+      const k = JSON.stringify(presMeta);
+      if (!force && k === lastTracked) return;
+      lastTracked = k; lastTrackAt = Date.now(); cnt(rt.sent, 'track');
+      let r = 'error';
+      try { r = await presCh.track(Object.assign({}, presMeta, { ts: Date.now() })); } catch (_) { }
+      if (r !== 'ok') lastTracked = '';                    // lỗi ⇒ lần sau gửi lại
+    }
+    function scheduleTrack() {
+      if (trackTimer) return;
+      trackTimer = setTimeout(() => { trackTimer = null; doTrack(false); }, Math.max(0, lastTrackAt + presGap() - Date.now()));
+    }
+    const fin = v => typeof v === 'number' && isFinite(v);
+    function cleanMeta(m, uid) {
+      const o = Object.assign({}, m, { uid });
+      delete o.presence_ref;
+      if (o.p && !(Array.isArray(o.p) && o.p.length >= 3 && o.p.slice(0, 4).every(fin))) delete o.p;
+      return o;
+    }
+    const emitPresence = U.throttle(() => {
+      if (!presCh) return;
+      const st = presCh.presenceState(), list = [];
+      for (const uid in st) {
+        const metas = st[uid]; if (!metas || !metas.length) continue;
+        /* cùng một người mở nhiều tab: lấy bản cập nhật mới nhất */
+        const m = metas.reduce((a, b) => ((b.ts || 0) > (a.ts || 0) ? b : a));
+        list.push(cleanMeta(m, uid));
+      }
+      presList = list;
+      if (zonePeers() > 0 && JSON.stringify(presMeta) !== lastTracked) scheduleTrack();
+      ev.emit('presence', list);
+    }, 400);
+
+    /* ----- người cùng khu: từ hiện diện + những ai vừa phát tin trong kênh khu ----- */
+    const recentPeers = new Map();     // uid → lúc nghe thấy gần nhất
+    function zonePeers() {
+      const now = Date.now(), set = new Set();
+      for (const p of presList) if (p.uid !== me.id && p.zone === curZone) set.add(p.uid);
+      for (const [u, t] of recentPeers) { if (now - t > 60e3) recentPeers.delete(u); else set.add(u); }
+      return set.size;
+    }
+    const heard = u => { if (typeof u === 'string' && u !== me.id) recentPeers.set(u, Date.now()); };
+
+    /* ----- vị trí: chỉ gửi khi có người cùng khu nghe; đông người thì thưa hơn ----- */
+    let lastPos = null, lastPosAt = 0, lastSentPos = 0, posTimer = null;
+    function posGap() {
+      const n = zonePeers(), b = APP.posIntervalMs || 1200;
+      return n <= 8 ? 0 : n <= 20 ? b * 1.5 : n <= 40 ? b * 2.5 : b * 4;
+    }
+    function zoneSend(event, payload) {
+      /* chỉ gửi khi kênh đã vào xong — nếu không supabase-js chuyển sang gửi từng gói qua HTTP */
+      if (!zoneCh || chOk.zone !== true || zoneCh.state !== 'joined') return false;
+      cnt(rt.sent, event);
+      zoneCh.send({ type: 'broadcast', event, payload }).catch(() => { });
+      return true;
+    }
+    function aged(p) {
+      /* gói gửi trễ: đẩy vị trí theo vận tốc cho khớp thời điểm gửi */
+      if (!p.s) return p;
+      const dt = Math.min(3, (Date.now() - lastPosAt) / 1000);
+      return Object.assign({}, p, { x: +(p.x + (p.vx || 0) * dt).toFixed(2), z: +(p.z + (p.vz || 0) * dt).toFixed(2) });
+    }
+    function okPos(p) {
+      if (!p || typeof p.u !== 'string' || p.u === me.id || !fin(p.x) || !fin(p.z)) return false;
+      if (!fin(p.y)) p.y = 0;
+      for (const k of ['r', 'vx', 'vz']) if (p[k] != null && !fin(p[k])) p[k] = 0;
+      return true;
+    }
 
     function subscribeDb() {
       dbCh = sb.channel('db-common')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'public_profiles' }, p => ev.emit('profile', p.new))
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'public_profiles' }, p => ev.emit('profile', p.new))
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notices' }, p => ev.emit('notice', p.new))
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'events' }, p => ev.emit('event', p.new))
+        /* 'hide_msg' (Đợt 3): tin nhắn vừa bị ẩn ⇒ gỡ khỏi màn hình (RLS không cho Realtime gửi chính dòng đã ẩn) */
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'events' }, p => {
+          const e = p.new || {};
+          if (e.kind === 'hide_msg') ev.emit('message-hidden', +e.text); else ev.emit('event', e);
+        })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, p => { cfg.settings = p.new.data; ev.emit('settings', p.new.data); })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cheers', filter: 'to_uid=eq.' + me.id }, p => ev.emit('cheer', p.new))
-        .subscribe(s => { if (s === 'SUBSCRIBED') setStatus('online'); else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') setStatus('reconnecting'); });
+        .subscribe(watch('db'));
     }
 
     const net = {
-      mode: 'online', ev, me, sb,
+      mode: 'online', ev, me, sb, rt,
       async init() {
-        let { data: { session } } = await sb.auth.getSession();
+        let session = null;
+        try { session = (await sb.auth.getSession()).data.session; } catch (_) { }
         if (!session) {
-          const { data, error } = await sb.auth.signInAnonymously();
-          if (error) throw new Error('Không đăng nhập ẩn danh được: ' + error.message + ' (đã bật Anonymous Sign-ins trong Supabase chưa?)');
+          const { data, error } = await retry(async () => {
+            const r = await sb.auth.signInAnonymously();
+            if (r.error && isNetErr(r.error)) throw r.error;
+            return r;
+          });
+          if (error) throw new Error('Không đăng nhập ẩn danh được. ' + friendly(error));
           session = data.session;
         }
         me.id = session.user.id;
+        /* đảm bảo Realtime dùng vé đăng nhập của người dùng (RLS của bảng chỉ cho vai trò authenticated đọc) */
+        try { sb.realtime.setAuth(session.access_token); } catch (_) { }
         const t0 = Date.now();
-        cfg = await rpc('get_config');
+        cfg = await retry(() => rpc('get_config'));
         U.serverOffset = new Date(cfg.now).getTime() - (t0 + Date.now()) / 2;
         subscribeDb();
         return { settings: cfg.settings, banned: cfg.banned };
@@ -301,52 +447,85 @@
       /* ----- hiện diện: ai đang online, ở khu nào, ngồi ghế nào ----- */
       presence: {
         join(meta) {
-          presMeta = meta;
+          presMeta = Object.assign({}, meta);
+          if (presCh) { scheduleTrack(); return; }          // gọi lại lần hai: chỉ cập nhật
           presCh = sb.channel('presence-global', { config: { presence: { key: me.id } } });
-          presCh.on('presence', { event: 'sync' }, () => {
-            const st = presCh.presenceState(), list = [];
-            for (const uid in st) {
-              const metas = st[uid]; if (!metas.length) continue;
-              const m = metas.reduce((a, b) => ((b.ts || 0) > (a.ts || 0) ? b : a));
-              list.push(Object.assign({}, m, { uid }));
-            }
-            ev.emit('presence', list);
-          });
-          presCh.subscribe(async s => {
-            if (s === 'SUBSCRIBED') { await presCh.track(Object.assign({}, presMeta, { ts: Date.now() })); setStatus('online'); }
-            else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') setStatus('reconnecting');
-          });
+          presCh.on('presence', { event: 'sync' }, () => { cnt(rt.recv, 'presence'); emitPresence(); });
+          /* (lại) vào kênh xong — kể cả sau khi mất mạng — luôn gửi lại hiện diện của mình */
+          presCh.subscribe(watch('pres', () => doTrack(true)));
         },
-        update(meta) { presMeta = Object.assign({}, presMeta, meta); pushTrack(); },
-        leave() { if (presCh) presCh.untrack(); }
+        update(meta) {
+          presMeta = Object.assign({}, presMeta, meta);
+          /* chỉ đổi vị trí nghỉ mà không ai cùng khu ⇒ để dành, gửi khi có người tới */
+          if (Object.keys(meta).length === 1 && 'p' in meta && zonePeers() === 0) return;
+          if (JSON.stringify(presMeta) !== lastTracked) scheduleTrack();
+        },
+        leave() { clearTimeout(trackTimer); trackTimer = null; if (presCh) presCh.untrack().catch(() => { }); lastTracked = ''; }
       },
 
-      /* ----- kênh của khu: vị trí nhân vật + tin nhắn ----- */
+      /* ----- kênh của khu: vị trí nhân vật, cử chỉ (broadcast, không lưu) + tin nhắn (bảng messages) ----- */
       joinZone(z) {
         if (curZone === z) return;
         net.leaveZone(); curZone = z;
-        zoneCh = sb.channel('zone-' + z, { config: { broadcast: { self: false } } });
-        zoneCh.on('broadcast', { event: 'pos' }, ({ payload }) => ev.emit('pos', payload))
-          .on('broadcast', { event: 'emo' }, ({ payload }) => ev.emit('emote', payload)).subscribe();
+        recentPeers.clear(); lastPos = null;
+        zoneCh = sb.channel('zone-' + z, { config: { broadcast: { self: false, ack: false } } });
+        zoneCh.on('broadcast', { event: 'pos' }, ({ payload }) => { cnt(rt.recv, 'pos'); if (okPos(payload)) { heard(payload.u); ev.emit('pos', payload); } })
+          .on('broadcast', { event: 'emo' }, ({ payload }) => { cnt(rt.recv, 'emo'); if (payload && typeof payload.u === 'string' && typeof payload.k === 'string' && payload.k.length < 40) { heard(payload.u); ev.emit('emote', payload); } })
+          /* 'hi': một bạn vừa vào khu ⇒ ai đang đi thì gửi ngay vị trí (khỏi chờ), ai có vị trí nghỉ chưa gửi thì gửi */
+          .on('broadcast', { event: 'hi' }, ({ payload }) => {
+            cnt(rt.recv, 'hi'); if (!payload || typeof payload.u !== 'string') return;
+            heard(payload.u);
+            const dirty = JSON.stringify(presMeta) !== lastTracked;
+            if (lastPos && (lastPos.s ? Date.now() - lastPosAt < 3000 : dirty)) setTimeout(() => { if (lastPos) { zoneSend('pos', aged(lastPos)); lastSentPos = Date.now(); } }, 150 + Math.random() * 600);
+            if (dirty) scheduleTrack();
+          })
+          .on('broadcast', { event: 'pno' }, ({ payload }) => ev.emit('piano', payload))   // [piano-net] nốt đàn của bạn khác
+          .subscribe(watch('zone', () => zoneSend('hi', { u: me.id })));
         msgCh = sb.channel('msg-' + z)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'zone=eq.' + z }, p => ev.emit('message', p.new))
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: 'zone=eq.' + z }, p => { if (p.new.hidden) ev.emit('message-hidden', p.new.id); })
-          .subscribe();
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'zone=eq.' + z }, p => { cnt(rt.recv, 'msg'); ev.emit('message', p.new); })
+          .subscribe(watch('msg'));
       },
       leaveZone() {
-        if (zoneCh) sb.removeChannel(zoneCh); if (msgCh) sb.removeChannel(msgCh);
+        clearTimeout(posTimer); posTimer = null;
+        if (zoneCh) sb.removeChannel(zoneCh).catch(() => { }); if (msgCh) sb.removeChannel(msgCh).catch(() => { });
         zoneCh = msgCh = null; curZone = null;
       },
-      sendPos(p) { if (zoneCh) zoneCh.send({ type: 'broadcast', event: 'pos', payload: Object.assign({ u: me.id }, p) }); },
+      sendPos(p) {
+        if (!p || !fin(p.x) || !fin(p.z)) return;
+        const msg = Object.assign({ u: me.id }, p);
+        lastPos = msg; lastPosAt = Date.now();
+        if (document.hidden || !zonePeers()) return;        // một mình trong khu (hoặc tab ẩn): không ai cần nghe
+        if (!p.s) { clearTimeout(posTimer); posTimer = null; if (zoneSend('pos', msg)) lastSentPos = Date.now(); return; }
+        const wait = lastSentPos + posGap() - Date.now();
+        if (wait <= 0) { if (zoneSend('pos', msg)) lastSentPos = Date.now(); }
+        else if (!posTimer) posTimer = setTimeout(() => { posTimer = null; if (lastPos && lastPos.s && zoneSend('pos', aged(lastPos))) lastSentPos = Date.now(); }, wait);
+      },
       /* cử chỉ (vẫy tay…): gửi thẳng cho người cùng khu, không lưu */
-      sendEmote(k) { if (zoneCh) zoneCh.send({ type: 'broadcast', event: 'emo', payload: { u: me.id, k } }); },
+      sendEmote(k) { if (zonePeers()) zoneSend('emo', { u: me.id, k }); },
+      /* [piano-net] gói nốt đàn (js/piano-net.js gom ≤ 25 gói/giây). Chỉ gửi khi kênh đã vào xong — nếu không
+         supabase-js sẽ chuyển sang gửi qua HTTP từng gói. */
+      sendPiano(b) { if (zoneCh && zoneCh.state === 'joined' && !(sb.realtime && sb.realtime.isConnected && !sb.realtime.isConnected())) zoneCh.send({ type: 'broadcast', event: 'pno', payload: Object.assign({}, b, { u: me.id }) }); },
       status: () => status
     };
     return net;
   }
 
   window.createNet = function () {
-    if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY && window.supabase) return SupaNet(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-    return LocalNet();
+    let net = null;
+    let secretKey = /^sb_secret_/.test(String(window.SUPABASE_ANON_KEY || ''));
+    try { secretKey = secretKey || JSON.parse(atob(String(window.SUPABASE_ANON_KEY).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).role === 'service_role'; } catch (_) { }
+    if (secretKey) {
+      /* khoá bí mật lọt vào config.js: KHÔNG dùng (ai mở trang cũng lấy được khoá này) */
+      console.error('[net] config.js đang chứa khoá service_role / secret — KHÔNG được để khoá này trên web! Hãy đổi khoá trong Supabase ngay và dùng khoá anon. Tạm chạy ngoại tuyến.');
+    } else if (window.SUPABASE_URL && window.SUPABASE_ANON_KEY) {
+      if (!window.supabase) console.error('[net] Đã điền SUPABASE_URL nhưng không tải được vendor/supabase/supabase.js — chạy chế độ ngoại tuyến.');
+      else {
+        try { net = SupaNet(String(window.SUPABASE_URL).trim().replace(/\/+$/, ''), String(window.SUPABASE_ANON_KEY).trim()); }
+        catch (e) { console.error('[net] Cấu hình Supabase trong config.js không hợp lệ — chạy chế độ ngoại tuyến.', e); }
+      }
+    }
+    net = net || LocalNet();
+    window.__potaNet = net;     // để xem nhanh trong Console: __potaNet.rt (đếm tin realtime), __potaNet.status()
+    return net;
   };
 })();

@@ -29,7 +29,7 @@
   const others = new Map(), info = new Map();
   let presence = [];
   const cam = { az: 0, el: 0.45, dist: { campus: 7.5, walk: 3.4, seat: 2.4 }, cur: null, ready: false };
-  const keys = { f: 0, b: 0, l: 0, r: 0, run: 0 };
+  const keys = { f: 0, b: 0, l: 0, r: 0, tl: 0, tr: 0, run: 0 };   // tl/tr: ←/→ xoay góc nhìn
   const joy = { x: 0, y: 0, on: false };
   let idleT = 0, nearB = null, lastSend = 0, wasMoving = false, rain = null, rainOn = false, bubblesOn = true;
   let route = null;     // đường đang tự đi: { pts:[{x,z}], done(), stuck, last }
@@ -75,7 +75,7 @@
       applyOpt(); Mini.reset();
       ev.emit('zone-changed', z); syncOthers(); Npc.sync();
     });
-    bindInput(); buildRain(); buildLife();
+    bindInput(); buildSeatHint(); buildRain(); buildLife();
   }
   function avatarFor(style, o) {
     if (AVK) {
@@ -291,6 +291,66 @@
     return goSit(idx);
   }
 
+  /* ---- ghế trống gần mình: nhấn E (hoặc F) để ngồi; trên màn hình hiện "E · Ngồi" ngay trên ghế (chạm vào cũng ngồi).
+     Phát sự kiện 'near-seat' (chỉ số ghế | null) để giao diện hiện gợi ý nếu muốn. ---- */
+  let nearSeat = -1, nearT = 0, seatHint = null;
+  const SIT_WORD = { lounger: 'Nằm', piano: 'Chơi đàn' };
+  function findNearSeat() {
+    const space = sp(); if (!space || !space.seats.length || !(me.mode === 'campus' || me.mode === 'walk') || route || going || observe || frozen || camHold) return -1;
+    const occ = occupiedSeats(), fx = Math.sin(me.yaw), fz = Math.cos(me.yaw);
+    let best = -1, bs = 1e9;
+    space.seats.forEach((s, i) => {
+      if (occ.has(i) || s.kind === 'piano') return;                       // đàn: dùng nút/E của đàn
+      const dx = s.x - me.x, dz = s.z - me.z, d = Math.hypot(dx, dz);
+      if (d > 1.5 || Math.abs(s.y - me.y) > 0.9) return;
+      const score = d - 0.35 * (dx * fx + dz * fz) / Math.max(d, 1e-3);    // ưu tiên ghế phía trước mặt
+      if (score < bs) { bs = score; best = i; }
+    });
+    return best;
+  }
+  function nearSeatFrame(dt, camera) {
+    nearT -= dt;
+    if (nearT <= 0) {
+      nearT = 0.2;
+      const n = findNearSeat();
+      if (n !== nearSeat) { nearSeat = n; ev.emit('near-seat', n >= 0 ? n : null); }
+    }
+    if (!seatHint) return;
+    const space = sp(), s = nearSeat >= 0 && space && space.seats[nearSeat];
+    if (!s) { seatHint.style.display = 'none'; return; }
+    tmp.set(s.x, s.y + 1.05, s.z); space.group.localToWorld(tmp); tmp.project(camera);
+    if (tmp.z > 1 || Math.abs(tmp.x) > 1.1 || Math.abs(tmp.y) > 1.1) { seatHint.style.display = 'none'; return; }
+    const W = labelsEl.clientWidth, Hh = labelsEl.clientHeight, word = SIT_WORD[s.kind] || 'Ngồi';
+    if (seatHint.dataset.w !== word) { seatHint.dataset.w = word; seatHint.lastChild.textContent = word; }
+    seatHint.style.display = '';
+    seatHint.style.transform = `translate(${((tmp.x + 1) / 2 * W).toFixed(1)}px,${((1 - tmp.y) / 2 * Hh).toFixed(1)}px) translate(-50%,-100%)`;
+  }
+  function buildSeatHint() {
+    document.head.appendChild(U.h('style', { text:
+      '.po-seat-hint{position:absolute;left:0;top:0;display:flex;align-items:center;gap:6px;pointer-events:auto;cursor:pointer;border:0;' +
+      'border-radius:999px;padding:4px 11px 4px 5px;background:rgba(18,22,34,.84);color:#fff;font:600 13px/1.2 inherit;' +
+      'box-shadow:0 3px 10px rgba(0,0,0,.25);white-space:nowrap;will-change:transform;z-index:2}' +
+      '.po-seat-hint kbd{font:700 12px/1 inherit;background:#fff;color:#1d2433;border-radius:6px;padding:4px 7px;box-shadow:inset 0 -2px 0 #c9cfdb}' +
+      '.po-seat-hint:hover{background:rgba(34,140,84,.95)}' }));
+    seatHint = U.h('button.po-seat-hint', { type: 'button', title: U.isTouch ? 'Chạm để ngồi' : 'Nhấn E để ngồi', onclick: e => { e.stopPropagation(); if (nearSeat >= 0) goSit(nearSeat); } },
+      U.h('kbd', { text: U.isTouch ? '🪑' : 'E' }), U.h('span', { text: 'Ngồi' }));
+    seatHint.style.display = 'none';
+    labelsEl.appendChild(seatHint);
+  }
+  /* phím E / F theo ngữ cảnh: đứng gần ghế → ngồi; đang ngồi → đứng dậy; gần đàn / kính thiên văn → dùng */
+  function useKey(e) {
+    if (observe || going || frozen || me.mode === 'idle') return;
+    if (me.mode === 'piano') { if (me.special && me.special !== 'piano') standUp(); return; }   // khi chơi đàn, E là một nốt nhạc
+    if (me.mode === 'seat') { standUp(); return; }
+    if (!(me.mode === 'campus' || me.mode === 'walk')) return;
+    const space = sp(); if (!space) return;
+    if (space.kind === 'room' && space.module.api.getMode() === 'piano') return;   // mô hình vừa cho ngồi đàn (E cạnh đàn)
+    const n = findNearSeat();
+    if (n >= 0) { goSit(n); return; }
+    if (nearThing === 'piano') { const i = space.seats.findIndex(x => x.kind === 'piano'); if (i >= 0) goSit(i); return; }
+    if (nearThing === 'scope' && space.scope) { route = null; me.special = 'scope'; setMode('piano'); space.scope(); }
+  }
+
   /* ------------------------------------------------------------------
      TỰ ĐI TỚI MỘT ĐIỂM (A* trên lưới của mặt sàn hiện tại)
      ------------------------------------------------------------------ */
@@ -378,7 +438,8 @@
      ------------------------------------------------------------------ */
   const STATUS_ICON = { nghi: '☕', tap_trung: '🎯', quiz: '📝', treo: '💤', piano: '🎹', scope: '🔭', gaze: '✨', choi: '🌳' };
   function makeLabel(uid) {
-    const el = U.h('div.po-tag', null, U.h('div.po-bubble'), U.h('div.po-name'));
+    // [bong bóng] nhiều bong bóng xếp chồng (mới nhất ở dưới, sát tên) — xem bubble()
+    const el = U.h('div.po-tag', null, U.h('div.po-bubbles', { 'aria-live': 'polite' }), U.h('div.po-name'));
     el.addEventListener('click', () => ev.emit('avatar-click', uid));
     labelsEl.appendChild(el); return el;
   }
@@ -386,7 +447,8 @@
     const i = info.get(o.uid) || {};
     const nm = o.label.querySelector('.po-name');
     const st = STATUS_ICON[o.status] ? STATUS_ICON[o.status] + ' ' : '';
-    const txt = st + (i.name || '…') + (o.via ? ' ✨' : '') + (i.stars ? ' · ⭐' + i.stars : '');
+    const ac = actIcon(o.uid);
+    const txt = st + (i.name || '…') + (o.via ? ' ✨' : '') + (i.stars ? ' · ⭐' + i.stars : '') + (ac ? ' ' + ac : '');
     if (nm.textContent !== txt) nm.textContent = txt;
     if (i.name && o.av.setCard) o.av.setCard(i.name, i.mssv || '');
   }
@@ -401,8 +463,46 @@
     if (!myLabel) { myLabel = makeLabel(me.uid); myLabel.classList.add('me'); }
     const i = info.get(me.uid) || {};
     const st = me.mode === 'piano' ? me.special : me.status;
-    myLabel.querySelector('.po-name').textContent = (STATUS_ICON[st] ? STATUS_ICON[st] + ' ' : '') + (i.name || me.name) + (U.store.get('via:day', '') === U.hanoiDay() ? ' ✨' : '') + (i.stars ? ' · ⭐' + i.stars : '');
+    const ac = actIcon(me.uid);
+    myLabel.querySelector('.po-name').textContent = (STATUS_ICON[st] ? STATUS_ICON[st] + ' ' : '') + (i.name || me.name) + (U.store.get('via:day', '') === U.hanoiDay() ? ' ✨' : '') + (i.stars ? ' · ⭐' + i.stars : '') + (ac ? ' ' + ac : '');
   }
+  /* ---- [act] hoạt động kéo dài: đọc sách / bấm điện thoại / dùng laptop ----
+     acts: uid → { k: 'doc'|'dien-thoai'|'laptop'|null, t: thời điểm người đó chọn (đồng hồ máy người đó) }
+     Tin cũ hơn (t nhỏ hơn) bị bỏ qua, nên tin phát ngay (broadcast) và tin hiện diện (presence, chậm ≤ 8 giây) không giẫm lên nhau. */
+  const acts = new Map();
+  const actIcon = uid => { const a = acts.get(uid), A2 = AVK && AVK.ACTS; return a && a.k && A2 && A2[a.k] ? A2[a.k].icon : ''; };
+  let actGrace = 0, actMode = null;          // actGrace: mốc thời gian (ms) — đổi tư thế ngồi/đứng không tính là "đi" 
+  function setAct(uid, kind, t) {
+    kind = kind && AVK && AVK.ACTS && AVK.ACTS[kind] ? kind : null;
+    const cur = acts.get(uid);
+    if (uid === me.uid) {
+      if (kind && (me.mode === 'idle' || me.mode === 'piano' || observe)) return false;
+      if ((cur ? cur.k : null) === kind) return true;
+      t = Date.now(); acts.set(uid, { k: kind, t });
+      me.act = kind; actMode = me.mode; actGrace = performance.now() + 400;
+      if (me.avatar && me.avatar.setAct) me.avatar.setAct(kind);
+      if (kind) { const A2 = AVK.ACTS[kind]; bubble(uid, A2.icon, false, 1500); }
+      updateMyLabel(); ev.emit('act', { k: kind, t });
+      return true;
+    }
+    t = +t || 0;
+    if (cur && cur.t > t) return false;                    // tin cũ đến muộn
+    if (cur && cur.t === t && cur.k === kind) return true;
+    acts.set(uid, { k: kind, t });
+    const o = others.get(uid);
+    if (o) { if (o.av.setAct) o.av.setAct(kind); updateLabel(o); }
+    return true;
+  }
+  /* mình đi (phím, cần điều khiển, bấm để tới) → dừng hoạt động; vào đàn / quan sát cũng dừng */
+  function actFrame() {
+    if (!me.act) return;
+    const now = performance.now();
+    if (me.mode !== actMode) { actMode = me.mode; actGrace = now + 400; }
+    if (me.mode === 'piano' || me.mode === 'idle' || observe) { setAct(me.uid, null); return; }
+    if (now < actGrace) return;
+    if (me.speed > 0.6 || route) setAct(me.uid, null);
+  }
+  hooks.frame.push(actFrame);
   function avOf(uid) { return uid === me.uid ? me.avatar : (others.get(uid) || {}).av; }
   /* người đang nói: các bạn đứng gần quay đầu nhìn về phía người đó vài giây */
   function turnHeads(uid) {
@@ -423,73 +523,126 @@
     av.playEmote(kind); bubble(uid, E.icon, false, 1800);
     return true;
   }
+  /* bong bóng trên đầu: tin chat (ms bỏ trống → 5–7,5 giây tuỳ độ dài) hoặc biểu tượng cử chỉ (ms ngắn).
+     Tối đa 2 bong bóng chồng nhau, cái cũ thu nhỏ & mờ đi; hết giờ thì mờ dần rồi biến mất. */
   function bubble(uid, text, mention, ms) {
     if (!bubblesOn && uid !== me.uid) return;
     if (!ms) turnHeads(uid);
     const el = uid === me.uid ? (updateMyLabel(), myLabel) : (others.get(uid) || {}).label;
     if (!el) return;
-    const b = el.querySelector('.po-bubble');
-    b.textContent = text; b.classList.toggle('mention', !!mention);
-    el.classList.add('talk'); clearTimeout(el._bt);
-    el._bt = setTimeout(() => el.classList.remove('talk'), ms || 5000);
+    const box = el.querySelector('.po-bubbles'); if (!box) return;
+    const icon = !!ms && String(text).length <= 4;
+    const life = ms || U.clamp(4000 + String(text).length * 45, 5000, 7500);
+    const b = U.h('div.po-bubble' + (mention ? '.mention' : '') + (icon ? '.icon' : ''), null, U.h('span', { text: String(text) }));
+    if (icon) for (const x of [...box.children]) if (x.classList.contains('icon')) x.remove();   // cử chỉ mới thay cử chỉ cũ
+    for (const x of box.children) x.classList.add('old');
+    box.append(b);
+    while (box.children.length > 2) box.firstElementChild.remove();
+    el.classList.add('talk');
+    const gone = () => { b.remove(); if (!box.children.length) el.classList.remove('talk'); };
+    setTimeout(() => { b.classList.add('out'); setTimeout(gone, 450); }, life);
   }
 
   /* ------------------------------------------------------------------
      ĐẦU VÀO
      ------------------------------------------------------------------ */
-  const KMAP = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r' };
-  const typing = e => { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); };
+  /* Phím: W/S/↑/↓ đi tới/lùi, A/D đi ngang (theo hướng camera), ←/→ xoay góc nhìn (như Roblox — dùng được cả khi
+     bàn di chuột laptop bị khoá lúc đang giữ phím), Shift chạy, E ngồi/đứng dậy ở ghế gần.
+     Web giữ trạng thái phím của riêng mình (keys) và ghi đè keys của bộ đi bộ trong mô hình mỗi lần có phím/khung hình,
+     nên gõ chat không làm nhân vật đi, phím không bị kẹt, và cần điều khiển ảo cũng đi theo hướng camera. */
+  const KMAP = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', KeyD: 'r', ArrowLeft: 'tl', ArrowRight: 'tr' };
+  const typing = e => {
+    const t = e.target; if (!t || !t.tagName) return false;
+    if (t.tagName === 'INPUT') return !/^(checkbox|radio|button|submit|reset|range|color)$/i.test(t.type || '') || (t.type === 'range' && /^Arrow/.test(e.code));
+    return t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable;
+  };
+  const moving = () => me.mode === 'campus' || me.mode === 'walk';
+  function clearKeys() { for (const k in keys) keys[k] = 0; driveRoom(); }
+  /* hướng muốn đi theo phím + cần điều khiển: ix sang phải, iy tới trước (−1…1) */
+  function moveInput() {
+    if (frozen) return { ix: 0, iy: 0 };
+    let jx = joy.x, jy = joy.y; if (Math.hypot(jx, jy) < 0.18) jx = jy = 0;
+    return { ix: U.clamp((keys.r - keys.l) + jx, -1, 1), iy: U.clamp((keys.f - keys.b) - jy, -1, 1) };
+  }
+  /* trong thư viện / sân thượng: ghi phím của web vào bộ đi bộ của mô hình (mô hình đi theo hướng nhìn api.yaw) */
+  function driveRoom() {
+    const space = sp(); if (!space || space.kind !== 'room') return;
+    const K = space.module.api.keys; if (!K) return;
+    const { ix, iy } = me.mode === 'walk' && !route ? moveInput() : { ix: 0, iy: 0 };
+    K.f = Math.max(0, iy); K.b = Math.max(0, -iy); K.r = Math.max(0, ix); K.l = Math.max(0, -ix);
+    K.run = me.mode === 'walk' && (keys.run || Math.hypot(joy.x, joy.y) > 0.95) ? 1 : 0;
+  }
   function bindInput() {
+    /* nhãn tên của chính mình nằm ngay giữa màn hình (trên đầu nhân vật): không chặn thao tác kéo để xoay camera */
+    document.head.appendChild(U.h('style', { text: '#labels .po-tag.me{pointer-events:none}' }));
+    // phím của web chạy SAU phím của mô hình (đăng ký sau) → ghi đè được keys của mô hình trong cùng sự kiện
     addEventListener('keydown', e => {
-      if (typing(e)) return;
-      if (KMAP[e.code] && route && (me.mode === 'campus' || me.mode === 'walk')) { route = null; autoDrive = false; }   // tự điều khiển thì huỷ đường đang đi
-      if (me.mode === 'seat' && KMAP[e.code] && (e.code === 'KeyW' || e.code === 'ArrowUp')) { standUp(); return; }
-      if (me.mode !== 'campus') return;
-      if (KMAP[e.code]) { keys[KMAP[e.code]] = 1; e.preventDefault(); }
+      if (typing(e)) { driveRoom(); return; }                // đang gõ chat: mô hình vừa nhận phím → huỷ
+      if ((e.code === 'KeyE' || e.code === 'KeyF') && !e.ctrlKey && !e.metaKey && !e.altKey) { if (!e.repeat) useKey(e); }
+      const k = KMAP[e.code];
+      if (k && me.mode === 'seat' && k === 'f') standUp();    // ngồi: W / ↑ là đứng dậy (giữ phím thì đi tiếp)
+      if (k && moving()) {
+        if (route && k !== 'tl' && k !== 'tr') { route = null; autoDrive = false; }   // tự điều khiển thì huỷ đường đang đi
+        keys[k] = 1; e.preventDefault();
+      }
       if (e.key === 'Shift') keys.run = 1;
+      driveRoom();
     });
-    addEventListener('keyup', e => { if (KMAP[e.code]) keys[KMAP[e.code]] = 0; if (e.key === 'Shift') keys.run = 0; });
-    addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
+    addEventListener('keyup', e => {
+      if (KMAP[e.code]) keys[KMAP[e.code]] = 0;
+      if (e.key === 'Shift') keys.run = 0;
+      if (e.key === 'Meta') clearKeys();                      // macOS: khi giữ ⌘ trình duyệt không gửi keyup của phím khác
+      driveRoom();
+    });
+    addEventListener('blur', clearKeys);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) clearKeys(); });
 
-    let down = null, pinch = null; const pts = new Map();
+    /* chuột / chạm trên khung 3D: kéo (chuột trái hoặc phải, một ngón) để xoay camera, hai ngón để phóng to/thu nhỏ,
+       chạm/bấm nhanh không kéo (chuột trái) mới là "bấm để tới". Bắt con trỏ để kéo qua nhãn tên, bảng HUD vẫn xoay tiếp. */
+    let pinch = null, multi = false; const pts = new Map();
     const orbiting = () => me.mode === 'campus' || me.mode === 'seat';
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
     canvas.addEventListener('pointerdown', e => {
-      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      down = { x: e.clientX, y: e.clientY, moved: false, t: performance.now() };
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) { }
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, btn: e.button });
+      if (pts.size > 1) multi = true;
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: curDist() }; }
     });
     canvas.addEventListener('pointermove', e => {
       const p = pts.get(e.pointerId);
-      if (p && pinch && pts.size === 2) {
+      if (!p) { if (!pts.size && e.pointerType === 'mouse') hover(e); return; }
+      if (pinch && pts.size === 2) {
         p.x = e.clientX; p.y = e.clientY; const [a, b] = [...pts.values()];
         setDist(pinch.dist * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)));
-      } else if (p && orbiting()) {
+      } else if (orbiting()) {
         const k = (U.isTouch ? 0.009 : 0.0065) * opt.look * (opt.reduce ? 0.75 : 1);
         cam.az -= (e.clientX - p.x) * k; cam.el = U.clamp(cam.el + (e.clientY - p.y) * k * 0.7, 0.08, 1.15);
-        p.x = e.clientX; p.y = e.clientY;
-      }
-      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 7) down.moved = true;
-      if (!down) hover(e);
+      }                                                       // đi trong thư viện: bộ đi bộ của mô hình tự xoay góc nhìn (api.yaw/pitch)
+      p.x = e.clientX; p.y = e.clientY;
+      if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 7) p.moved = true;
     });
     const up = e => {
+      const p = pts.get(e.pointerId); if (!p) return;
       pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
-      if (down && !down.moved && performance.now() - down.t < 600) click(e);
-      if (!pts.size) down = null;
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) { }
+      if (e.type === 'pointerup' && !multi && !p.moved && p.btn === 0 && performance.now() - p.t < 600) click(e);
+      if (!pts.size) multi = false;
     };
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+    canvas.addEventListener('lostpointercapture', e => { if (pts.has(e.pointerId)) { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) multi = false; } });
     canvas.addEventListener('wheel', e => {
       if (me.mode === 'campus' || me.mode === 'seat' || (me.mode === 'walk' && opt.view !== 'first')) { setDist(curDist() * (1 + Math.sign(e.deltaY) * 0.1)); e.preventDefault(); }
     }, { passive: false });
 
-    // cần điều khiển ảo (điện thoại)
+    // cần điều khiển ảo (điện thoại): đi theo hướng camera như phím W/A/S/D; ngón kia vẫn kéo trên màn hình để xoay
     const j = document.getElementById('po-joy');
     if (j) {
       const knob = j.querySelector('i'); let jid = null, c = null;
-      j.addEventListener('pointerdown', e => { jid = e.pointerId; j.setPointerCapture(jid); const r = j.getBoundingClientRect(); c = { x: r.left + r.width / 2, y: r.top + r.height / 2, R: r.width / 2 }; joy.on = true; jm(e); e.preventDefault(); });
-      const jm = e => { if (e.pointerId !== jid) return; let dx = e.clientX - c.x, dy = e.clientY - c.y; const l = Math.hypot(dx, dy); if (l > c.R) { dx *= c.R / l; dy *= c.R / l; } joy.x = dx / c.R; joy.y = dy / c.R; knob.style.transform = `translate(${dx}px,${dy}px)`; route = null; if (me.mode === 'seat' && joy.y < -0.5) standUp(); };
+      j.addEventListener('pointerdown', e => { if (jid != null) return; jid = e.pointerId; try { j.setPointerCapture(jid); } catch (_) { } const r = j.getBoundingClientRect(); c = { x: r.left + r.width / 2, y: r.top + r.height / 2, R: r.width / 2 }; joy.on = true; jm(e); e.preventDefault(); });
+      const jm = e => { if (e.pointerId !== jid) return; let dx = e.clientX - c.x, dy = e.clientY - c.y; const l = Math.hypot(dx, dy); if (l > c.R) { dx *= c.R / l; dy *= c.R / l; } joy.x = dx / c.R; joy.y = dy / c.R; knob.style.transform = `translate(${dx}px,${dy}px)`; if (Math.hypot(joy.x, joy.y) > 0.25) route = null; if (me.mode === 'seat' && joy.y < -0.5) standUp(); };
       j.addEventListener('pointermove', jm);
-      const je = e => { if (e.pointerId !== jid) return; jid = null; joy.x = joy.y = 0; joy.on = false; joy.end = true; knob.style.transform = ''; };
-      j.addEventListener('pointerup', je); j.addEventListener('pointercancel', je);
+      const je = e => { if (e.pointerId !== jid) return; jid = null; joy.x = joy.y = 0; joy.on = false; knob.style.transform = ''; driveRoom(); };
+      j.addEventListener('pointerup', je); j.addEventListener('pointercancel', je); j.addEventListener('lostpointercapture', je);
     }
   }
   function curKind() { return me.mode === 'campus' ? 'campus' : me.mode === 'seat' ? 'seat' : 'walk'; }
@@ -502,9 +655,14 @@
   function setRay(e) {
     const r = canvas.getBoundingClientRect();
     ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
-    ray.setFromCamera(ndc, S.camera());
+    ray.setFromCamera(ndc, viewCam());
     return r;
   }
+  /* camera đúng như hình đang hiện trên màn hình. Trong thư viện (ngôi thứ ba) camera của mô hình được trả về vị trí
+     "mắt" sau mỗi lần vẽ (afterFrame), nên giữa hai khung hình phải dùng bản sao này để bấm trúng ghế/sàn/người. */
+  const rcam = new THREE.PerspectiveCamera();
+  let rcamOk = false;
+  function viewCam() { return rcamOk && rcam.userData.of === S.camera() ? rcam : S.camera(); }
   function pickAvatar(e) {
     setRay(e);
     const objs = [];
@@ -519,21 +677,37 @@
     return null;
   }
   /* ghế gần điểm bấm trên màn hình (cùng tầng hoặc nhìn thấy được) */
-  function seatAtScreen(e) {
+  function seatAtScreen(e, deep) {
     const space = sp(); if (!space || !space.seats.length) return -1;
-    const r = canvas.getBoundingClientRect(), c = S.camera(), occ = occupiedSeats(), v = new V3();
+    const r = canvas.getBoundingClientRect(), c = viewCam(), v = new V3();
+    // deep (khi bấm): bắn tia vào cảnh — trúng thẳng ghế nào thì chọn ghế đó; ghế khuất sau tường/bàn thì bỏ qua
+    let hitP = null, hitD = Infinity;
+    if (deep) {
+      setRay(e);
+      const hs = ray.intersectObject(space.group, true);
+      for (const h of hs) { if (sceneHit(h.object, space.group)) { hitP = h.point; hitD = h.distance; break; } }
+    }
     let best = -1, bd = U.isTouch ? 34 : 26;
     space.seats.forEach((s, i) => {
-      if (occ.has(i) || i === me.seat) return;
+      if (i === me.seat) return;
       if (Math.abs(s.y - me.y) > 3 && space.kind === 'room') return;
-      v.set(s.x, s.y + 0.55, s.z); space.group.localToWorld(v);
-      if (v.distanceTo(c.position) > 30) return;
+      v.set(s.x, s.y + 0.45, s.z); space.group.localToWorld(v);
+      const dist = v.distanceTo(c.position);
+      if (dist > 30) return;
+      if (hitP) { const dh = v.distanceTo(hitP); if (dh < 0.7) { if (dh - 1000 < bd) { bd = dh - 1000; best = i; } return; } }
+      if (dist > hitD + 0.9) return;
       v.project(c);
       if (v.z > 1) return;
       const d = Math.hypot((v.x + 1) / 2 * r.width - (e.clientX - r.left), (1 - v.y) / 2 * r.height - (e.clientY - r.top));
       if (d < bd) { bd = d; best = i; }
     });
     return best;
+  }
+  /* vật trúng tia có phải là một phần cảnh nhìn thấy được (không phải nhân vật, vòng đích, vật đang ẩn) */
+  function sceneHit(o, top) {
+    for (let x = o; x && x !== top; x = x.parent) { if (x.visible === false || (x.userData && x.userData.avatar) || x === marker) return false; }
+    if (o.material && (o.material.visible === false || (o.material.transparent && o.material.opacity < 0.05))) return false;
+    return true;
   }
   /* điểm trên mặt sàn dưới con trỏ */
   function floorAtScreen(e) {
@@ -555,7 +729,8 @@
   function hover(e) {
     if (me.mode === 'idle' || me.mode === 'piano' || observe) { canvas.style.cursor = ''; return; }
     const a = pickAvatar(e);
-    canvas.style.cursor = a ? 'pointer' : seatAtScreen(e) >= 0 ? 'cell' : '';
+    const si = a ? -1 : seatAtScreen(e);
+    canvas.style.cursor = a ? 'pointer' : si >= 0 ? (occupiedSeats().has(si) ? 'not-allowed' : 'cell') : '';
   }
   function click(e) {
     if (me.mode === 'idle' || me.mode === 'piano' || observe) return;
@@ -573,7 +748,7 @@
         else { if (me.mode === 'seat') standUp(); const ex = space.exitPoint, out = () => go('campus', { from: 'library' }); if (!walkTo(ex.x, ex.z, out, 0.5)) out(); }
         return;
       } }
-    const s = seatAtScreen(e);
+    const s = seatAtScreen(e, true);
     if (s >= 0) { goSit(s); return; }
     const p = floorAtScreen(e);
     if (p && (me.mode === 'campus' || me.mode === 'walk' || me.mode === 'seat')) {
@@ -672,6 +847,7 @@
     } else if (me.mode === 'campus') moveCampus(dt, camera);
     else if (me.mode === 'seat') seatCam(dt, camera);
     if (me.mode === 'walk' || me.mode === 'piano') roomFrame(dt, camera);
+    nearSeatFrame(dt, camera);
 
     if (me.avatar) me.avatar.update(dt, me.speed);
     for (const f of hooks.frame) f(dt, now, camera);
@@ -685,13 +861,15 @@
   }
   function afterFrame() {
     for (const f of hooks.after) f();
+    { const c = S.camera(); rcam.copy(c); rcam.userData.of = c; rcam.updateMatrixWorld(true); rcam.updateProjectionMatrix(); rcamOk = true; }
     if (saved) { const c = sp().camera; c.position.copy(saved.p); c.quaternion.copy(saved.q); saved = null; }
   }
 
   function moveCampus(dt, camera) {
     const space = sp();
-    const fx = -Math.sin(cam.az), fz = -Math.cos(cam.az);   // "tới trước" theo hướng camera
-    const ix = frozen ? 0 : (keys.r - keys.l) + joy.x, iy = frozen ? 0 : (keys.f - keys.b) - joy.y;
+    if (!frozen) cam.az -= (keys.tr - keys.tl) * dt * TURN * opt.look;   // ←/→ xoay camera
+    const fx = -Math.sin(cam.az), fz = -Math.cos(cam.az);   // "tới trước" theo hướng camera (đổi liên tục khi kéo chuột)
+    const { ix, iy } = moveInput();
     let mx = fx * iy - fz * ix, mz = fz * iy + fx * ix, len = Math.hypot(mx, mz);
     let auto = false;
     if (len < 0.05) { const d = followRoute(dt); if (d) { mx = d.x; mz = d.z; len = 1; auto = true; } }
@@ -762,14 +940,16 @@
       if (space.free(tx, tz, fl0) || space.camFree(tx, tz, eye.y - 1.6)) { eye.x = tx; eye.z = tz; } else route.stuck += dt;
       if (space.module === S.spaces.B?.module || space.module === S.spaces.D?.module) { /* độ cao mắt do mô hình tự tính */ }
     }
-    // cần điều khiển ảo: kéo lên/xuống để đi, sang trái/phải để quay
-    if (joy.on) { api.keys.f = joy.y < -0.25 ? 1 : 0; api.keys.b = joy.y > 0.35 ? 1 : 0; api.keys.run = Math.hypot(joy.x, joy.y) > 0.95 ? 1 : 0; api.yaw += joy.x * dt * 2.2 * opt.look; }
-    else if (joy.end) { joy.end = false; api.keys.f = api.keys.b = api.keys.run = 0; }
+    // phím + cần điều khiển → bộ đi bộ của mô hình (đi theo hướng camera, A/D đi ngang); ←/→ xoay góc nhìn
+    if (!frozen && me.mode === 'walk') api.yaw += (keys.tr - keys.tl) * dt * TURN * opt.look;
+    driveRoom();
+    const inp = moveInput(), fy = api.yaw;
     const nx = eye.x, nz = eye.z, ny = eye.y - 1.6;
     me.vx = (nx - me.x) / d; me.vz = (nz - me.z) / d; me.speed = Math.min(8, Math.hypot(me.vx, me.vz));
     me.x = nx; me.z = nz; me.y = ny;
-    // nhân vật quay mặt theo hướng đang đi; đứng yên thì giữ hướng cũ
-    if (me.speed > 0.4) me.yaw += ang(Math.atan2(me.vx, me.vz) - me.yaw) * Math.min(1, dt * 10);
+    // nhân vật quay dần về hướng MUỐN đi (phím/cần, theo camera); tự đi theo đường thì quay theo hướng đang đi
+    if (!r && Math.hypot(inp.ix, inp.iy) > 0.05) { const wx = inp.iy * Math.sin(fy) + inp.ix * Math.cos(fy), wz = -inp.iy * Math.cos(fy) + inp.ix * Math.sin(fy); me.yaw += ang(Math.atan2(wx, wz) - me.yaw) * Math.min(1, dt * (opt.reduce ? 7 : 10)); }
+    else if (me.speed > 0.4) me.yaw += ang(Math.atan2(me.vx, me.vz) - me.yaw) * Math.min(1, dt * 10);
     me.avatar.root.position.set(me.x, me.y, me.z); me.avatar.root.rotation.y = me.yaw;
     sendPos(performance.now(), me.speed > 0.1);
     updatePlace();
@@ -786,6 +966,7 @@
     placeCam(camera, dt, me.x, me.y + 1.5, me.z, Math.PI - api.yaw + Math.PI, Math.min(el, Math.asin(U.clamp((ceil - (me.y + 1.5)) / want, -1, 1))), want, () => true, false);
   }
   let autoDrive = false;
+  const TURN = 2.6;      // rad/s ở độ nhạy 1 khi giữ ←/→
 
   function others3D(dt, camera) {
     const list = [];
@@ -817,12 +998,26 @@
       if (tmp.z > 1 || tmp.x < -1.2 || tmp.x > 1.2 || tmp.y < -1.2 || tmp.y > 1.2) { el.style.display = 'none'; return; }
       el.style.display = '';
       el.style.transform = `translate(${((tmp.x + 1) / 2 * W).toFixed(1)}px,${((1 - tmp.y) / 2 * Hh).toFixed(1)}px) translate(-50%,-100%)`;
-      el.style.opacity = d > maxD * 0.7 ? '0.55' : '1';
+      el.style.opacity = d > maxD * 0.7 && !el.classList.contains('talk') ? '0.55' : '1';
+      // người gần đè lên người xa; ai đang nói thì bong bóng nổi lên trên mọi nhãn tên
+      el.style.zIndex = String((el.classList.contains('talk') ? 3000 : 1000) - Math.round(d * 10));
     };
+    // độ cao nhãn = đỉnh đầu thật của nhân vật (đứng / ngồi / nằm, cao / thấp) + khoảng hở
+    const topOf = (av, seated) => (av && av.headY ? av.headY() : seated ? 1.32 : 1.77) + 0.18;
     const room = me.space !== 'campus';
-    for (const o of others.list || []) place(o.label, o.av.root, o.seat >= 0 ? 1.5 : 1.95, o.d, room && Math.abs(o.y - me.y) > 2.6);
+    for (const o of others.list || []) {
+      const a = acts.get(o.uid), k = a ? a.k : null;           // [act] nhân vật vừa dựng lại (đổi khu…) thì gắn lại hoạt động
+      if (o.av.setAct && (o.av.act || null) !== k) { o.av.setAct(k); updateLabel(o); }
+      place(o.label, o.av.root, topOf(o.av, o.seat >= 0), o.d, room && Math.abs(o.y - me.y) > 2.6);
+    }
     if (myLabel) {
-      if (me.avatar && me.mode !== 'idle' && me.mode !== 'piano' && !(me.mode === 'walk' && opt.view === 'first')) { me.avatar.root.getWorldPosition(tmp2); place(myLabel, me.avatar.root, me.mode === 'seat' ? 1.5 : 1.95, tmp2.distanceTo(camera.position)); }
+      myLabel.classList.remove('pinned');
+      if (me.avatar && me.mode !== 'idle' && me.mode !== 'piano' && !(me.mode === 'walk' && opt.view === 'first')) { me.avatar.root.getWorldPosition(tmp2); place(myLabel, me.avatar.root, topOf(me.avatar, me.mode === 'seat'), tmp2.distanceTo(camera.position)); }
+      else if (me.mode !== 'idle' && myLabel.classList.contains('talk')) {
+        // không thấy nhân vật của mình (nhìn bằng mắt / đang chơi đàn): bong bóng của mình ghim giữa màn hình
+        myLabel.classList.add('pinned'); myLabel.style.display = ''; myLabel.style.opacity = '1'; myLabel.style.zIndex = '4000';
+        myLabel.style.transform = `translate(${(W / 2).toFixed(1)}px,${(Hh * 0.6).toFixed(1)}px) translate(-50%,-100%)`;
+      }
       else myLabel.style.display = 'none';
     }
     const showB = me.space === 'campus' && me.mode !== 'idle';
@@ -1065,8 +1260,10 @@
     nearBuilding: () => nearB,
     seatKind: () => { const s = sp() && sp().seats[me.seat]; return s ? s.kind : null; },
     nearThing: () => nearThing,
+    nearSeat: () => (nearSeat >= 0 ? nearSeat : null),
     sitPiano() { const space = sp(), i = space ? space.seats.findIndex(x => x.kind === 'piano') : -1; if (i >= 0) goSit(i); },
     sitNearest, goNear, whereIs, isNear, emote,
+    setAct, actOf: uid => (acts.get(uid) || {}).k || null,      // [act]
     /* chế độ Dạo chơi: hiện NPC mini-game, rác trên sân… */
     setPlay(on) { playMode = !!on; Npc.sync(); for (const f of hooks.zone) f(me.zone); },
     get play() { return playMode; },
@@ -1074,7 +1271,7 @@
     /* dùng cho js/games.js */
     hooks, sp, placeNear, avOf, setNear(t) { if (t !== nearThing) { nearThing = t; ev.emit('near-thing', t); } },
     holdCam(p, t) { camHold = p ? { p, t } : null; }, freeze(on) { frozen = !!on; if (on) route = null; },
-    get camera() { return S.camera(); },
+    get camera() { return viewCam(); },                    // camera như đang hiện trên màn hình
     goToPerson(uid) { const w = whereIs(uid); if (w) goNear(w.zone, w); return !!w; },
     npcs: () => Npc.directory(), npcSay: (def, t) => Npc.say(def, t), npcEmote: (id, k) => Npc.emote(id, k),
     /* kính thiên văn (đứng gần) hoặc nằm ngắm sao (đang ngồi ghế nằm) — chỉ có ở sân thượng tầng 10 */

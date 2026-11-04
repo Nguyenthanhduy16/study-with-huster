@@ -380,3 +380,57 @@ canvas.po-idcard { width: 170px; max-width: 45%; height: auto; border-radius: 8p
 .po-game .po-bprog i { display: block; height: 100%; background: linear-gradient(90deg, #8cbf3f, #f2b23a); transition: width .15s; }
 .po-countdown { position: fixed; inset: 0; display: grid; place-items: center; z-index: 80; pointer-events: none; font: 800 120px/1 "Be Vietnam Pro", system-ui, sans-serif; color: #fff; text-shadow: 0 6px 30px rgba(0,0,0,.45); }
 #po-play.on { background: var(--accent-soft); }
+
+/* ---------- lời nhắc theo ngữ cảnh (thay thanh nút dịch chuyển cũ) ---------- */
+.po-actions .po-btn.po-ctx { padding: 8px 13px; font-size: 13.5px; border-radius: 99px; gap: 8px; }
+.po-actions .po-btn.po-ctx kbd, .po-wheel-btn kbd { font: 700 11px/1 var(--font-ui, system-ui); padding: 3px 6px; border-radius: 6px; background: rgba(255,255,255,.22); border: 1px solid rgba(255,255,255,.35); color: inherit; }
+.po-actions .po-btn.ghost.po-ctx kbd, .po-actions .po-btn.line.po-ctx kbd { background: var(--accent-soft); border-color: var(--line); }
+
+/* ---------- vòng hành động nhanh (giữ Q / nút ✋) ---------- */
+.po-wheel-btn { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--panel); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: var(--shadow); cursor: pointer; z-index: 7;
+  display: grid; place-items: center; font-size: 26px; touch-action: none; user-select: none; -webkit-user-select: none; transition: transform .15s; }
+.po-wheel-btn:hover { transform: scale(1.06); }
+.po-wheel-btn kbd { position: absolute; right: -4px; bottom: -4px; background: var(--accent); color: var(--accent-ink); border: 0; }
+@media (pointer: coarse) { .po-wheel-btn kbd { display: none; } }
+body.po-wheel-on .po-wheel-btn { background: var(--accent); color: var(--accent-ink); }
+.po-wheel { position: fixed; inset: 0; z-index: 70; background: radial-gradient(circle at 50% 50%, rgba(10, 14, 30, .18), rgba(10, 14, 30, .42)); touch-action: none; user-select: none; -webkit-user-select: none; opacity: 0; transition: opacity .12s; }
+.po-wheel.in { opacity: 1; }
+.po-wheel-ring { position: absolute; border-radius: 50%; transform: scale(.86); transition: transform .16s cubic-bezier(.2, .9, .3, 1.3); filter: drop-shadow(0 14px 34px rgba(0, 0, 0, .35)); }
+.po-wheel.in .po-wheel-ring { transform: scale(1); }
+.po-wheel-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.po-wheel-sl { fill: var(--panel); stroke: var(--line); stroke-width: .6; transition: fill .1s; }
+.po-wheel-sl.on { fill: var(--accent); }
+.po-wheel-it { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 1px; width: 84px; padding: 4px 2px; border: 0; background: none; cursor: pointer; color: var(--ink); font: inherit; border-radius: 12px; }
+.po-wheel-it .ic { font-size: 27px; line-height: 1.1; transition: transform .12s; }
+.po-wheel-it em { font-style: normal; font-size: 11.5px; font-weight: 700; line-height: 1.15; text-align: center; }
+.po-wheel-it i { font-style: normal; font-size: 10px; font-weight: 700; color: var(--muted); }
+.po-wheel-it.on { color: var(--accent-ink); }
+.po-wheel-it.on .ic { transform: scale(1.18); }
+.po-wheel-it.on i { color: inherit; opacity: .8; }
+.po-wheel-it.cur::after { content: "đang làm"; position: absolute; top: -10px; font-size: 9.5px; font-weight: 800; padding: 1px 6px; border-radius: 99px; background: var(--po-green); color: #fff; }
+.po-wheel-it:focus-visible, .po-wheel-hub:focus-visible { outline: 3px solid var(--po-gold); outline-offset: 1px; }
+.po-wheel-hub { position: absolute; left: 50%; top: 50%; width: 34%; height: 34%; transform: translate(-50%, -50%); border-radius: 50%; border: 1px solid var(--line); background: var(--panel);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; cursor: pointer; color: var(--ink); font: inherit; padding: 4px; }
+.po-wheel-hub .ic { font-size: 22px; line-height: 1; }
+.po-wheel-hub em { font-style: normal; font-size: 11px; font-weight: 700; line-height: 1.15; text-align: center; max-width: 100%; }
+.po-wheel-hub.stop { background: color-mix(in srgb, var(--po-red) 16%, var(--panel)); }
+.po-wheel-hint { position: absolute; transform: translateX(-50%); white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; font-weight: 600; color: #fff; background: rgba(14, 18, 36, .72); padding: 5px 12px; border-radius: 99px; }
+@media (max-width: 860px) {
+  .po-wheel-btn { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); width: 62px; height: 62px; }
+  .po-wheel-it { width: 72px; }
+  .po-wheel-it em { font-size: 10.5px; }
+  .po-wheel-hint { white-space: normal; text-align: center; width: calc(100vw - 32px); }
+}
+@media (prefers-reduced-motion: reduce) { .po-wheel, .po-wheel-ring { transition: none; } }
+
+/* ---------- bong bóng chat trên đầu nhân vật ---------- */
+.po-bubbles { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.po-bubbles:empty { display: none; }
+.po-bubbles .po-bubble { display: block; max-width: min(240px, 70vw); overflow-wrap: anywhere; animation: po-pop .25s ease-out; transition: opacity .4s, transform .4s; }
+.po-bubbles .po-bubble > span { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.po-bubbles .po-bubble.old { opacity: .72; transform: scale(.88); transform-origin: 50% 100%; }
+.po-bubbles .po-bubble.old::after { display: none; }
+.po-bubbles .po-bubble.out { opacity: 0; transform: translateY(-6px) scale(.92); }
+.po-bubbles .po-bubble.icon { font-size: 20px; line-height: 1.1; padding: 4px 8px; }
+.po-tag.pinned .po-name { display: none; }

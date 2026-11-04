@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Tạo lưới di chuyển sân thư viện</title>
+<style>body{font:14px system-ui;margin:24px;max-width:760px}canvas{border:1px solid #ccc;max-width:100%;image-rendering:pixelated}</style></head>
+<body>
+<h1>Tạo lưới di chuyển cho sân thư viện</h1>
+<p>Dùng khi thay file <code>scene/exterior/thu-vien-ta-quang-buu.glb</code>. Mở trang này qua máy chủ nhỏ (<code>python3 -m http.server</code>), chờ tính xong rồi bấm "Tải file" và chép file <code>luoi-di-chuyen.json</code> vào <code>scene/exterior/</code>.</p>
+<p id="st">Đang tính…</p>
+<canvas id="cv"></canvas>
+<p><button id="dl" disabled>Tải file luoi-di-chuyen.json</button></p>
+<script src="../scene/vendor/three.min.js"></script>
+<script src="../scene/vendor/GLTFLoader.js"></script>
+<script src="../js/grid.js"></script>
+<script src="../scene/exterior/build-grid.js"></script>
+<script>
+new THREE.GLTFLoader().load('../scene/exterior/thu-vien-ta-quang-buu.glb', g => {
+  const t0 = performance.now();
+  const grid = buildWalkGrid(g.scene);
+  const json = JSON.stringify(grid.toJSON());
+  window.OUT = json;
+  const cv = document.getElementById('cv'); cv.width = grid.nx; cv.height = grid.nz;
+  const cx = cv.getContext('2d'), im = cx.createImageData(grid.nx, grid.nz);
+  for (let k = 0; k < grid.walk.length; k++) { const w = grid.walk[k], f = grid.floor[k]; im.data.set(w ? [200 - f * 40, 220 - f * 30, 200, 255] : [60, 64, 80, 255], k * 4); }
+  cx.putImageData(im, 0, 0);
+  let n = 0; grid.walk.forEach(v => n += v);
+  document.getElementById('st').textContent = `Xong sau ${Math.round(performance.now() - t0)} ms · ${grid.nx}×${grid.nz} ô · ${n} ô đi được`;
+  const b = document.getElementById('dl'); b.disabled = false;
+  b.onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = 'luoi-di-chuyen.json'; a.click(); };
+});
+</script>
+</body></html>

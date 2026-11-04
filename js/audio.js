@@ -11,6 +11,8 @@
     { id: 'nature', label: '🍃 Gió & chim', def: 0.35 },
     { id: 'library', label: '📖 Không khí thư viện', def: 0.4 },
     { id: 'piano', label: '🎹 Piano nhẹ', def: 0.3 },
+    // [piano-net] tiếng đàn thật do bạn khác chơi ở tầng 6 (kéo về 0 = tắt). Phát ở scene/hust3d.js, đọc mức ở js/piano-net.js
+    { id: 'pianoNet', label: '🎹 Tiếng đàn của bạn khác', def: 1 },
     { id: 'fx', label: '🔔 Âm báo', def: 0.6 }
   ];
   const vol = Object.assign(Object.fromEntries(CHANNELS.map(c => [c.id, c.def])), U.store.get('audio:vol', {}));

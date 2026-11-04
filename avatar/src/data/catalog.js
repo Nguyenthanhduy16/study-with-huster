@@ -10,18 +10,20 @@
 //    colors:   { main, accent, trim, print, zipper, front, text },
 //    palette:  ['#…'],                 // gợi ý màu trong giao diện
 //    textures: {                       // ẢNH CỦA BẠN (PNG nền trong suốt là đẹp nhất)
-//      front:   'assets/textures/ao-mat-truoc.png',  // hình in mặt trước
-//      back:    'assets/textures/ao-mat-sau.png',    // hình in lưng
-//      pattern: 'assets/textures/vai-hoa-van.png',   // hoa văn vải lặp lại
-//      upper:   'assets/textures/quai-dep.png',      // (dép) phủ lên quai, vẫn giữ lỗ
+//      front:   'avatar/assets/textures/ao-mat-truoc.png',  // hình in mặt trước
+//      back:    'avatar/assets/textures/ao-mat-sau.png',    // hình in lưng
+//      pattern: 'avatar/assets/textures/vai-hoa-van.png',   // hoa văn vải lặp lại
+//      upper:   'avatar/assets/textures/quai-dep.png',      // (dép) phủ lên quai, vẫn giữ lỗ
 //    },
 //    accepts:  ['front','back','pattern'],           // ô "Tải ảnh lên" hiện trong giao diện
 //    emblem:   'chest-left' | 'chest-center' | 'back' | ...,   // vị trí huy hiệu tự tạo
 //    options:  { ... tham số riêng của từng builder ... }
 //  }
 //
+//  [game] Đường dẫn ảnh tính từ gốc web Phòng ôn thi ảo (index.html, phong-thay-do.html) → 'avatar/assets/textures/…'
+//
 //  Chữ in trên áo (wordmark) và tên trường trên dây đeo lấy từ phần "Huy hiệu"
-//  (DEFAULTS.emblem) — KHÔNG đặt logo chữ thật của trường vào đây khi chưa được phép.
+//  (DEFAULTS.emblem) — mặc định dùng chữ HUST và huy hiệu cách điệu.
 // =============================================================
 
 // Bảng màu "đồng phục" — đỏ đậm + kem, gợi không khí áo lớp kỹ thuật
@@ -59,22 +61,138 @@ export const ITEMS = [
 
   // ---------------------------------------------------------------- ÁO — phong cách áo trường (data của bạn)
   {
-    id: 'ao-polo-truong', slot: 'top', group: 'truong', name: 'Polo lớp viền trắng',
-    colors: { main: RED, accent: RED, trim: '#ffffff', print: '#ffffff' }, palette: SCHOOL_TOPS,
-    textures: { front: null, back: null, pattern: null }, accepts: ['front', 'back', 'pattern'],
-    options: { sleeve: 'short', collar: 'polo', placket: [0, 0.26], piping: true, wordmark: 'chest-left', sleeveEmblem: true },
+    "id": "ao-polo-truong",
+    "slot": "top",
+    "group": "truong",
+    "name": "Polo cotton HUST đỏ đô",
+    "colors": {
+      "main": "#a51f28",
+      "accent": "#a51f28",
+      "trim": "#ffffff",
+      "ribAccent": "#101c35",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "short",
+      "collar": "polo",
+      "placket": [
+        0,
+        0.2
+      ],
+      "poloTrim": true,
+      "wordmark": "chest-left",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo polo cộc tay (Sản phẩm Best Seller học đường)",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-polo-coc-tay-san-pham-best-seller-hoc-duong"
+    }
   },
   {
-    id: 'ao-thun-truong', slot: 'top', group: 'truong', name: 'Áo thun thể thao lớp',
-    colors: { main: RED, trim: '#ffffff', print: '#ffffff' }, palette: SCHOOL_TOPS,
-    textures: { front: null, back: null }, accepts: ['front', 'back'],
-    options: { sleeve: 'short', collar: 'crew', sidePiping: true, wordmark: 'chest-left', sleeveEmblem: true },
+    "id": "ao-thun-truong",
+    "slot": "top",
+    "group": "truong",
+    "name": "Áo thể thao cổ tròn HUST",
+    "colors": {
+      "main": "#a51f28",
+      "trim": "#ffffff",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "short",
+      "collar": "crew",
+      "wordmark": "chest-left",
+      "sleeveEmblem": true,
+      "shoulderPiping": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo thể thao cổ tròn",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-the-thao-co-tron"
+    }
   },
   {
-    id: 'ao-khoac-gio', slot: 'top', group: 'truong', name: 'Áo khoác gió có mũ',
-    colors: { main: RED, trim: '#ffffff', print: '#ffffff', zipper: WINE }, palette: SCHOOL_TOPS,
-    textures: { front: null, back: null }, accepts: ['front', 'back'],
-    options: { sleeve: 'long', collar: 'hood', zipper: true, piping: true, weltPockets: true, hemBand: true, cuffs: true, wordmark: 'chest-left', sleeveEmblem: true },
+    "id": "ao-khoac-gio",
+    "slot": "top",
+    "group": "truong",
+    "name": "Áo khoác gió HUST có mũ",
+    "colors": {
+      "main": "#a51f28",
+      "trim": "#ffffff",
+      "print": "#ffffff",
+      "zipper": "#333236"
+    },
+    "palette": [
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "hood",
+      "zipper": true,
+      "piping": true,
+      "weltPockets": true,
+      "hemBand": true,
+      "cuffs": true,
+      "wordmark": "chest-left",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo khoác gió",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-khoac-gio"
+    }
   },
   {
     id: 'ao-khoac-the-thao', slot: 'top', group: 'truong', name: 'Áo khoác thể thao',
@@ -91,26 +209,690 @@ export const ITEMS = [
     options: { sleeve: 'long', collar: 'shirt', placket: [0, 1], pocket: true, tucked: true, cuffs: true },
   },
   {
-    id: 'ao-ni-truong', slot: 'top', group: 'truong', name: 'Áo nỉ không mũ',
-    colors: { main: NAVY, print: '#ffffff' }, palette: [NAVY, '#f3f1ec', RED, '#a9abb0'],
-    textures: { front: null, back: null }, accepts: ['front', 'back'],
-    options: { sleeve: 'long', collar: 'crew', cuffs: true, hemBand: true, wordmark: 'chest-big', sleeveEmblem: true },
+    "id": "ao-ni-truong",
+    "slot": "top",
+    "group": "truong",
+    "name": "Sweater HUST xanh tím than",
+    "colors": {
+      "main": "#101c35",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#101c35",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "crew",
+      "cuffs": true,
+      "hemBand": true,
+      "wordmark": "chest-big",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo Sweater màu xanh tím than",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-sweater-mau-xanh-tim-than"
+    }
   },
   {
-    id: 'ao-hoodie-truong', slot: 'top', group: 'truong', name: 'Hoodie lớp',
-    colors: { main: RED, print: '#ffffff' }, palette: [RED, '#a9abb0', NAVY, '#f3f1ec'],
-    textures: { front: null, back: null }, accepts: ['front', 'back'],
-    options: { sleeve: 'long', collar: 'hood', kangaroo: true, cuffs: true, hemBand: true, wordmark: 'chest-big', sleeveEmblem: true },
+    "id": "ao-hoodie-truong",
+    "slot": "top",
+    "group": "truong",
+    "name": "Hoodie HUST đỏ đô",
+    "colors": {
+      "main": "#a51f28",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "hood",
+      "kangaroo": true,
+      "cuffs": true,
+      "hemBand": true,
+      "wordmark": "chest-big",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo Hoodie màu đỏ đô (Trang phục best seller học đường)",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-hoodie-mau-do-do-trang-phuc-best-seller-hoc-duong"
+    }
+  },
+
+  // ---------------------------------------------------------------- CÁC MẪU HUST TỪ MAY PHƯƠNG THẢO
+  {
+    "id": "ao-so-mi-nam-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Sơ mi HUST nam màu ghi",
+    "colors": {
+      "main": "#c5c8cd",
+      "accent": "#b3b7bc"
+    },
+    "palette": [
+      "#c5c8cd",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "shirt",
+      "placket": [
+        0,
+        1
+      ],
+      "cuffs": true,
+      "pocket": false,
+      "tucked": false
+    },
+    "emblem": "chest-left",
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo sơ mi Nam",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-so-mi-nam"
+    }
+  },
+  {
+    "id": "ao-so-mi-nu-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Sơ mi HUST nữ màu ghi",
+    "colors": {
+      "main": "#c5c8cd",
+      "accent": "#b3b7bc"
+    },
+    "palette": [
+      "#c5c8cd",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "shirt",
+      "placket": [
+        0,
+        1
+      ],
+      "cuffs": true,
+      "pocket": false,
+      "tucked": false,
+      "waistFit": true
+    },
+    "emblem": "chest-left",
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo sơ mi nữ",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-so-mi-nu"
+    }
+  },
+  {
+    "id": "ao-thun-trang-nguc-trai-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Áo thun HUST trắng · ngực trái",
+    "colors": {
+      "main": "#f8f8f6",
+      "print": "#a51f28"
+    },
+    "palette": [
+      "#f8f8f6",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "short",
+      "collar": "crew",
+      "wordmark": "chest-left",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo thun cổ tròn màu trắng (thêu ngực trái)",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-thun-co-tron-mau-trang-theu-nguc-trai"
+    }
+  },
+  {
+    "id": "ao-thun-trang-giua-nguc-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Áo thun HUST trắng · giữa ngực",
+    "colors": {
+      "main": "#f8f8f6",
+      "print": "#a51f28"
+    },
+    "palette": [
+      "#f8f8f6",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "short",
+      "collar": "crew",
+      "wordmark": "chest-big",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo thun cổ tròn màu trắng (thêu giữa ngực)",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-thun-co-tron-mau-trang-theu-giua-nguc"
+    }
+  },
+  {
+    "id": "ao-thun-do-giua-nguc-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Áo thun HUST đỏ đô · giữa ngực",
+    "colors": {
+      "main": "#a51f28",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "short",
+      "collar": "crew",
+      "wordmark": "chest-big",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo thun cổ tròn màu đỏ đô (thêu giữa ngực)",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-thun-co-tron-mau-do-do-theu-giua-nguc"
+    }
+  },
+  {
+    "id": "ao-thun-ghi-nguc-trai-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Áo thun HUST ghi · ngực trái",
+    "colors": {
+      "main": "#aeb0b2",
+      "print": "#a51f28"
+    },
+    "palette": [
+      "#aeb0b2",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "short",
+      "collar": "crew",
+      "wordmark": "chest-left",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo thun cổ tròn màu ghi (thêu ngực trái)",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-thun-co-tron-mau-ghi-theu-nguc-trai"
+    }
+  },
+  {
+    "id": "ao-polo-the-thao-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Áo thể thao có cổ HUST",
+    "colors": {
+      "main": "#a51f28",
+      "accent": "#a51f28",
+      "trim": "#ffffff",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "short",
+      "collar": "polo",
+      "placket": [
+        0,
+        0.2
+      ],
+      "shoulderPiping": true,
+      "wordmark": "chest-left",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo thể thao có cổ",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-the-thao-co-co"
+    }
+  },
+  {
+    "id": "ao-bomber-xanh-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Bomber HUST xanh than · tay trắng",
+    "colors": {
+      "main": "#101c35",
+      "accent": "#f5f4ef",
+      "trim": "#ffffff",
+      "print": "#ffffff",
+      "ribAccent": "#ffffff"
+    },
+    "palette": [
+      "#101c35",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "stand",
+      "bomber": true,
+      "accentSleeves": true,
+      "cuffs": true,
+      "hemBand": true,
+      "wordmark": "chest-left",
+      "sleeveEmblem": true,
+      "weltPockets": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo khoác Bomber màu xanh than",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-khoac-bomber-mau-xanh-than"
+    }
+  },
+  {
+    "id": "ao-bomber-do-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Bomber HUST đỏ đô · tay ghi",
+    "colors": {
+      "main": "#a51f28",
+      "accent": "#bdc0c2",
+      "trim": "#e7e7e4",
+      "print": "#ffffff",
+      "ribAccent": "#e7e7e4"
+    },
+    "palette": [
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "stand",
+      "bomber": true,
+      "accentSleeves": true,
+      "cuffs": true,
+      "hemBand": true,
+      "wordmark": "chest-left",
+      "sleeveEmblem": true,
+      "weltPockets": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo khoác Bomber màu đỏ đô",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-khoac-bomber-mau-do-do"
+    }
+  },
+  {
+    "id": "ao-ni-trang-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Sweater HUST trắng",
+    "colors": {
+      "main": "#f7f7f3",
+      "print": "#a51f28"
+    },
+    "palette": [
+      "#f7f7f3",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "crew",
+      "cuffs": true,
+      "hemBand": true,
+      "wordmark": "chest-big",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo Sweater màu trắng",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-sweater-mau-trang"
+    }
+  },
+  {
+    "id": "ao-hoodie-ghi-hust",
+    "slot": "top",
+    "group": "truong",
+    "name": "Hoodie HUST màu ghi",
+    "colors": {
+      "main": "#bdbfbe",
+      "print": "#a51f28"
+    },
+    "palette": [
+      "#bdbfbe",
+      "#a51f28",
+      "#7a1c26",
+      "#ffffff",
+      "#101c35",
+      "#a9abb0"
+    ],
+    "textures": {
+      "front": null,
+      "back": null,
+      "pattern": null
+    },
+    "accepts": [
+      "front",
+      "back",
+      "pattern"
+    ],
+    "options": {
+      "sleeve": "long",
+      "collar": "hood",
+      "kangaroo": true,
+      "cuffs": true,
+      "hemBand": true,
+      "wordmark": "chest-big",
+      "sleeveEmblem": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Áo Hoodie màu ghi",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-hoodie-mau-ghi"
+    }
   },
 
   // ---------------------------------------------------------------- ÁO — thông dụng
-  { id: 'ao-raglan-co-tim', slot: 'top', name: 'Áo raglan cổ tim', colors: { main: '#e7e9ee', accent: '#2f7be0', trim: '#ffffff' }, palette: ['#e7e9ee', '#ffffff', '#f2efe6'], accepts: ['front'], textures: {}, options: { sleeve: 'short', collar: 'crew', collarAccent: true, accentSleeves: true, vneck: true } },
+  { id: 'ao-raglan-co-tim', slot: 'top', group: 'truong', name: 'Áo GDTC HUST trắng · xanh', colors: { main: '#ffffff', accent: '#1689ca', trim: '#ffffff' }, palette: ['#ffffff', '#e7e9ee', '#f2efe6'], accepts: ['front'], textures: {}, emblem: 'chest-left', options: { sleeve: 'short', collar: 'polo', collarAccent: true, accentSleeves: true, vneck: true, sportsCollar: true } },
   { id: 'ao-thun', slot: 'top', name: 'Áo thun trơn', colors: { main: '#f2efe8' }, palette: ['#f2efe8', '#1f1f22', '#e65a4f', '#3d7bd9', '#f2c94c', '#7bc4a4'], textures: {}, accepts: ['front', 'back'], options: { sleeve: 'short', collar: 'crew' } },
   { id: 'ao-ke-ngang', slot: 'top', name: 'Áo thun kẻ ngang', colors: { main: '#f4f1ea', accent: '#24324f' }, palette: ['#f4f1ea', '#fff7e0'], options: { sleeve: 'long', collar: 'crew', breton: '#24324f' } },
   { id: 'ao-so-mi-caro', slot: 'top', name: 'Sơ mi caro', colors: { main: '#b8423a' }, palette: ['#b8423a', '#3a5f8a', '#4d6b3c', '#6b6f78'], options: { sleeve: 'long', collar: 'shirt', placket: [0, 1], pocket: true, cuffs: true, plaid: ['#22324d', '#f1e4c9'] } },
   { id: 'ao-the-thao', slot: 'top', name: 'Áo thể thao sọc', colors: { main: '#2e6fd6', accent: '#ffffff' }, palette: ['#2e6fd6', '#d63a3a', '#1aa36f', '#ff8a1f', '#222'], accepts: ['front', 'back'], textures: {}, options: { sleeve: 'short', collar: 'crew', collarAccent: true, stripes: [[0.62, 0.66], [0.69, 0.71]] } },
   { id: 'ao-hoodie', slot: 'top', name: 'Hoodie trơn', colors: { main: '#8a95a8' }, palette: ['#8a95a8', '#2a2d34', '#e8e2d6', '#b45f4a', '#4f6b52'], accepts: ['front', 'back'], textures: {}, options: { sleeve: 'long', collar: 'hood', kangaroo: true, cuffs: true, hemBand: true } },
   { id: 'ao-ba-lo', slot: 'top', name: 'Áo ba lỗ', colors: { main: '#f2efe8' }, palette: ['#f2efe8', '#1f1f22', '#5c7da8'], options: { sleeve: 'none', collar: 'crew' } },
+
+  // ---------------------------------------------------------------- QUẦN THỂ THAO HUST
+  {
+    "id": "quan-the-thao-hust",
+    "slot": "bottom",
+    "group": "truong",
+    "name": "Quần thể thao HUST · ống suông",
+    "colors": {
+      "main": "#101c35",
+      "accent": "#ffffff",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#101c35",
+      "#1f2a44",
+      "#23252d"
+    ],
+    "textures": {},
+    "accepts": [
+      "pattern"
+    ],
+    "options": {
+      "fit": "regular",
+      "track": true,
+      "sideStripe": true,
+      "wordmark": true,
+      "belt": false,
+      "elasticWaist": true,
+      "zipPockets": true,
+      "sideTag": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Quần thể thao",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/quan-the-thao"
+    }
+  },
+  {
+    "id": "quan-the-thao-ni-hust",
+    "slot": "bottom",
+    "group": "truong",
+    "name": "Quần thể thao HUST · nỉ ấm",
+    "colors": {
+      "main": "#101c35",
+      "accent": "#ffffff",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#101c35",
+      "#1f2a44",
+      "#23252d"
+    ],
+    "textures": {},
+    "accepts": [
+      "pattern"
+    ],
+    "options": {
+      "fit": "slim",
+      "track": true,
+      "sideStripe": true,
+      "wordmark": true,
+      "belt": false,
+      "elasticWaist": true,
+      "zipPockets": true,
+      "sideTag": true,
+      "fleece": true
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Quần thể thao cao cấp (Vải nỉ ấm áp)",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/quan-the-thao-cao-cap-vai-ni-am-ap"
+    }
+  },
+  {
+    "id": "quan-short-hust",
+    "slot": "bottom",
+    "group": "truong",
+    "name": "Quần sooc thể thao HUST",
+    "colors": {
+      "main": "#101c35",
+      "accent": "#ffffff",
+      "print": "#ffffff"
+    },
+    "palette": [
+      "#101c35",
+      "#1f2a44",
+      "#23252d"
+    ],
+    "textures": {},
+    "accepts": [
+      "pattern"
+    ],
+    "options": {
+      "fit": "wide",
+      "track": true,
+      "sideStripe": true,
+      "wordmark": true,
+      "belt": false,
+      "elasticWaist": true,
+      "zipPockets": true,
+      "sideTag": true,
+      "length": "shorts",
+      "wordmarkVertical": true,
+      "trackStripeWidth": 0.1
+    },
+    "collection": "hust-phuong-thao",
+    "source": {
+      "name": "May Phương Thảo",
+      "title": "Quần sooc thể thao cao cấp",
+      "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/quan-sooc-the-thao-cao-cap"
+    }
+  },
 
   // ---------------------------------------------------------------- QUẦN · VÁY
   { id: 'quan-au', slot: 'bottom', group: 'truong', name: 'Quần âu', colors: { main: '#23252d' }, palette: ['#23252d', '#1f2c4a', '#8f9196', '#4a3a2c'], options: { fit: 'regular' } },
@@ -145,7 +927,7 @@ export const ITEMS = [
   { id: 'dep-tong', slot: 'footwear', name: 'Dép tông', colors: { main: '#2f6fd6', accent: '#f2efe6' }, palette: ['#2f6fd6', '#e14b4b', '#1f1f22', '#f2c94c'], options: { type: 'tong' } },
 
   // ---------------------------------------------------------------- THẺ SINH VIÊN
-  { id: 'the-sv-day-deo', slot: 'card', group: 'truong', name: 'Dây đeo + vỏ silicone', colors: { main: RED, accent: RED, text: '#ffffff' }, palette: [RED, WINE, NAVY, '#1aa36f', '#202125'], options: { type: 'day-deo' } },
+  { id: 'the-sv-day-deo', slot: 'card', group: 'truong', name: 'Dây đeo HUST + vỏ thẻ đỏ', fixedColors: true, colors: { main: '#df1930', accent: '#e31b34', text: '#ffffff' }, palette: ['#df1930'], options: { type: 'day-deo' } },
   { id: 'the-sv-kep-ao', slot: 'card', group: 'truong', name: 'Thẻ kẹp ngực', colors: { main: RED }, options: { type: 'kep-ao' } },
 
   // ---------------------------------------------------------------- MŨ
@@ -192,6 +974,19 @@ export const ITEMS = [
   { id: 'ong-ban-ve', slot: 'handheld', name: 'Ống đựng bản vẽ', colors: { main: '#3a3f4a', accent: '#e8b93a' }, palette: ['#3a3f4a', '#1f3b6e', '#c0463f'], options: { type: 'ong-ban-ve' } },
 ];
 
+// Huy hiệu riêng cho áo: mẫu tròn, ngoại trừ áo GDTC trắng–xanh.
+// Tách khỏi nhận diện phụ kiện để đổi logo áo không đổi thẻ, mũ hay balo.
+for (const item of ITEMS) {
+  if (item.slot !== 'top') continue;
+  const rectangular = item.id === 'ao-raglan-co-tim';
+  item.textures = {
+    ...item.textures,
+    badge: rectangular ? 'avatar/assets/textures/hust-logo.png' : 'avatar/assets/textures/hust-logo-round.png',
+  };
+  item.badgeCrop = rectangular ? [261, 40, 246, 370] : [16, 12, 224, 224];
+  item.badgeClip = rectangular ? null : 'circle';
+}
+
 // Trạng thái mặc định khi mở trang
 export const DEFAULTS = {
   body: { skin: '#e2b08c', build: 'vua', height: 0.97 },
@@ -199,17 +994,19 @@ export const DEFAULTS = {
     hair: 'toc-ngan', top: 'ao-polo-truong', bottom: 'quan-au', footwear: 'dep-to-ong',
     card: 'the-sv-day-deo', hat: null, bag: 'balo', eyewear: null, mask: null, audio: null, handheld: null,
   },
-  // Thương hiệu TỰ TẠO — thay cho logo, chữ "HUST" và con dấu thật của trường
+  // Nhận diện HUST — dùng logo Bách khoa do người dùng cung cấp
   emblem: {
-    name: 'Trường Đại học Kỹ thuật Tổ Ong', short: 'KTO', wordmark: 'TỔ ONG', year: '2026',
-    shape: 'khien', motif: 'banh-rang', main: RED, accent: CREAM,
+    name: 'Đại học Bách khoa Hà Nội', short: 'HUST', wordmark: 'HUST', year: '1956',
+    shape: 'tron', motif: 'banh-rang', main: RED, accent: '#ffffff',
+    logo: 'avatar/assets/textures/hust-logo.png', logoCrop: [261, 40, 246, 370],
   },
   // Thẻ SV mẫu — toàn bộ là dữ liệu giả
   card: {
-    school: 'Trường Đại học Kỹ thuật Tổ Ong', title: 'THẺ SINH VIÊN',
+    school: 'Đại học Bách khoa Hà Nội', title: 'THẺ SINH VIÊN',
+    orientation: 'landscape',
     name: 'Nguyễn Minh An', id: '26A0001', major: 'Kỹ thuật phần mềm', cohort: 'K71 · 2026–2030',
     photo: null,     // dataURL hoặc đường dẫn ảnh
-    template: null,  // 'assets/textures/the-sv-nen.png' — ảnh nền thẻ của bạn (1024×646)
+    template: null,  // 'avatar/assets/textures/the-sv-nen.png' — ảnh nền thẻ của bạn (1024×646)
     drawHeader: true,
   },
 };

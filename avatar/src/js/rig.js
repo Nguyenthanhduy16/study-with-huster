@@ -7,7 +7,7 @@
 //  Quần áo dùng lại chính các "chi tiết" này, nới rộng ra → ôm sát người.
 // =============================================================
 import * as THREE from 'three';
-import { smin, ellipsoid, roundCone, roundBox, surfaceNets, relax, skinByDistance } from './sdf.js';
+import { smin, ellipsoid, roundCone, roundBox, surfaceNets, relax, segDist, segT } from './sdf.js';
 
 export const DIM = {
   pelvisY: 0.965,     // khớp hông so với mặt đất
@@ -245,11 +245,63 @@ export const BONE_NAMES = ['torso', 'head', 'shoulderL', 'elbowL', 'wristL', 'sh
 
 // Lưới cơ thể (cache theo dáng người — đổi màu da không cần dựng lại)
 const bodyGeoCache = new Map();
+
+// Chỉ trộn xương trong cùng bộ phận và các khớp nối trực tiếp.
+// Nếu xét toàn bộ xương theo khoảng cách, cổ tay gần hông sẽ kéo da hông
+// ra khỏi quần/váy khi nhân vật cầm đồ, dù quần áo đã có trọng số đúng.
+function skinBody(geo, M) {
+  const p = geo.attributes.position, count = p.count;
+  const indices = new Uint16Array(count * 4), weights = new Float32Array(count * 4);
+  for (let i = 0; i < count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const distances = [
+      Math.min(M.trunk(x, y, z), M.neck(x, y, z), M.glute('L', x, y, z), M.glute('R', x, y, z)),
+      M.headSDF(x, y, z),
+      Math.min(M.arm('L', x, y, z), M.deltoid('L', x, y, z)),
+      Math.min(M.arm('R', x, y, z), M.deltoid('R', x, y, z)),
+      Math.min(M.leg('L', x, y, z), M.foot(M.legs.L, x, y, z)),
+      Math.min(M.leg('R', x, y, z), M.foot(M.legs.R, x, y, z)),
+    ];
+    let region = 0;
+    for (let k = 1; k < distances.length; k++) if (distances[k] < distances[region]) region = k;
+    const allowed = new Set();
+    const addChain = (base) => { allowed.add(base); allowed.add(base + 1); allowed.add(base + 2); };
+    if (region === 0) {
+      allowed.add(0);
+      if (y > M.P[1] + 0.47) allowed.add(1);
+      if (y > M.P[1] + 0.24) {
+        if (distances[2] - distances[0] < 0.04) addChain(2);
+        if (distances[3] - distances[0] < 0.04) addChain(5);
+      }
+      if (y < M.P[1] + 0.08) { addChain(8); addChain(11); }
+    } else if (region === 1) {
+      allowed.add(1);
+      if (y < M.P[1] + 0.66) allowed.add(0);
+    } else if (region === 2 || region === 3) {
+      const side = region === 2 ? 'L' : 'R', arm = M.arms[side];
+      addChain(region === 2 ? 2 : 5);
+      if (y > M.P[1] + 0.24 && segT(x, y, z, arm.sh, arm.wr) < 0.3) allowed.add(0);
+    } else {
+      addChain(region === 4 ? 8 : 11);
+      if (y > M.P[1] - 0.16) allowed.add(0);
+    }
+    const candidates = M.segments.filter((segment) => allowed.has(segment.bone)).map((segment) => {
+      const d = segDist(x, y, z, segment.a, segment.b);
+      return { bone: segment.bone, weight: 1 / Math.pow(d * d + 1e-4, 2) };
+    }).sort((a, b) => b.weight - a.weight).slice(0, 4);
+    const sum = candidates.reduce((total, entry) => total + entry.weight, 0);
+    candidates.forEach((entry, k) => { indices[i * 4 + k] = entry.bone; weights[i * 4 + k] = entry.weight / sum; });
+  }
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(indices, 4));
+  geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
+  return geo;
+}
+
 function bodyGeometry(model) {
   if (bodyGeoCache.has(model.name)) return bodyGeoCache.get(model.name);
   const g = surfaceNets(model.body, [-0.45, -0.02, -0.2], [0.45, 1.86, 0.3], 0.0105);
   relax(g, 1, 0.45);
-  skinByDistance(g, model.segments);
+  skinBody(g, model);
   g.userData.keep = true;
   bodyGeoCache.set(model.name, g);
   return g;

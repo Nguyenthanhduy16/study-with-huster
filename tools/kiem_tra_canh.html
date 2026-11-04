@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kiểm tra lớp cảnh 3D</title>
+<link rel="stylesheet" href="../vendor/fonts/fonts.css">
+<link rel="stylesheet" href="../scene/hust3d.css">
+<link rel="stylesheet" href="../scene/tang10.css">
+<style>
+  body { overflow: auto; }
+  #c { position: fixed; right: 16px; bottom: 16px; left: auto; top: auto; width: 420px !important; height: 280px !important; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.3); z-index: 2; }
+  #rep { position: relative; z-index: 3; max-width: 760px; margin: 24px; padding: 20px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; font-size: 14px; }
+  #rep h1 { margin: 0 0 4px; font-size: 22px; }
+  .ok { color: #138a4c; } .bad { color: #c03535; font-weight: 600; } .warn { color: #a06d00; }
+  li { margin: 4px 0; }
+  #scene-dom .hud { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="scene-dom"></div>
+<div id="rep"><h1>Kiểm tra lớp cảnh 3D</h1><p>Trang này kiểm tra mô hình trong thư mục <code>scene/</code> có đúng "hợp đồng cảnh" (docs/HOP_DONG_CANH.md) để web Phòng ôn thi ảo dùng được hay không.</p><ul id="out"><li>Đang dựng mô hình…</li></ul></div>
+<script src="../scene/hust3d-dom.js"></script>
+<script src="../scene/tang10-dom.js"></script>
+<script src="../scene/vendor/three.min.js"></script>
+<script src="../scene/vendor/OrbitControls.js"></script>
+<script src="../scene/vendor/GLTFLoader.js"></script>
+<script src="../scene/vendor/CopyShader.js"></script>
+<script src="../scene/vendor/LuminosityHighPassShader.js"></script>
+<script src="../scene/vendor/EffectComposer.js"></script>
+<script src="../scene/vendor/RenderPass.js"></script>
+<script src="../scene/vendor/ShaderPass.js"></script>
+<script src="../scene/vendor/UnrealBloomPass.js"></script>
+<script src="../config.js"></script>
+<script src="../js/util.js"></script>
+<script src="../js/grid.js"></script>
+<script src="../scene/exterior/build-grid.js"></script>
+<script src="../scene/tang10.js"></script>
+<script src="../scene/hust3d.js"></script>
+<script src="../scene/adapter.js"></script>
+<script>
+(async function () {
+  const out = document.getElementById('out'); out.innerHTML = '';
+  let bad = 0, warn = 0;
+  const line = (cls, txt) => { const li = document.createElement('li'); li.className = cls; li.textContent = (cls === 'ok' ? '✓ ' : cls === 'warn' ? '⚠ ' : '✗ ') + txt; out.appendChild(li); if (cls === 'bad') bad++; if (cls === 'warn') warn++; };
+  const t0 = 0; // tính từ lúc mở trang
+  let S;
+  try { S = await Promise.race([SceneAPI.ready, new Promise((_, r) => setTimeout(() => r(new Error('quá 90 giây')), 90000))]); }
+  catch (e) { line('bad', 'Mô hình không dựng xong: ' + e.message); return; }
+  line('ok', `Dựng mô hình xong sau ${Math.round(performance.now() - t0)} ms`);
+  for (const f of ['enter', 'setNight', 'onFrame', 'on', 'camera', 'current']) typeof S[f] === 'function' ? line('ok', 'Có hàm SceneAPI.' + f) : line('bad', 'Thiếu hàm SceneAPI.' + f);
+  // không gian
+  const C = S.spaces.campus;
+  if (!C) line('bad', 'Thiếu không gian "campus" (sân thư viện, file GLB)'); else {
+    C.free(C.spawn.x, C.spawn.z) ? line('ok', `Điểm xuất hiện trên sân (${C.spawn.x}, ${C.spawn.z}) đứng được`) : line('bad', 'Điểm xuất hiện trên sân nằm trong vật cản');
+    const g = C.grid(); let n = 0; for (const v of g.walk) n += v;
+    n > 5000 ? line('ok', `Lưới đi bộ trên sân: ${n} ô đi được`) : line('bad', `Lưới đi bộ trên sân quá ít ô (${n}) — chạy lại tools/tao_luoi_san.html`);
+    const p = g.path(C.spawn.x, C.spawn.z, 0, -1.2);
+    p ? line('ok', 'Tìm được đường từ chỗ xuất hiện tới cửa chính thư viện') : line('bad', 'Không có đường từ chỗ xuất hiện tới cửa chính thư viện');
+    C.seats.length ? line('ok', `Sân có ${C.seats.length} chỗ ngồi (ghế đá)`) : line('warn', 'Sân không có ghế đá nào');
+  }
+  for (const [id, sp] of Object.entries(S.spaces)) {
+    if (sp.kind !== 'room') continue;
+    const n = sp.seats.length, okSeats = sp.seats.every(s => [s.x, s.y, s.z, s.ry].every(Number.isFinite));
+    const kinds = {}; sp.seats.forEach(s => kinds[s.kind] = (kinds[s.kind] || 0) + 1);
+    n >= 10 && okSeats ? line('ok', `Không gian "${id}": ${n} chỗ ngồi (${Object.entries(kinds).map(([k, v]) => k + ' ' + v).join(', ')})`) : line('bad', `Không gian "${id}": ${n} chỗ ngồi${okSeats ? '' : ' (có toạ độ lỗi)'} — cần ≥ 10`);
+    for (const f of ['walkNow', 'stopWalk', 'free', 'camFree', 'grid', 'floorOf', 'ceil', 'place']) if (typeof sp[f] !== 'function') line('bad', `Không gian "${id}" thiếu hàm ${f}`);
+    let w = 0; for (const v of sp.grid(sp.floors[0]).walk) w += v;
+    w > 300 ? line('ok', `Không gian "${id}": mặt sàn đầu tiên có ${w} ô đi được`) : line('bad', `Không gian "${id}": mặt sàn gần như không đi được (${w} ô)`);
+  }
+  for (const [z, info] of Object.entries(ZONES)) S.spaces[info.space] ? line('ok', `Khu "${z}" → không gian "${info.space}"`) : line('bad', `Khu "${z}" trỏ tới không gian "${info.space}" không tồn tại`);
+  for (const b of Object.keys(BUILDING_ROOMS)) S.buildings.find(x => x.id === b) ? line('ok', `Toà "${b}" có khai báo cửa`) : line('bad', `Toà "${b}" có trong config.js nhưng cảnh không khai báo cửa`);
+  // đo tốc độ khung hình ở từng không gian
+  let frames = 0; S.onFrame(() => frames++);
+  for (const id of Object.keys(S.spaces)) {
+    await S.enter(id, 'Kiểm tra ' + id + '…');
+    const sp = S.spaces[id];
+    const c = S.camera(), s0 = sp.seats[0] || { x: 0, y: 0, z: 0 };
+    if (sp.kind === 'room') { c.position.set(s0.x + 4, s0.y + 3, s0.z + 4); c.lookAt(s0.x, s0.y + 1, s0.z); } else { c.position.set(0, 30, 60); c.lookAt(0, 5, 0); }
+    frames = 0; await new Promise(r => setTimeout(r, 3000));
+    const fps = frames / 3;
+    line(fps >= 30 ? 'ok' : 'warn', `Không gian "${id}": ~${fps.toFixed(0)} khung hình/giây trên máy này` + (fps < 30 ? ' (thấp — thử trên laptop tầm trung có card đồ hoạ để đánh giá đúng)' : ''));
+  }
+  S.setNight(1); await new Promise(r => setTimeout(r, 800)); S.setNight(0); line('ok', 'Chuyển ngày/đêm chạy được');
+  const sum = document.createElement('p');
+  sum.innerHTML = bad ? `<b class="bad">Có ${bad} lỗi — chưa thay được mô hình.</b>` : `<b class="ok">Đạt yêu cầu${warn ? ` (có ${warn} cảnh báo)` : ''} — có thể dùng mô hình này.</b>`;
+  out.after(sum);
+})();
+</script>
+</body>
+</html>

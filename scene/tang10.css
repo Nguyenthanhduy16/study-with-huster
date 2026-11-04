@@ -1,0 +1,38 @@
+/* Sân thượng tầng 10 — phần giao diện riêng (kính thiên văn, nhãn sao, thông báo sao băng).
+   Lấy từ trang sân thượng gốc, gói trong #modD để không lẫn với các tầng khác. */
+#modD { --d-panel: rgba(14,16,40,.78); --d-ink: #eef0ff; --d-muted: #aab0d8; --d-line: rgba(170,180,255,.2); --d-accent: #f2c46b; --d-accent-ink: #1d1405; --d-accent-soft: rgba(242,196,107,.13); }
+#modD .toast { pointer-events: none; font-size: 13.5px; font-weight: 600; color: var(--d-accent-ink); background: var(--d-accent); padding: 7px 14px; border-radius: 99px;
+  box-shadow: 0 0 24px rgba(242,196,107,.45); opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; max-width: 100%; text-align: center; }
+#modD .toast.show { opacity: 1; transform: none; }
+#modD .bottom { position: fixed; left: 0; right: 0; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); display: flex; justify-content: center; pointer-events: none; }
+#modD .scopebar[hidden], #modD .eyepiece[hidden], #modD .labels[hidden] { display: none; }
+#modD .eyepiece { position: fixed; inset: 0; pointer-events: none; --r: min(46vw, 42vh); z-index: 41;
+  background: radial-gradient(circle at 50% 50%, transparent calc(var(--r) - 2px), rgba(1,2,8,.82) var(--r), #010208 calc(var(--r) + 34px)); }
+#modD .eyepiece::before { content: ""; position: absolute; left: 50%; top: 50%; width: calc(var(--r)*2); height: calc(var(--r)*2); transform: translate(-50%,-50%); border-radius: 50%;
+  box-shadow: inset 0 0 70px rgba(0,0,10,.75); border: 1px solid rgba(242,196,107,.28); }
+#modD .eyepiece::after { content: ""; position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%,-50%); opacity: .5;
+  background: linear-gradient(var(--d-accent),var(--d-accent)) center/1px 100% no-repeat, linear-gradient(var(--d-accent),var(--d-accent)) center/100% 1px no-repeat; }
+#modD .labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 42; }
+#modD .labels span { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 12px; font-weight: 500; color: #cdd5ff; text-shadow: 0 0 6px #000, 0 0 2px #000; will-change: transform; }
+#modD .labels span.c { font-size: 13.5px; font-weight: 700; color: var(--d-accent); letter-spacing: .02em; }
+#modD .scopebar { position: fixed; pointer-events: auto; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 43;
+  width: min(760px, calc(100% - 32px)); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--d-panel); color: var(--d-ink); border: 1px solid var(--d-line); border-radius: 14px; backdrop-filter: blur(14px); }
+#modD .scopebar button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+#modD .sb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+#modD .sb-row strong { font-size: 14px; }
+#modD .sb-read { font-size: 12.5px; color: var(--d-muted); font-variant-numeric: tabular-nums; }
+#modD .sb-spacer { flex: 1; }
+#modD .sb-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--d-line) !important; font-size: 12.5px; font-weight: 600; }
+#modD .sb-targets { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+#modD .sb-targets button { flex: none; padding: 7px 11px; border-radius: 99px; border: 1px solid var(--d-line); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+#modD .sb-targets button.on { background: var(--d-accent); border-color: var(--d-accent); color: var(--d-accent-ink); }
+#modD .sb-z { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--d-line) !important; font-size: 16px; font-weight: 700; flex: none; }
+#modD #sb-zoom { flex: 1; min-width: 90px; accent-color: var(--d-accent); }
+#modD .sb-tip { margin: 0; font-size: 12.5px; color: var(--d-muted); line-height: 1.45; min-height: 2.9em; }
+#modD .tog { display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 9px; font-size: 13px; font-weight: 500; }
+#modD .tog .sw { width: 28px; height: 16px; border-radius: 99px; background: var(--d-line); position: relative; flex: none; }
+#modD .tog .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--d-ink); transition: transform .2s; }
+#modD .tog[aria-pressed="true"] .sw { background: var(--d-accent); }
+#modD .tog[aria-pressed="true"] .sw::after { transform: translateX(12px); background: var(--d-accent-ink); }
+@media (prefers-reduced-motion: reduce) { #modD .toast, #modD .tog .sw::after { transition: none; } }

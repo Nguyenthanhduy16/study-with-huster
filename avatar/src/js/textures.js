@@ -12,7 +12,7 @@ export function makeCanvas(w, h) {
 
 export function toTexture(cnv, { repeat = null, srgb = true } = {}) {
   const t = new THREE.CanvasTexture(cnv);
-  if (srgb) t.encoding = THREE.sRGBEncoding;
+  if (srgb) t.encoding = THREE.sRGBEncoding; // [r128] chưa có colorSpace
   t.anisotropy = 4;
   if (repeat) {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -23,13 +23,15 @@ export function toTexture(cnv, { repeat = null, srgb = true } = {}) {
 
 // ---------- Tải ảnh (có cache, lỗi thì trả null chứ không làm hỏng cả cảnh)
 const imageCache = new Map();
+// Đồng bộ với cache Promise để các bản xem trước canvas vẽ ngay sau khi tải xong.
+const resolvedImages = new Map();
 export function loadImage(src) {
   if (!src) return Promise.resolve(null);
   if (imageCache.has(src)) return imageCache.get(src);
   const p = new Promise((resolve) => {
     const img = new Image();
     if (!src.startsWith('data:') && !src.startsWith('blob:')) img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
+    img.onload = () => { resolvedImages.set(src, img); resolve(img); };
     img.onerror = () => {
       console.warn('[avatar-studio] Không tải được ảnh:', src);
       resolve(null);
@@ -39,6 +41,8 @@ export function loadImage(src) {
   imageCache.set(src, p);
   return p;
 }
+/** [game] ảnh đã tải xong (đồng bộ) — avatar-kit dựng nhân vật trong phòng không chờ Promise */
+export function cachedImage(src) { return (src && resolvedImages.get(src)) || null; }
 
 // Tải mọi ảnh trong object { front: url, back: url, ... } → { front: Image, ... }
 export async function loadImageSet(set = {}) {
@@ -115,6 +119,11 @@ export function composeGarment(opts) {
     }
   }
   // Viền sườn (áo thun thể thao)
+  // Viền vai: chạy từ chân cổ áo qua đỉnh vai (nối tiếp xuống tay áo)
+  if (opts.shoulderPiping) {
+    ctx.fillStyle = trim;
+    for (const u of [0.5, 0.0, 1.0]) ctx.fillRect(W * u - 3, 0, 6, H * 0.17);
+  }
   if (opts.sidePiping) {
     ctx.strokeStyle = trim; ctx.lineWidth = 5;
     for (const u of [0.0, 0.5, 1.0]) {
@@ -162,7 +171,7 @@ export function composeGarment(opts) {
     const [y0, y1] = opts.placket;
     ctx.fillStyle = shade(color, -0.06);
     ctx.fillRect(W * 0.25 - 14, y0 * H, 28, (y1 - y0) * H);
-    ctx.fillStyle = isDark(color) ? '#ddd' : '#9aa0a8';
+    ctx.fillStyle = isDark(color) ? shade(color, 0.14) : '#9aa0a8';
     for (let y = y0 * H + 22; y < y1 * H; y += 52) { ctx.beginPath(); ctx.arc(W * 0.25, y, 5, 0, Math.PI * 2); ctx.fill(); }
   }
   // Khóa kéo (áo khoác)
@@ -200,10 +209,10 @@ export function composeGarment(opts) {
     }[emblemPos];
     if (pos) ctx.drawImage(emblem, pos[0] - pos[2] / 2, pos[1], pos[2], pos[2]);
   }
-  // Chữ in (wordmark) — lấy từ huy hiệu tự tạo, KHÔNG dùng logo chữ thật của trường
+  // Chữ in (wordmark) — lấy từ nhận diện đang chọn trong tab Huy hiệu
   if (opts.wordmark && opts.wordmarkText) {
     const big = opts.wordmark === 'chest-big';
-    drawWordmark(ctx, opts.wordmarkText, big ? W * 0.25 : W * 0.25 + 70, big ? H * 0.3 : H * 0.2, big ? W * 0.3 : 96, big ? 92 : 28, opts.printColor || '#ffffff');
+    drawWordmark(ctx, opts.wordmarkText, big ? W * 0.25 : W * 0.25 + 88, big ? H * 0.3 : H * 0.17, big ? W * 0.3 : 84, big ? 92 : 24, opts.printColor || '#ffffff');
     if (opts.wordmarkBack) drawWordmark(ctx, opts.wordmarkText, W * 0.75, H * 0.14, W * 0.18, 40, opts.printColor || '#ffffff');
   }
   if (opts.archText) drawArchText(ctx, opts.archText, W * 0.25 + 92, H * 0.2, 74, opts.printColor || '#ffffff', opts.archSub);
@@ -261,26 +270,31 @@ export function drawArchText(ctx, text, cx, top, radius, color, sub) {
   ctx.restore();
 }
 
-// Dây đeo thẻ: chữ chạy dọc + chuỗi lục giác ở hai đầu (thay cho mũi tên/vạch của mẫu gốc)
-export function ribbonTexture(text, bg, fg) {
-  const W = 2048, H = 96;
-  const cnv = makeCanvas(W, H);
-  const ctx = cnv.getContext('2d');
+// Dây đeo HUST: nền đỏ, logo chữ nhật, tên trường và vạch chữ V bản lớn.
+export function ribbonTexture(text, bg, fg, { logo = null, wordmark = 'HUST' } = {}) {
+  const W = 2048, H = 128;
+  const cnv = makeCanvas(W, H), ctx = cnv.getContext('2d');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 0.045; ctx.fillStyle = '#fff';
+  for (let y = 1; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = fg; ctx.textBaseline = 'middle';
+  const school = (text || 'ĐẠI HỌC BÁCH KHOA HÀ NỘI').toUpperCase();
+  for (const x of [290, 985]) {
+    if (logo) ctx.drawImage(logo, x, 27, 74, 74);
+    ctx.font = '800 30px "Be Vietnam Pro", system-ui, sans-serif';
+    ctx.fillText(school, x + 87, 29, 520);
+    ctx.font = '600 16px "Be Vietnam Pro", system-ui, sans-serif';
+    ctx.fillText('HANOI UNIVERSITY OF SCIENCE AND TECHNOLOGY', x + 87, 58, 520);
+    drawWordmark(ctx, wordmark || 'HUST', x + 225, 72, 280, 47, fg);
+  }
+  // Các vạch V rộng, không có đường viền trắng dọc mép dây.
   ctx.fillStyle = fg;
-  ctx.fillRect(0, 6, W, 3); ctx.fillRect(0, H - 9, W, 3);
-  ctx.font = `800 40px "Be Vietnam Pro", system-ui, sans-serif`;
-  ctx.textBaseline = 'middle';
-  const unit = `${text}   `;
-  const uw = ctx.measureText(unit).width;
-  for (let x = 40; x < W * 0.7; x += uw) ctx.fillText(unit, x, H / 2 + 2);
-  // chuỗi lục giác phía đầu gần thẻ
-  for (let i = 0; i < 6; i++) {
-    const x = W * 0.76 + i * 72, r = 22;
+  for (const x of [18, 91, 164, 1788, 1861, 1934]) {
     ctx.beginPath();
-    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; ctx.lineTo(x + Math.cos(a) * r, H / 2 + Math.sin(a) * r); }
-    ctx.closePath();
-    if (i % 2) ctx.fill(); else { ctx.lineWidth = 5; ctx.strokeStyle = fg; ctx.stroke(); }
+    ctx.moveTo(x, 0); ctx.lineTo(x + 32, 0); ctx.lineTo(x + 76, H / 2);
+    ctx.lineTo(x + 32, H); ctx.lineTo(x, H); ctx.lineTo(x + 44, H / 2);
+    ctx.closePath(); ctx.fill();
   }
   return cnv;
 }
@@ -437,7 +451,7 @@ export function calculatorFace(color = '#2b2f36', accent = '#e86a33') {
 }
 
 // =============================================================
-//  HUY HIỆU TỰ TẠO — thay cho logo thật của trường
+//  HUY HIỆU CÁCH ĐIỆU — mặc định theo nhận diện HUST
 //  Thiết kế gốc từ: hình dạng + biểu tượng + chữ viết tắt + màu
 // =============================================================
 function pathShape(ctx, shape, cx, cy, s) {
@@ -525,13 +539,26 @@ function drawMotif(ctx, motif, cx, cy, s, color) {
 }
 
 /**
- * emblem = { name, short, year, shape, motif, main, accent }
+ * emblem = { name, short, year, shape, motif, main, accent, logo?, logoCrop?, logoClip? }
  * Trả về canvas 512×512 nền trong suốt
  */
 export function drawEmblem(emblem, size = 512) {
-  const e = { shape: 'khien', motif: 'sach', main: '#4b2e9a', accent: '#f0b53a', short: 'TO', year: '2026', ...emblem };
+  const e = { shape: 'tron', motif: 'banh-rang', main: '#b3141d', accent: '#ffffff', short: 'HUST', year: '1956', ...emblem };
   const cnv = makeCanvas(size, size);
   const ctx = cnv.getContext('2d');
+  const logo = e.logo && resolvedImages.get(e.logo);
+  if (logo) {
+    // Lấy đúng phần logo từ ảnh tham chiếu, bỏ khoảng trắng bao quanh.
+    // Canvas vẫn vuông để dùng chung mọi atlas; logo chữ nhật giữ nguyên tỉ lệ.
+    const [sx, sy, sw, sh] = e.logoCrop || [0, 0, logo.width, logo.height];
+    const scale = size * 0.94 / Math.max(sw, sh);
+    const w = sw * scale, h = sh * scale;
+    if (e.logoClip === 'circle') {
+      ctx.beginPath(); ctx.arc(size / 2, size / 2, Math.min(w, h) / 2, 0, Math.PI * 2); ctx.clip();
+    }
+    ctx.drawImage(logo, sx, sy, sw, sh, (size - w) / 2, (size - h) / 2, w, h);
+    return cnv;
+  }
   const k = size / 512, cx = 256 * k, cy = 256 * k, s = 230 * k;
 
   pathShape(ctx, e.shape, cx, cy, s);
@@ -562,93 +589,108 @@ export function drawEmblem(emblem, size = 512) {
 // =============================================================
 function hashStr(s) { let h = 2166136261; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 
-export function drawStudentCard(card, emblemCanvas, emblem) {
-  const W = 1024, H = 646;
-  const cnv = makeCanvas(W, H);
-  const ctx = cnv.getContext('2d');
-  const main = emblem?.main || '#4b2e9a', accent = emblem?.accent || '#f0b53a';
-  const font = (w, px) => `${w} ${px}px "Be Vietnam Pro", system-ui, sans-serif`;
-
-  // Nền
-  ctx.save();
-  ctx.beginPath(); ctx.roundRect(0, 0, W, H, 34); ctx.clip();
-  if (card.template) {
-    ctx.drawImage(card.template, 0, 0, W, H);
-  } else {
-    ctx.fillStyle = '#f7f6fb'; ctx.fillRect(0, 0, W, H);
-    // hoa văn lục giác chìm
-    ctx.globalAlpha = 0.06; ctx.strokeStyle = main; ctx.lineWidth = 2;
-    for (let y = 0; y < H + 40; y += 46) for (let x = (y / 46) % 2 ? 26 : 0; x < W + 40; x += 52) {
-      ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; ctx.lineTo(x + Math.cos(a) * 24, y + Math.sin(a) * 24); } ctx.closePath(); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-    // dải màu chéo
-    ctx.fillStyle = main;
-    ctx.beginPath(); ctx.moveTo(W * 0.62, H); ctx.lineTo(W, H * 0.42); ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = accent;
-    ctx.beginPath(); ctx.moveTo(W * 0.56, H); ctx.lineTo(W * 0.6, H); ctx.lineTo(W, H * 0.36); ctx.lineTo(W, H * 0.42); ctx.closePath(); ctx.fill();
-  }
-
+function drawPortraitStudentCard(card, emblemCanvas) {
+  const W = 646, H = 1024, canvas = makeCanvas(W, H), ctx = canvas.getContext('2d');
+  const font = (weight, size) => `${weight} ${size}px "Be Vietnam Pro", system-ui, sans-serif`;
+  ctx.save(); ctx.beginPath(); ctx.roundRect(0, 0, W, H, 16); ctx.clip();
+  ctx.fillStyle = '#fafaf7'; ctx.fillRect(0, 0, W, H);
+  if (card.template) ctx.drawImage(card.template, 0, 0, W, H);
   if (card.drawHeader !== false) {
-    ctx.fillStyle = main; ctx.fillRect(0, 0, W, 138);
-    ctx.fillStyle = accent; ctx.fillRect(0, 138, W, 8);
-    if (emblemCanvas) ctx.drawImage(emblemCanvas, 30, 14, 112, 112);
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.font = font(800, 40); ctx.fillText((card.school || 'Trường Đại học Mẫu').toUpperCase(), 160, 70, W - 190);
-    ctx.font = font(600, 26); ctx.fillStyle = shade(accent, 0.2); ctx.fillText(card.title || 'THẺ SINH VIÊN', 160, 112);
+    if (emblemCanvas) ctx.drawImage(emblemCanvas, 24, 16, 91, 91);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#b51d2b'; ctx.font = font(800, 24);
+    ctx.fillText((card.school || 'Đại học Bách khoa Hà Nội').toUpperCase(), 123, 46, 493);
+    ctx.fillStyle = '#777b80'; ctx.font = font(500, 13);
+    ctx.fillText('HANOI UNIVERSITY OF SCIENCE AND TECHNOLOGY', 123, 72, 493);
+    ctx.fillStyle = '#35373b'; ctx.font = font(700, 23); ctx.fillText(card.title || 'THẺ SINH VIÊN', 123, 104);
+    ctx.fillStyle = '#c9cbce'; ctx.fillRect(28, 124, 590, 1);
   }
-
-  // Ảnh
-  const px = 46, py = 180, pw = 250, ph = 320;
-  ctx.fillStyle = '#e4e2ec'; ctx.fillRect(px, py, pw, ph);
+  const px = 211, py = 153, pw = 224, ph = 282;
+  ctx.fillStyle = '#eeefed'; ctx.fillRect(px, py, pw, ph);
   if (card.photo) {
-    const im = card.photo, r = Math.max(pw / im.width, ph / im.height);
-    const w = im.width * r, h = im.height * r;
+    const image = card.photo, ratio = Math.max(pw / image.width, ph / image.height);
+    const w = image.width * ratio, h = image.height * ratio;
+    ctx.save(); ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+    ctx.drawImage(image, px + (pw - w) / 2, py + (ph - h) / 2, w, h); ctx.restore();
+  } else {
+    ctx.fillStyle = '#bfc2c0'; ctx.beginPath(); ctx.arc(W / 2, py + 98, 51, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(W / 2, py + ph, 94, 110, 0, Math.PI, 0); ctx.fill();
+  }
+  ctx.strokeStyle = '#c5c8c6'; ctx.lineWidth = 2; ctx.strokeRect(px, py, pw, ph);
+  const rows = [['Họ và tên', card.name || 'Nguyễn Minh An'], ['MSSV', card.id || '26A0001'],
+    ['Ngành', card.major || 'Kỹ thuật phần mềm'], ['Khóa', card.cohort || 'K71 · 2026–2030']];
+  rows.forEach(([label, value], i) => {
+    const y = 480 + i * 86;
+    ctx.textAlign = 'left'; ctx.fillStyle = '#777b80'; ctx.font = font(500, 18); ctx.fillText(label.toUpperCase(), 46, y);
+    ctx.fillStyle = '#35373b'; ctx.font = font(i ? 600 : 800, i ? 28 : 34); ctx.fillText(value, 46, y + 38, 554);
+  });
+  let hash = hashStr((card.id || '') + (card.name || '')), x = 79;
+  ctx.fillStyle = '#35373b';
+  while (x < 567) {
+    hash = Math.imul(hash ^ (hash >>> 13), 1274126177) >>> 0;
+    const width = 2 + hash % 5; ctx.fillRect(x, 861, width, 54); x += width + 2 + ((hash >>> 8) % 4);
+  }
+  ctx.fillStyle = '#777b80'; ctx.font = font(500, 18); ctx.textAlign = 'center'; ctx.fillText(card.id || '26A0001', W / 2, 946);
+  ctx.save(); ctx.translate(W / 2, H * 0.65); ctx.rotate(-0.32); ctx.globalAlpha = 0.065;
+  ctx.fillStyle = '#b51d2b'; ctx.font = font(800, 120); ctx.fillText('MẪU', 0, 0); ctx.restore();
+  ctx.fillStyle = '#b51d2b'; ctx.font = font(600, 15); ctx.fillText('THẺ MẪU · KHÔNG CÓ GIÁ TRỊ SỬ DỤNG', W / 2, 995, 580);
+  ctx.restore(); return canvas;
+}
+
+export function drawStudentCard(card, emblemCanvas, emblem) {
+  if (card.orientation === 'portrait') return drawPortraitStudentCard(card, emblemCanvas);
+  const W = 1024, H = 646, cnv = makeCanvas(W, H), ctx = cnv.getContext('2d');
+  const red = '#b51d2b', ink = '#35373b';
+  const font = (weight, size) => `${weight} ${size}px "Be Vietnam Pro", system-ui, sans-serif`;
+  ctx.save();
+  ctx.beginPath(); ctx.roundRect(0, 0, W, H, 16); ctx.clip();
+  ctx.fillStyle = '#fafaf7'; ctx.fillRect(0, 0, W, H);
+  if (card.template) ctx.drawImage(card.template, 0, 0, W, H);
+  if (card.drawHeader !== false) {
+    if (emblemCanvas) ctx.drawImage(emblemCanvas, 35, 14, 100, 100);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = red; ctx.font = font(800, 31);
+    ctx.fillText((card.school || 'Đại học Bách khoa Hà Nội').toUpperCase(), 150, 52, 830);
+    ctx.fillStyle = '#777b80'; ctx.font = font(500, 16);
+    ctx.fillText('HANOI UNIVERSITY OF SCIENCE AND TECHNOLOGY', 150, 78, 830);
+    ctx.fillStyle = ink; ctx.font = font(700, 25);
+    ctx.fillText(card.title || 'THẺ SINH VIÊN', 150, 111);
+    ctx.fillStyle = '#c9cbce'; ctx.fillRect(38, 132, 948, 1);
+  }
+  const px = 48, py = 162, pw = 242, ph = 306;
+  ctx.fillStyle = '#eeefed'; ctx.fillRect(px, py, pw, ph);
+  if (card.photo) {
+    const im = card.photo, ratio = Math.max(pw / im.width, ph / im.height);
+    const w = im.width * ratio, h = im.height * ratio;
     ctx.save(); ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
     ctx.drawImage(im, px + (pw - w) / 2, py + (ph - h) / 2, w, h); ctx.restore();
   } else {
-    ctx.fillStyle = '#c3bfd3';
-    ctx.beginPath(); ctx.arc(px + pw / 2, py + 125, 62, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(px + pw / 2, py + ph, 105, 120, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#bfc2c0';
+    ctx.beginPath(); ctx.arc(px + pw / 2, py + 107, 56, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + pw / 2, py + ph, 103, 120, 0, Math.PI, 0); ctx.fill();
   }
-  ctx.strokeStyle = main; ctx.lineWidth = 4; ctx.strokeRect(px, py, pw, ph);
-
-  // Thông tin
-  const fx = 336;
-  const rows = [
-    ['Họ và tên', card.name || 'Nguyễn Minh An'],
-    ['MSSV', card.id || '26A0001'],
-    ['Ngành', card.major || 'Thiết kế đồ họa'],
-    ['Khóa', card.cohort || 'K66 · 2026–2030'],
-  ];
+  ctx.strokeStyle = '#c5c8c6'; ctx.lineWidth = 2; ctx.strokeRect(px, py, pw, ph);
+  const rows = [['Họ và tên', card.name || 'Nguyễn Minh An'], ['MSSV', card.id || '26A0001'],
+    ['Ngành', card.major || 'Kỹ thuật phần mềm'], ['Khóa', card.cohort || 'K71 · 2026–2030']];
   ctx.textAlign = 'left';
-  rows.forEach(([label, val], i) => {
-    const y = 214 + i * 76;
-    ctx.fillStyle = '#6b6680'; ctx.font = font(600, 22); ctx.fillText(label.toUpperCase(), fx, y);
-    ctx.fillStyle = '#1d1a2b'; ctx.font = font(i === 0 ? 800 : 700, i === 0 ? 40 : 32); ctx.fillText(val, fx, y + (i === 0 ? 42 : 36), W - fx - 40);
+  rows.forEach(([label, value], i) => {
+    const y = 188 + i * 77;
+    ctx.fillStyle = '#777b80'; ctx.font = font(500, 20); ctx.fillText(label.toUpperCase(), 332, y);
+    ctx.fillStyle = ink; ctx.font = font(i ? 600 : 800, i ? 29 : 37);
+    ctx.fillText(value, 332, y + 37, 645);
   });
-
-  // Mã vạch trang trí (sinh từ chuỗi giả, không mã hoá dữ liệu thật)
-  let h = hashStr((card.id || '') + (card.name || ''));
-  let bx = 336;
-  ctx.fillStyle = '#1d1a2b';
-  while (bx < 640) {
-    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
-    const bw = 2 + (h % 5);
-    ctx.fillRect(bx, 548, bw, 58);
-    bx += bw + 2 + ((h >>> 8) % 4);
+  let hash = hashStr((card.id || '') + (card.name || '')), x = 333;
+  ctx.fillStyle = ink;
+  while (x < 827) {
+    hash = Math.imul(hash ^ (hash >>> 13), 1274126177) >>> 0;
+    const width = 2 + hash % 5; ctx.fillRect(x, 521, width, 49); x += width + 2 + ((hash >>> 8) % 4);
   }
-
-  // Dấu MẪU — bắt buộc giữ để thẻ không bị dùng như thẻ thật
-  ctx.save();
-  ctx.translate(W * 0.55, H * 0.56); ctx.rotate(-0.32);
-  ctx.globalAlpha = 0.1; ctx.fillStyle = '#c0392b'; ctx.font = font(900, 150); ctx.textAlign = 'center';
-  ctx.fillText('MẪU', 0, 40);
-  ctx.restore();
-  ctx.fillStyle = '#c0392b'; ctx.font = font(700, 18); ctx.textAlign = 'left';
-  ctx.fillText('THẺ MẪU · KHÔNG CÓ GIÁ TRỊ SỬ DỤNG', 46, 620);
-  ctx.restore();
-  return cnv;
+  ctx.fillStyle = '#777b80'; ctx.font = font(500, 18); ctx.fillText(card.id || '26A0001', 333, 596);
+  ctx.save(); ctx.translate(W * 0.54, H * 0.55); ctx.rotate(-0.3);
+  ctx.globalAlpha = 0.065; ctx.fillStyle = red; ctx.font = font(800, 130); ctx.textAlign = 'center';
+  ctx.fillText('MẪU', 0, 35); ctx.restore();
+  ctx.fillStyle = red; ctx.font = font(600, 17);
+  ctx.fillText('THẺ MẪU · KHÔNG CÓ GIÁ TRỊ SỬ DỤNG', 48, 625);
+  ctx.restore(); return cnv;
 }
 
 // Bóng mờ dưới chân
@@ -675,14 +717,17 @@ export function composeSleeve(color, imgs = {}, opts = {}) {
     const total = n * w + (n - 1) * gap;
     for (let i = 0; i < n; i++) ctx.fillRect(S / 2 - total / 2 + i * (w + gap), 0, w, S);
   }
-  if (opts.piping) { ctx.fillStyle = opts.trim || '#ffffff'; ctx.fillRect(S / 2 - 4, 0, 8, S); }
+  if (opts.piping) { ctx.fillStyle = opts.trim || '#ffffff'; ctx.fillRect(S * (opts.pipingU ?? 0.5) - 3, 0, 6, S); }
   if (opts.cuff) {
     ctx.fillStyle = shade(color, -0.08); ctx.fillRect(0, S * 0.9, S, S * 0.1);
     ctx.fillStyle = 'rgba(0,0,0,0.07)'; for (let x = 0; x < S; x += 8) ctx.fillRect(x, S * 0.9, 3, S * 0.1);
   } else if (opts.hem) {
     ctx.fillStyle = shade(color, -0.06); ctx.fillRect(0, S * 0.94, S, 4);
   }
-  if (opts.emblem) ctx.drawImage(opts.emblem, S / 2 - 60, S * 0.16, 120, 120);
+  if (opts.emblem) {
+    const [w, h, top] = opts.emblemBox || [120, 120, S * 0.16];
+    ctx.drawImage(opts.emblem, S / 2 - w / 2, top, w, h);
+  }
   return cnv;
 }
 

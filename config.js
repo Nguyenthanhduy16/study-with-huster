@@ -4,7 +4,16 @@
 
 /* 1) KẾT NỐI SUPABASE
    Để trống = chạy CHẾ ĐỘ NGOẠI TUYẾN (chỉ mình bạn, dữ liệu lưu trên trình duyệt).
-   Lấy 2 giá trị này ở Supabase → Project Settings → API (xem docs/HUONG_DAN_CAI_DAT.md). */
+   Lấy 2 giá trị này ở Supabase → Project Settings → API (xem docs/HUONG_DAN_CAI_DAT.md).
+
+   ⚠️ FILE NÀY AI CŨNG ĐỌC ĐƯỢC (nó được tải xuống trình duyệt của mọi người).
+     ✅ ĐƯỢC dán ở đây: Project URL và khoá "anon" (chuỗi dài bắt đầu bằng eyJ…, ở tab "Legacy API Keys") —
+        khoá công khai, mọi quyền đã được khoá bằng RLS và các hàm trong supabase/schema.sql.
+        (Khoá kiểu mới "sb_publishable_…" cũng là khoá công khai nhưng CHƯA thử với supabase-js 2.45.4 đóng gói sẵn.)
+     ❌ KHÔNG BAO GIỜ dán ở đây: khoá "service_role" / "secret" (sb_secret_…), mật khẩu cơ sở dữ liệu,
+        mật khẩu quản trị. Mật khẩu quản trị chỉ nằm (dạng băm) trong cơ sở dữ liệu và được kiểm tra trên máy chủ.
+   Ví dụ:  window.SUPABASE_URL = 'https://abcdxyz.supabase.co';
+           window.SUPABASE_ANON_KEY = 'eyJhbGciOi...'; */
 window.SUPABASE_URL = '';
 window.SUPABASE_ANON_KEY = '';
 

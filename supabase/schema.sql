@@ -419,6 +419,20 @@ begin
   end loop;
 end $$;
 
+-- Đợt 3: khi một tin nhắn bị ẩn (QTV ẩn, hoặc đủ 3 báo cáo), Realtime KHÔNG gửi bản cập nhật cho
+-- trình duyệt vì RLS "not hidden" chặn chính dòng đó ⇒ trước đây tin bị ẩn vẫn nằm trên màn hình
+-- người khác tới khi tải lại. Ghi thêm một sự kiện nhỏ 'hide_msg' (text = id tin) để máy khách gỡ tin.
+create or replace function _msg_hidden_event() returns trigger language plpgsql security definer set search_path = public, extensions as $$
+begin
+  if new.hidden and not old.hidden then
+    insert into events (kind, uid, text) values ('hide_msg', null, new.id::text);
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_msg_hidden_event on messages;
+create trigger trg_msg_hidden_event after update of hidden on messages
+  for each row execute function _msg_hidden_event();
+
 -- =====================================================================
 -- 7. HÀM CHO NGƯỜI HỌC
 -- =====================================================================
@@ -908,19 +922,43 @@ end $$;
 -- =====================================================================
 -- 8. HÀM QUẢN TRỊ (mọi hàm nhận mật khẩu ở tham số đầu, trả jsonb)
 -- =====================================================================
+-- Đợt 3: đếm sai mật khẩu THEO NGUỒN (địa chỉ IP do Supabase chuyển tới), để người lạ gõ sai liên tục
+-- không khoá được cả ban tổ chức. Vẫn giữ một ngưỡng chung (40 lần sai liên tiếp ⇒ khoá chung 2 phút)
+-- phòng khi địa chỉ nguồn bị giả mạo.
+create table if not exists admin_fail (
+  k text primary key,
+  n int not null default 0,
+  locked_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+alter table admin_fail enable row level security;
+
 create or replace function _admin_ok(pw text) returns boolean language plpgsql security definer set search_path = public, extensions as $$
-declare s admin_secret;
+declare s admin_secret; h jsonb; src text; f admin_fail;
 begin
   select * into s from admin_secret where id = 1;
   if not found then return false; end if;
-  if s.locked_until > now() then return false; end if;
+  begin h := nullif(current_setting('request.headers', true), '')::jsonb; exception when others then h := null; end;
+  src := left(coalesce(nullif(h->>'cf-connecting-ip', ''), nullif(btrim(split_part(coalesce(h->>'x-forwarded-for', ''), ',', 1)), ''), 'khac'), 64);
+  select * into f from admin_fail where k = src;
+  if f.locked_until > now() then return false; end if;      -- nguồn này đang bị khoá
+  if s.locked_until > now() then return false; end if;      -- khoá chung
   if s.pw_hash = crypt(coalesce(pw, ''), s.pw_hash) then
     if s.fail_count > 0 then update admin_secret set fail_count = 0 where id = 1; end if;
+    if f.k is not null then delete from admin_fail where k = src; end if;
     return true;
   end if;
-  -- sai mật khẩu: đếm số lần sai; sai 8 lần liên tiếp thì khoá 5 phút
-  update admin_secret set fail_count = case when fail_count + 1 >= 8 then 0 else fail_count + 1 end,
-    locked_until = case when fail_count + 1 >= 8 then now() + interval '5 minutes' else locked_until end where id = 1;
+  -- sai mật khẩu: một nguồn sai 8 lần liên tiếp ⇒ khoá nguồn đó 5 phút
+  insert into admin_fail as a (k, n, locked_until, updated_at) values (src, 1, null, now())
+    on conflict (k) do update set
+      n = case when a.locked_until is not null or a.updated_at < now() - interval '1 hour' then 1 else a.n + 1 end,
+      locked_until = case when a.locked_until is null and a.updated_at >= now() - interval '1 hour' and a.n + 1 >= 8
+                          then now() + interval '5 minutes' else null end,
+      updated_at = now();
+  -- ngưỡng chung
+  update admin_secret set fail_count = case when fail_count + 1 >= 40 then 0 else fail_count + 1 end,
+    locked_until = case when fail_count + 1 >= 40 then now() + interval '2 minutes' else locked_until end where id = 1;
+  delete from admin_fail where updated_at < now() - interval '1 day';
   return false;
 end $$;
 
@@ -1190,6 +1228,14 @@ end $$;
 -- =====================================================================
 -- 9. QUYỀN GỌI HÀM
 -- =====================================================================
+-- Đợt 3: ghi rõ quyền trên bảng thay vì dựa vào quyền mặc định của dự án
+-- (dự án Supabase mới có thể tắt "tự cấp quyền cho bảng mới"; khi đó trình duyệt và Realtime không đọc được gì).
+-- Trình duyệt chỉ ĐỌC các bảng công khai (RLS lọc tiếp từng dòng); mọi thao tác ghi đi qua hàm security definer.
+grant usage on schema public to anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on all tables in schema public from anon, authenticated;
+revoke select on all tables in schema public from anon, authenticated;
+grant select on app_settings, banned_words to anon, authenticated;
+grant select on public_profiles, messages, qa_questions, qa_answers, cheers, notices, events to authenticated;
 revoke execute on all functions in schema public from public, anon, authenticated;
 grant execute on function server_now(), get_config(), check_identity(text, text) to anon, authenticated;
 grant execute on function register_profile(text, text, boolean, jsonb, boolean, boolean), update_prefs(jsonb, boolean, boolean, boolean),

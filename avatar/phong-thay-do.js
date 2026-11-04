@@ -52,14 +52,14 @@
     }
   });
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/studio.js
+  // avatar/src/js/studio.js
   var THREE6 = __toESM(require_three());
   var import_OrbitControls = __toESM(require_OrbitControls());
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/rig.js
+  // avatar/src/js/rig.js
   var THREE2 = __toESM(require_three());
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/sdf.js
+  // avatar/src/js/sdf.js
   var THREE = __toESM(require_three());
   function smin(a, b, k) {
     const h2 = Math.max(k - Math.abs(a - b), 0) / k;
@@ -254,7 +254,7 @@
     return geo;
   }
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/rig.js
+  // avatar/src/js/rig.js
   var DIM = {
     pelvisY: 0.965,
     // khớp hông so với mặt đất
@@ -467,11 +467,68 @@
   }
   var BONE_NAMES = ["torso", "head", "shoulderL", "elbowL", "wristL", "shoulderR", "elbowR", "wristR", "hipL", "kneeL", "ankleL", "hipR", "kneeR", "ankleR"];
   var bodyGeoCache = /* @__PURE__ */ new Map();
+  function skinBody(geo, M) {
+    const p = geo.attributes.position, count = p.count;
+    const indices = new Uint16Array(count * 4), weights = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const distances = [
+        Math.min(M.trunk(x, y, z), M.neck(x, y, z), M.glute("L", x, y, z), M.glute("R", x, y, z)),
+        M.headSDF(x, y, z),
+        Math.min(M.arm("L", x, y, z), M.deltoid("L", x, y, z)),
+        Math.min(M.arm("R", x, y, z), M.deltoid("R", x, y, z)),
+        Math.min(M.leg("L", x, y, z), M.foot(M.legs.L, x, y, z)),
+        Math.min(M.leg("R", x, y, z), M.foot(M.legs.R, x, y, z))
+      ];
+      let region = 0;
+      for (let k = 1; k < distances.length; k++) if (distances[k] < distances[region]) region = k;
+      const allowed = /* @__PURE__ */ new Set();
+      const addChain = (base) => {
+        allowed.add(base);
+        allowed.add(base + 1);
+        allowed.add(base + 2);
+      };
+      if (region === 0) {
+        allowed.add(0);
+        if (y > M.P[1] + 0.47) allowed.add(1);
+        if (y > M.P[1] + 0.24) {
+          if (distances[2] - distances[0] < 0.04) addChain(2);
+          if (distances[3] - distances[0] < 0.04) addChain(5);
+        }
+        if (y < M.P[1] + 0.08) {
+          addChain(8);
+          addChain(11);
+        }
+      } else if (region === 1) {
+        allowed.add(1);
+        if (y < M.P[1] + 0.66) allowed.add(0);
+      } else if (region === 2 || region === 3) {
+        const side = region === 2 ? "L" : "R", arm = M.arms[side];
+        addChain(region === 2 ? 2 : 5);
+        if (y > M.P[1] + 0.24 && segT(x, y, z, arm.sh, arm.wr) < 0.3) allowed.add(0);
+      } else {
+        addChain(region === 4 ? 8 : 11);
+        if (y > M.P[1] - 0.16) allowed.add(0);
+      }
+      const candidates = M.segments.filter((segment) => allowed.has(segment.bone)).map((segment) => {
+        const d = segDist(x, y, z, segment.a, segment.b);
+        return { bone: segment.bone, weight: 1 / Math.pow(d * d + 1e-4, 2) };
+      }).sort((a, b) => b.weight - a.weight).slice(0, 4);
+      const sum = candidates.reduce((total, entry) => total + entry.weight, 0);
+      candidates.forEach((entry, k) => {
+        indices[i * 4 + k] = entry.bone;
+        weights[i * 4 + k] = entry.weight / sum;
+      });
+    }
+    geo.setAttribute("skinIndex", new THREE2.Uint16BufferAttribute(indices, 4));
+    geo.setAttribute("skinWeight", new THREE2.Float32BufferAttribute(weights, 4));
+    return geo;
+  }
   function bodyGeometry(model) {
     if (bodyGeoCache.has(model.name)) return bodyGeoCache.get(model.name);
     const g = surfaceNets(model.body, [-0.45, -0.02, -0.2], [0.45, 1.86, 0.3], 0.0105);
     relax(g, 1, 0.45);
-    skinByDistance(g, model.segments);
+    skinBody(g, model);
     g.userData.keep = true;
     bodyGeoCache.set(model.name, g);
     return g;
@@ -589,10 +646,10 @@
     return rig;
   }
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/items/clothing.js
+  // avatar/src/js/items/clothing.js
   var THREE4 = __toESM(require_three());
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/textures.js
+  // avatar/src/js/textures.js
   var THREE3 = __toESM(require_three());
   function makeCanvas(w, h2) {
     const c = document.createElement("canvas");
@@ -611,13 +668,17 @@
     return t;
   }
   var imageCache = /* @__PURE__ */ new Map();
+  var resolvedImages = /* @__PURE__ */ new Map();
   function loadImage(src) {
     if (!src) return Promise.resolve(null);
     if (imageCache.has(src)) return imageCache.get(src);
     const p = new Promise((resolve) => {
       const img = new Image();
       if (!src.startsWith("data:") && !src.startsWith("blob:")) img.crossOrigin = "anonymous";
-      img.onload = () => resolve(img);
+      img.onload = () => {
+        resolvedImages.set(src, img);
+        resolve(img);
+      };
       img.onerror = () => {
         console.warn("[avatar-studio] Không tải được ảnh:", src);
         resolve(null);
@@ -692,6 +753,10 @@
         }
       }
     }
+    if (opts.shoulderPiping) {
+      ctx.fillStyle = trim;
+      for (const u of [0.5, 0, 1]) ctx.fillRect(W * u - 3, 0, 6, H * 0.17);
+    }
     if (opts.sidePiping) {
       ctx.strokeStyle = trim;
       ctx.lineWidth = 5;
@@ -739,7 +804,7 @@
       const [y0, y1] = opts.placket;
       ctx.fillStyle = shade(color, -0.06);
       ctx.fillRect(W * 0.25 - 14, y0 * H, 28, (y1 - y0) * H);
-      ctx.fillStyle = isDark(color) ? "#ddd" : "#9aa0a8";
+      ctx.fillStyle = isDark(color) ? shade(color, 0.14) : "#9aa0a8";
       for (let y = y0 * H + 22; y < y1 * H; y += 52) {
         ctx.beginPath();
         ctx.arc(W * 0.25, y, 5, 0, Math.PI * 2);
@@ -782,7 +847,7 @@
     }
     if (opts.wordmark && opts.wordmarkText) {
       const big = opts.wordmark === "chest-big";
-      drawWordmark(ctx, opts.wordmarkText, big ? W * 0.25 : W * 0.25 + 70, big ? H * 0.3 : H * 0.2, big ? W * 0.3 : 96, big ? 92 : 28, opts.printColor || "#ffffff");
+      drawWordmark(ctx, opts.wordmarkText, big ? W * 0.25 : W * 0.25 + 88, big ? H * 0.3 : H * 0.17, big ? W * 0.3 : 84, big ? 92 : 24, opts.printColor || "#ffffff");
       if (opts.wordmarkBack) drawWordmark(ctx, opts.wordmarkText, W * 0.75, H * 0.14, W * 0.18, 40, opts.printColor || "#ffffff");
     }
     if (opts.archText) drawArchText(ctx, opts.archText, W * 0.25 + 92, H * 0.2, 74, opts.printColor || "#ffffff", opts.archSub);
@@ -843,34 +908,37 @@
     }
     ctx.restore();
   }
-  function ribbonTexture(text, bg, fg) {
-    const W = 2048, H = 96;
-    const cnv = makeCanvas(W, H);
-    const ctx = cnv.getContext("2d");
+  function ribbonTexture(text, bg, fg, { logo = null, wordmark = "HUST" } = {}) {
+    const W = 2048, H = 128;
+    const cnv = makeCanvas(W, H), ctx = cnv.getContext("2d");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 0.045;
+    ctx.fillStyle = "#fff";
+    for (let y = 1; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+    ctx.globalAlpha = 1;
     ctx.fillStyle = fg;
-    ctx.fillRect(0, 6, W, 3);
-    ctx.fillRect(0, H - 9, W, 3);
-    ctx.font = `800 40px "Be Vietnam Pro", system-ui, sans-serif`;
     ctx.textBaseline = "middle";
-    const unit = `${text}   `;
-    const uw = ctx.measureText(unit).width;
-    for (let x = 40; x < W * 0.7; x += uw) ctx.fillText(unit, x, H / 2 + 2);
-    for (let i = 0; i < 6; i++) {
-      const x = W * 0.76 + i * 72, r = 22;
+    const school = (text || "ĐẠI HỌC BÁCH KHOA HÀ NỘI").toUpperCase();
+    for (const x of [290, 985]) {
+      if (logo) ctx.drawImage(logo, x, 27, 74, 74);
+      ctx.font = '800 30px "Be Vietnam Pro", system-ui, sans-serif';
+      ctx.fillText(school, x + 87, 29, 520);
+      ctx.font = '600 16px "Be Vietnam Pro", system-ui, sans-serif';
+      ctx.fillText("HANOI UNIVERSITY OF SCIENCE AND TECHNOLOGY", x + 87, 58, 520);
+      drawWordmark(ctx, wordmark || "HUST", x + 225, 72, 280, 47, fg);
+    }
+    ctx.fillStyle = fg;
+    for (const x of [18, 91, 164, 1788, 1861, 1934]) {
       ctx.beginPath();
-      for (let k = 0; k < 6; k++) {
-        const a = k * Math.PI / 3;
-        ctx.lineTo(x + Math.cos(a) * r, H / 2 + Math.sin(a) * r);
-      }
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + 32, 0);
+      ctx.lineTo(x + 76, H / 2);
+      ctx.lineTo(x + 32, H);
+      ctx.lineTo(x, H);
+      ctx.lineTo(x + 44, H / 2);
       ctx.closePath();
-      if (i % 2) ctx.fill();
-      else {
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = fg;
-        ctx.stroke();
-      }
+      ctx.fill();
     }
     return cnv;
   }
@@ -1142,9 +1210,22 @@
     ctx.restore();
   }
   function drawEmblem(emblem, size = 512) {
-    const e = { shape: "khien", motif: "sach", main: "#4b2e9a", accent: "#f0b53a", short: "TO", year: "2026", ...emblem };
+    const e = { shape: "tron", motif: "banh-rang", main: "#b3141d", accent: "#ffffff", short: "HUST", year: "1956", ...emblem };
     const cnv = makeCanvas(size, size);
     const ctx = cnv.getContext("2d");
+    const logo = e.logo && resolvedImages.get(e.logo);
+    if (logo) {
+      const [sx, sy, sw, sh] = e.logoCrop || [0, 0, logo.width, logo.height];
+      const scale = size * 0.94 / Math.max(sw, sh);
+      const w = sw * scale, h2 = sh * scale;
+      if (e.logoClip === "circle") {
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, Math.min(w, h2) / 2, 0, Math.PI * 2);
+        ctx.clip();
+      }
+      ctx.drawImage(logo, sx, sy, sw, sh, (size - w) / 2, (size - h2) / 2, w, h2);
+      return cnv;
+    }
     const k = size / 512, cx = 256 * k, cy = 256 * k, s = 230 * k;
     pathShape(ctx, e.shape, cx, cy, s);
     ctx.fillStyle = e.main;
@@ -1178,128 +1259,188 @@
     }
     return h2 >>> 0;
   }
-  function drawStudentCard(card, emblemCanvas, emblem) {
-    const W = 1024, H = 646;
-    const cnv = makeCanvas(W, H);
-    const ctx = cnv.getContext("2d");
-    const main = (emblem == null ? void 0 : emblem.main) || "#4b2e9a", accent = (emblem == null ? void 0 : emblem.accent) || "#f0b53a";
-    const font = (w, px2) => `${w} ${px2}px "Be Vietnam Pro", system-ui, sans-serif`;
+  function drawPortraitStudentCard(card, emblemCanvas) {
+    const W = 646, H = 1024, canvas = makeCanvas(W, H), ctx = canvas.getContext("2d");
+    const font = (weight, size) => `${weight} ${size}px "Be Vietnam Pro", system-ui, sans-serif`;
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(0, 0, W, H, 34);
+    ctx.roundRect(0, 0, W, H, 16);
     ctx.clip();
-    if (card.template) {
-      ctx.drawImage(card.template, 0, 0, W, H);
-    } else {
-      ctx.fillStyle = "#f7f6fb";
-      ctx.fillRect(0, 0, W, H);
-      ctx.globalAlpha = 0.06;
-      ctx.strokeStyle = main;
-      ctx.lineWidth = 2;
-      for (let y = 0; y < H + 40; y += 46) for (let x = y / 46 % 2 ? 26 : 0; x < W + 40; x += 52) {
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const a = Math.PI / 6 + i * Math.PI / 3;
-          ctx.lineTo(x + Math.cos(a) * 24, y + Math.sin(a) * 24);
-        }
-        ctx.closePath();
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = main;
-      ctx.beginPath();
-      ctx.moveTo(W * 0.62, H);
-      ctx.lineTo(W, H * 0.42);
-      ctx.lineTo(W, H);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = accent;
-      ctx.beginPath();
-      ctx.moveTo(W * 0.56, H);
-      ctx.lineTo(W * 0.6, H);
-      ctx.lineTo(W, H * 0.36);
-      ctx.lineTo(W, H * 0.42);
-      ctx.closePath();
-      ctx.fill();
-    }
+    ctx.fillStyle = "#fafaf7";
+    ctx.fillRect(0, 0, W, H);
+    if (card.template) ctx.drawImage(card.template, 0, 0, W, H);
     if (card.drawHeader !== false) {
-      ctx.fillStyle = main;
-      ctx.fillRect(0, 0, W, 138);
-      ctx.fillStyle = accent;
-      ctx.fillRect(0, 138, W, 8);
-      if (emblemCanvas) ctx.drawImage(emblemCanvas, 30, 14, 112, 112);
-      ctx.fillStyle = "#fff";
+      if (emblemCanvas) ctx.drawImage(emblemCanvas, 24, 16, 91, 91);
       ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
-      ctx.font = font(800, 40);
-      ctx.fillText((card.school || "Trường Đại học Mẫu").toUpperCase(), 160, 70, W - 190);
-      ctx.font = font(600, 26);
-      ctx.fillStyle = shade(accent, 0.2);
-      ctx.fillText(card.title || "THẺ SINH VIÊN", 160, 112);
+      ctx.fillStyle = "#b51d2b";
+      ctx.font = font(800, 24);
+      ctx.fillText((card.school || "Đại học Bách khoa Hà Nội").toUpperCase(), 123, 46, 493);
+      ctx.fillStyle = "#777b80";
+      ctx.font = font(500, 13);
+      ctx.fillText("HANOI UNIVERSITY OF SCIENCE AND TECHNOLOGY", 123, 72, 493);
+      ctx.fillStyle = "#35373b";
+      ctx.font = font(700, 23);
+      ctx.fillText(card.title || "THẺ SINH VIÊN", 123, 104);
+      ctx.fillStyle = "#c9cbce";
+      ctx.fillRect(28, 124, 590, 1);
     }
-    const px = 46, py = 180, pw = 250, ph = 320;
-    ctx.fillStyle = "#e4e2ec";
+    const px = 211, py = 153, pw = 224, ph = 282;
+    ctx.fillStyle = "#eeefed";
     ctx.fillRect(px, py, pw, ph);
     if (card.photo) {
-      const im = card.photo, r = Math.max(pw / im.width, ph / im.height);
-      const w = im.width * r, h3 = im.height * r;
+      const image = card.photo, ratio = Math.max(pw / image.width, ph / image.height);
+      const w = image.width * ratio, h2 = image.height * ratio;
       ctx.save();
       ctx.beginPath();
       ctx.rect(px, py, pw, ph);
       ctx.clip();
-      ctx.drawImage(im, px + (pw - w) / 2, py + (ph - h3) / 2, w, h3);
+      ctx.drawImage(image, px + (pw - w) / 2, py + (ph - h2) / 2, w, h2);
       ctx.restore();
     } else {
-      ctx.fillStyle = "#c3bfd3";
+      ctx.fillStyle = "#bfc2c0";
       ctx.beginPath();
-      ctx.arc(px + pw / 2, py + 125, 62, 0, Math.PI * 2);
+      ctx.arc(W / 2, py + 98, 51, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(px + pw / 2, py + ph, 105, 120, 0, Math.PI, 0);
+      ctx.ellipse(W / 2, py + ph, 94, 110, 0, Math.PI, 0);
       ctx.fill();
     }
-    ctx.strokeStyle = main;
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#c5c8c6";
+    ctx.lineWidth = 2;
     ctx.strokeRect(px, py, pw, ph);
-    const fx = 336;
     const rows = [
       ["Họ và tên", card.name || "Nguyễn Minh An"],
       ["MSSV", card.id || "26A0001"],
-      ["Ngành", card.major || "Thiết kế đồ họa"],
-      ["Khóa", card.cohort || "K66 · 2026–2030"]
+      ["Ngành", card.major || "Kỹ thuật phần mềm"],
+      ["Khóa", card.cohort || "K71 · 2026–2030"]
+    ];
+    rows.forEach(([label, value], i) => {
+      const y = 480 + i * 86;
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#777b80";
+      ctx.font = font(500, 18);
+      ctx.fillText(label.toUpperCase(), 46, y);
+      ctx.fillStyle = "#35373b";
+      ctx.font = font(i ? 600 : 800, i ? 28 : 34);
+      ctx.fillText(value, 46, y + 38, 554);
+    });
+    let hash = hashStr((card.id || "") + (card.name || "")), x = 79;
+    ctx.fillStyle = "#35373b";
+    while (x < 567) {
+      hash = Math.imul(hash ^ hash >>> 13, 1274126177) >>> 0;
+      const width = 2 + hash % 5;
+      ctx.fillRect(x, 861, width, 54);
+      x += width + 2 + (hash >>> 8) % 4;
+    }
+    ctx.fillStyle = "#777b80";
+    ctx.font = font(500, 18);
+    ctx.textAlign = "center";
+    ctx.fillText(card.id || "26A0001", W / 2, 946);
+    ctx.save();
+    ctx.translate(W / 2, H * 0.65);
+    ctx.rotate(-0.32);
+    ctx.globalAlpha = 0.065;
+    ctx.fillStyle = "#b51d2b";
+    ctx.font = font(800, 120);
+    ctx.fillText("MẪU", 0, 0);
+    ctx.restore();
+    ctx.fillStyle = "#b51d2b";
+    ctx.font = font(600, 15);
+    ctx.fillText("THẺ MẪU · KHÔNG CÓ GIÁ TRỊ SỬ DỤNG", W / 2, 995, 580);
+    ctx.restore();
+    return canvas;
+  }
+  function drawStudentCard(card, emblemCanvas, emblem) {
+    if (card.orientation === "portrait") return drawPortraitStudentCard(card, emblemCanvas);
+    const W = 1024, H = 646, cnv = makeCanvas(W, H), ctx = cnv.getContext("2d");
+    const red = "#b51d2b", ink = "#35373b";
+    const font = (weight, size) => `${weight} ${size}px "Be Vietnam Pro", system-ui, sans-serif`;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(0, 0, W, H, 16);
+    ctx.clip();
+    ctx.fillStyle = "#fafaf7";
+    ctx.fillRect(0, 0, W, H);
+    if (card.template) ctx.drawImage(card.template, 0, 0, W, H);
+    if (card.drawHeader !== false) {
+      if (emblemCanvas) ctx.drawImage(emblemCanvas, 35, 14, 100, 100);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = red;
+      ctx.font = font(800, 31);
+      ctx.fillText((card.school || "Đại học Bách khoa Hà Nội").toUpperCase(), 150, 52, 830);
+      ctx.fillStyle = "#777b80";
+      ctx.font = font(500, 16);
+      ctx.fillText("HANOI UNIVERSITY OF SCIENCE AND TECHNOLOGY", 150, 78, 830);
+      ctx.fillStyle = ink;
+      ctx.font = font(700, 25);
+      ctx.fillText(card.title || "THẺ SINH VIÊN", 150, 111);
+      ctx.fillStyle = "#c9cbce";
+      ctx.fillRect(38, 132, 948, 1);
+    }
+    const px = 48, py = 162, pw = 242, ph = 306;
+    ctx.fillStyle = "#eeefed";
+    ctx.fillRect(px, py, pw, ph);
+    if (card.photo) {
+      const im = card.photo, ratio = Math.max(pw / im.width, ph / im.height);
+      const w = im.width * ratio, h2 = im.height * ratio;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(px, py, pw, ph);
+      ctx.clip();
+      ctx.drawImage(im, px + (pw - w) / 2, py + (ph - h2) / 2, w, h2);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#bfc2c0";
+      ctx.beginPath();
+      ctx.arc(px + pw / 2, py + 107, 56, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(px + pw / 2, py + ph, 103, 120, 0, Math.PI, 0);
+      ctx.fill();
+    }
+    ctx.strokeStyle = "#c5c8c6";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px, py, pw, ph);
+    const rows = [
+      ["Họ và tên", card.name || "Nguyễn Minh An"],
+      ["MSSV", card.id || "26A0001"],
+      ["Ngành", card.major || "Kỹ thuật phần mềm"],
+      ["Khóa", card.cohort || "K71 · 2026–2030"]
     ];
     ctx.textAlign = "left";
-    rows.forEach(([label, val], i) => {
-      const y = 214 + i * 76;
-      ctx.fillStyle = "#6b6680";
-      ctx.font = font(600, 22);
-      ctx.fillText(label.toUpperCase(), fx, y);
-      ctx.fillStyle = "#1d1a2b";
-      ctx.font = font(i === 0 ? 800 : 700, i === 0 ? 40 : 32);
-      ctx.fillText(val, fx, y + (i === 0 ? 42 : 36), W - fx - 40);
+    rows.forEach(([label, value], i) => {
+      const y = 188 + i * 77;
+      ctx.fillStyle = "#777b80";
+      ctx.font = font(500, 20);
+      ctx.fillText(label.toUpperCase(), 332, y);
+      ctx.fillStyle = ink;
+      ctx.font = font(i ? 600 : 800, i ? 29 : 37);
+      ctx.fillText(value, 332, y + 37, 645);
     });
-    let h2 = hashStr((card.id || "") + (card.name || ""));
-    let bx = 336;
-    ctx.fillStyle = "#1d1a2b";
-    while (bx < 640) {
-      h2 = Math.imul(h2 ^ h2 >>> 13, 1274126177) >>> 0;
-      const bw = 2 + h2 % 5;
-      ctx.fillRect(bx, 548, bw, 58);
-      bx += bw + 2 + (h2 >>> 8) % 4;
+    let hash = hashStr((card.id || "") + (card.name || "")), x = 333;
+    ctx.fillStyle = ink;
+    while (x < 827) {
+      hash = Math.imul(hash ^ hash >>> 13, 1274126177) >>> 0;
+      const width = 2 + hash % 5;
+      ctx.fillRect(x, 521, width, 49);
+      x += width + 2 + (hash >>> 8) % 4;
     }
+    ctx.fillStyle = "#777b80";
+    ctx.font = font(500, 18);
+    ctx.fillText(card.id || "26A0001", 333, 596);
     ctx.save();
-    ctx.translate(W * 0.55, H * 0.56);
-    ctx.rotate(-0.32);
-    ctx.globalAlpha = 0.1;
-    ctx.fillStyle = "#c0392b";
-    ctx.font = font(900, 150);
+    ctx.translate(W * 0.54, H * 0.55);
+    ctx.rotate(-0.3);
+    ctx.globalAlpha = 0.065;
+    ctx.fillStyle = red;
+    ctx.font = font(800, 130);
     ctx.textAlign = "center";
-    ctx.fillText("MẪU", 0, 40);
+    ctx.fillText("MẪU", 0, 35);
     ctx.restore();
-    ctx.fillStyle = "#c0392b";
-    ctx.font = font(700, 18);
-    ctx.textAlign = "left";
-    ctx.fillText("THẺ MẪU · KHÔNG CÓ GIÁ TRỊ SỬ DỤNG", 46, 620);
+    ctx.fillStyle = red;
+    ctx.font = font(600, 17);
+    ctx.fillText("THẺ MẪU · KHÔNG CÓ GIÁ TRỊ SỬ DỤNG", 48, 625);
     ctx.restore();
     return cnv;
   }
@@ -1313,7 +1454,7 @@
     return toTexture(c);
   }
   function composeSleeve(color, imgs = {}, opts = {}) {
-    var _a;
+    var _a, _b;
     const S = 512;
     const cnv = makeCanvas(S, S);
     const ctx = cnv.getContext("2d");
@@ -1332,7 +1473,7 @@
     }
     if (opts.piping) {
       ctx.fillStyle = opts.trim || "#ffffff";
-      ctx.fillRect(S / 2 - 4, 0, 8, S);
+      ctx.fillRect(S * ((_b = opts.pipingU) != null ? _b : 0.5) - 3, 0, 6, S);
     }
     if (opts.cuff) {
       ctx.fillStyle = shade(color, -0.08);
@@ -1343,7 +1484,10 @@
       ctx.fillStyle = shade(color, -0.06);
       ctx.fillRect(0, S * 0.94, S, 4);
     }
-    if (opts.emblem) ctx.drawImage(opts.emblem, S / 2 - 60, S * 0.16, 120, 120);
+    if (opts.emblem) {
+      const [w, h2, top] = opts.emblemBox || [120, 120, S * 0.16];
+      ctx.drawImage(opts.emblem, S / 2 - w / 2, top, w, h2);
+    }
     return cnv;
   }
   function composeTopAtlas(bodyCanvas, leftCanvas, rightCanvas) {
@@ -1355,7 +1499,7 @@
     return cnv;
   }
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/items/clothing.js
+  // avatar/src/js/items/clothing.js
   var TAU = Math.PI * 2;
   var wrap = (u) => u - Math.floor(u);
   var clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -1404,6 +1548,34 @@
     const m = new THREE4.SkinnedMesh(geo, mat);
     m.castShadow = true;
     return { skinned: m };
+  }
+  function skinTop(geo, M, options) {
+    const fullArm = DIM.upperArm + DIM.foreArm;
+    const sleeveLen = options.sleeve === "long" ? fullArm - 0.025 : options.sleeve === "none" ? 0 : 0.15;
+    skinByDistance(geo, M.segments.filter((segment) => segment.bone === 0 || segment.bone >= 2 && segment.bone <= 7));
+    const p = geo.attributes.position, indices = geo.attributes.skinIndex, weights = geo.attributes.skinWeight;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const side = x >= 0 ? "L" : "R", arm = M.arms[side], base = side === "L" ? 2 : 5;
+      const along = segT(x, y, z, arm.sh, arm.wr) * fullArm;
+      const armDistance = Math.max(M.arm(side, x, y, z, 0.012, { upTo: sleeveLen, withHand: false }), along - sleeveLen);
+      const blend = sleeveLen ? smooth(-0.018, 0.018, M.trunk(x, y, z, 0.014) - armDistance) : 0;
+      const armWeights = [0, 0, 0];
+      for (let k = 0; k < 4; k++) {
+        const bone = indices.array[i * 4 + k];
+        if (bone >= base && bone <= base + 2) armWeights[bone - base] += weights.array[i * 4 + k];
+      }
+      const sum = armWeights[0] + armWeights[1] + armWeights[2];
+      indices.setXYZW(i, 0, base, base + 1, base + 2);
+      weights.setXYZW(
+        i,
+        1 - blend,
+        blend * (sum ? armWeights[0] / sum : 1),
+        blend * (sum ? armWeights[1] / sum : 0),
+        blend * (sum ? armWeights[2] / sum : 0)
+      );
+    }
+    return geo;
   }
   function hairGeometry(M, style, hatOn) {
     const H = M.head;
@@ -1480,7 +1652,8 @@
     const neckY = (z) => P + neckFront + 0.02 - 0.03 * clamp01((z + 0.02) / 0.08);
     const field = (x, y, z) => {
       const flare = o.tucked ? 0 : 0.013 * smooth(P + 0.15, P + 0.08, y);
-      let d = M.trunk(x, y, z, base + flare);
+      const waistTaper = o.waistFit ? 5e-3 * Math.exp(-(((y - P - 0.17) / 0.13) ** 2)) : 0;
+      let d = M.trunk(x, y, z, base + flare - waistTaper);
       for (const s of ["L", "R"]) {
         d = smin(d, M.deltoid(s, x, y, z, base * 0.6), 0.04);
         if (!o.tucked) {
@@ -1499,11 +1672,20 @@
         }
       }
       d = Math.max(d, hemY - y);
-      d = Math.max(d, y - neckY(z));
+      d = Math.max(d, -Math.max(Math.hypot(x, (z - 4e-3) * 1.08) - 0.058, neckY(z) - 0.03 - y));
+      d = Math.max(d, y - (P + 0.56));
       if (o.vneck) d = Math.max(d, -Math.max(P + 0.395 + 1.5 * Math.abs(x) - y, 0.03 - z));
-      if (o.collar === "polo" || o.collar === "shirt") {
-        d = smin(d, torusY(x, y, z, [0, P + 0.497, 4e-3], 0.064, 0.014, 1.06, 0.92), 0.012);
-      } else if (o.collar === "crew") {
+      if (!o.sportsCollar && (o.collar === "polo" || o.collar === "shirt")) {
+        d = smin(d, torusY(x, y, z, [0, P + 0.51, 4e-3], 0.066, 0.016, 1.06, 0.94), 0.01);
+        for (const s of [-1, 1]) {
+          const cx = s * 0.038, cy = P + 0.47, cz = trunkRadius(0.47) * M.b.sz + base + 0.01;
+          const ux = x - cx, uy = y - cy, uz = z - cz;
+          const a = 0.55, r = s * 0.5;
+          const y1 = uy * Math.cos(a) - uz * Math.sin(a), z1 = uy * Math.sin(a) + uz * Math.cos(a);
+          const x2 = ux * Math.cos(r) - y1 * Math.sin(r), y2 = ux * Math.sin(r) + y1 * Math.cos(r);
+          d = smin(d, ellipsoid(x2, y2, z1, [0, 0, 0], [0.03, 0.04, 8e-3]), 6e-3);
+        }
+      } else if (!o.sportsCollar && o.collar === "crew") {
         d = smin(d, torusY(x, y, z, [0, neckY(0.06) - 4e-3, 6e-3], 0.057, 85e-4, 1.02, 0.95), 8e-3);
       } else if (o.collar === "stand") {
         const ring = Math.max(Math.abs(Math.hypot(x, (z - 4e-3) * 1.05) - 0.064) - 9e-3, Math.abs(y - (P + 0.515)) - 0.032);
@@ -1516,37 +1698,115 @@
     };
     const g = surfaceNets(field, [-0.43, P - 0.2, -0.27], [0.43, P + 0.64, 0.25], 95e-4);
     relax(g, 1, 0.4);
-    skinByDistance(g, M.segments);
+    skinTop(g, M, o);
     return perTriangleUV(g, (x, y, z, cx, cy, cz) => {
-      if (sleeveLen > 0) {
+      if (sleeveLen > 0 && !o.sportsCollar) {
         for (const s of ["L", "R"]) {
           const A = M.arms[s];
           if (Math.sign(cx) !== A.s) continue;
           const tFrac = segT(cx, cy, cz, A.sh, A.wr);
-          if (tFrac > 0.06 && M.arm(s, cx, cy, cz) < M.trunk(cx, cy, cz) - 0.01) {
+          const bomberSeamX = M.shoulderX - 0.035 + 0.045 * (1 - smooth(P + 0.23, P + 0.39, cy));
+          const sleeveRegion = o.bomber ? Math.abs(cx) > bomberSeamX : M.arm(s, cx, cy, cz) < M.trunk(cx, cy, cz) - 0.01;
+          if (tFrac > (o.bomber ? -0.09 : 0.06) && sleeveRegion) {
             const st = segT(x, y, z, A.sh, A.wr);
             const ax = A.sh[0] + (A.wr[0] - A.sh[0]) * st, az = A.sh[2] + (A.wr[2] - A.sh[2]) * st;
             const th2 = Math.atan2(x - ax, z - az);
             const ul = wrap(s === "L" ? (th2 + Math.PI / 2) / TAU : (th2 - Math.PI / 2) / TAU);
             const f = clamp01(st * fullArm / Math.max(sleeveLen, 0.01));
-            return [(s === "L" ? 0 : 0.5) + 0.5 * ul, 0.5 * (1 - f), 0.5, s === "L" ? 0 : 0.5, true];
+            const v2 = o.bomber ? 2e-3 + 0.496 * (1 - f) : 0.5 * (1 - f);
+            return [(s === "L" ? 0 : 0.5) + 0.5 * ul, v2, 0.5, s === "L" ? 0 : 0.5, true];
           }
         }
       }
       const th = Math.atan2(x / M.b.sx, z / M.b.sz);
       const v = clamp01((y - hemY) / (neckY(z) - hemY));
-      return [wrap(0.25 + th / TAU), 0.5 + 0.5 * v, 1, 0, false];
+      return [wrap(0.25 + th / TAU), o.bomber ? 0.502 + 0.496 * v : 0.5 + 0.5 * v, 1, 0, false];
     });
   }
+  function sportsCollar(M, blue, white) {
+    const group = new THREE4.Group();
+    const blueMat = lowpolyMat(blue, { flatShading: false, side: THREE4.DoubleSide });
+    const whiteMat = lowpolyMat(white, { flatShading: false, side: THREE4.DoubleSide });
+    const frontZ = (x, y, lift = 0) => {
+      const r = trunkRadius(y), rx = r * M.b.sx + 0.014;
+      return r * M.b.sz * Math.sqrt(Math.max(0.04, 1 - (x / rx) ** 2)) + 0.022 + lift;
+    };
+    const mesh = (verts, indices, material) => {
+      const g = new THREE4.BufferGeometry();
+      g.setAttribute("position", new THREE4.Float32BufferAttribute(verts, 3));
+      g.setIndex(indices);
+      g.computeVertexNormals();
+      const m = new THREE4.Mesh(g, material);
+      m.castShadow = true;
+      group.add(m);
+    };
+    const strip = (a, b, width, material, lift = 0, offset = 0) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+      const nx = -dy / len, ny = dx / len, vertices = [], indices = [];
+      for (let i = 0; i <= 16; i++) {
+        const t = i / 16;
+        for (const side of [-1, 1]) {
+          const d = offset + side * width * 0.5;
+          const x = a[0] + dx * t + nx * d, y = a[1] + dy * t + ny * d;
+          vertices.push(x, y, frontZ(x, y, lift));
+        }
+        if (i) {
+          const p = i * 2;
+          indices.push(p - 2, p - 1, p, p - 1, p + 1, p);
+        }
+      }
+      mesh(vertices, indices, material);
+    };
+    for (const side of [-1, 1]) {
+      const points = [[side * 0.038, 0.502], [side * 0.076, 0.508], [side * 0.112, 0.468], [side * 0.069, 0.449]];
+      mesh(points.flatMap(([x, y]) => [x, y, frontZ(x, y, 4e-3)]), [0, 1, 2, 0, 2, 3], blueMat);
+      const a = [side * 0.074, 0.5], b = [side * 0.104, 0.468];
+      for (const offset of [-3e-3, 3e-3]) strip(a, b, 18e-4, whiteMat, 6e-3, offset);
+    }
+    for (const side of [-1, 1]) {
+      const a = [side * 0.066, 0.491], b = [-side * 6e-3, side < 0 ? 0.386 : 0.378];
+      const lift = side < 0 ? 3e-3 : 5e-3;
+      strip(a, b, 0.018, blueMat, lift);
+      for (const offset of [-48e-4, 48e-4]) strip(a, b, 22e-4, whiteMat, lift + 1e-3, offset);
+    }
+    return group;
+  }
   function buildTop(ctx) {
-    const { item, rig, imgs, emblemCanvas, emblem } = ctx;
+    const { item, rig, imgs, emblem } = ctx;
+    const emblemCanvas = imgs.badge ? drawEmblem({
+      ...emblem,
+      logo: item.textures.badge,
+      logoCrop: item.badgeCrop,
+      logoClip: item.badgeClip
+    }) : ctx.emblemCanvas;
     const o = item.options || {};
     const M = rig.model;
     const main = item.colors.main, accent = item.colors.accent || shade(main, -0.25);
     const trim = item.colors.trim || "#ffffff";
     const printColor = item.colors.print || "#ffffff";
-    const keyOpts = { sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck };
-    const geo = cached(`top|${M.name}|${JSON.stringify(keyOpts)}`, () => topGeometry(M, o));
+    const keyOpts = { sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck, sportsCollar: o.sportsCollar, bomber: o.bomber, waistFit: o.waistFit };
+    let geo = cached(`top|${M.name}|${JSON.stringify(keyOpts)}`, () => topGeometry(M, o));
+    if (o.sportsCollar || o.bomber) {
+      geo = geo.clone();
+      geo.userData.keep = false;
+      const pos = geo.attributes.position, colors = new Float32Array(pos.count * 3), panelMix = new Float32Array(pos.count);
+      const lin = (hex) => new THREE4.Color(hex).convertSRGBToLinear();
+      const blue = lin(accent), white = lin("#ffffff"), bodyColor = lin(main);
+      for (let i = 0; i < pos.count; i++) {
+        const x = Math.abs(pos.getX(i)) / M.b.sx;
+        const y = pos.getY(i) - M.P[1];
+        const seamX = Math.min(0.165, 0.059 + Math.max(0, 0.5 - y) * 0.65) + Math.max(0, 0.23 - y) * 2.5;
+        const bomberSeamX = M.shoulderX - 0.035 + 0.045 * (1 - smooth(0.23, 0.39, y));
+        const blend = o.bomber ? smooth(bomberSeamX - 6e-3, bomberSeamX + 6e-3, Math.abs(pos.getX(i))) : smooth(seamX - 3e-3, seamX + 3e-3, x);
+        const c = (o.bomber ? bodyColor : white).clone().lerp(blue, blend);
+        panelMix[i] = blend;
+        colors[i * 3] = c.r;
+        colors[i * 3 + 1] = c.g;
+        colors[i * 3 + 2] = c.b;
+      }
+      geo.setAttribute("color", new THREE4.BufferAttribute(colors, 3));
+      if (o.bomber) geo.setAttribute("panelMix", new THREE4.BufferAttribute(panelMix, 1));
+    }
     const bodyCanvas = composeGarment({
       color: main,
       accent,
@@ -1563,10 +1823,11 @@
       kangaroo: o.kangaroo,
       patternScale: o.patternScale,
       piping: o.piping,
+      shoulderPiping: o.shoulderPiping,
       sidePiping: o.sidePiping,
       weltPockets: o.weltPockets,
       hemBand: o.hemBand,
-      vneck: o.vneck ? [accent, trim] : null,
+      vneck: o.vneck && !o.sportsCollar ? [accent, trim] : null,
       plaid: o.plaid,
       breton: o.breton,
       wordmark: o.wordmark,
@@ -1575,17 +1836,93 @@
       archText: o.arch ? (emblem == null ? void 0 : emblem.name) || "" : null,
       archSub: o.arch ? emblem == null ? void 0 : emblem.short : null
     });
-    if (o.collarAccent) {
+    if (!o.sportsCollar && (o.collar === "polo" || o.collar === "shirt")) {
+      const c = bodyCanvas.getContext("2d");
+      c.fillStyle = shade(o.collarAccent ? accent : main, -0.05);
+      c.fillRect(0, 0, 1024, 12);
+    }
+    if (o.collarAccent && !o.sportsCollar) {
       const c = bodyCanvas.getContext("2d");
       c.fillStyle = accent;
       c.fillRect(0, 0, 1024, 18);
     }
+    if (o.poloTrim) {
+      const c = bodyCanvas.getContext("2d");
+      c.fillStyle = item.colors.ribAccent || "#1f2a44";
+      c.fillRect(0, 3, 1024, 4);
+      c.fillStyle = trim;
+      c.fillRect(0, 8, 1024, 3);
+    }
+    if (o.bomber) {
+      const c = bodyCanvas.getContext("2d");
+      c.fillStyle = main;
+      c.fillRect(0, 0, 1024, 25);
+      c.fillRect(0, 512 * 0.92, 1024, 512 * 0.08);
+      c.fillStyle = trim;
+      for (const y of [5, 15, 512 * 0.94, 512 * 0.973]) c.fillRect(0, y, 1024, y < 25 ? 4 : 5);
+      c.fillStyle = shade(main, -0.03);
+      c.fillRect(244, 0, 24, 512);
+      for (let y = 22; y < 506; y += 78) {
+        c.fillStyle = "#7c828a";
+        c.beginPath();
+        c.arc(256, y, 5.2, 0, TAU);
+        c.fill();
+        c.fillStyle = "#dce0e4";
+        c.beginPath();
+        c.arc(255, y - 1, 3.8, 0, TAU);
+        c.fill();
+      }
+      if (o.weltPockets) {
+        c.strokeStyle = trim;
+        c.lineWidth = 10;
+        for (const side of [-1, 1]) {
+          c.beginPath();
+          c.moveTo(256 + side * 95, 512 * 0.65);
+          c.lineTo(256 + side * 114, 512 * 0.86);
+          c.stroke();
+        }
+      }
+    }
     const sleeveColor = o.accentSleeves ? accent : main;
     const sl = { cuff: o.cuffs && o.sleeve === "long", hem: o.sleeve === "short", sleeveStripes: o.sleeveStripes, trim, plaid: o.plaid, breton: o.breton, patternScale: o.patternScale };
     const sleeveImgs = o.accentSleeves ? {} : { pattern: imgs.pattern };
-    const left = composeSleeve(sleeveColor, sleeveImgs, { ...sl, emblem: o.sleeveEmblem ? emblemCanvas : null });
-    const right = composeSleeve(sleeveColor, sleeveImgs, sl);
-    const parts = [skinnedPart(geo, garmentMaterial(composeTopAtlas(bodyCanvas, left, right)))];
+    const sleeveLen = o.sleeve === "long" ? DIM.upperArm + DIM.foreArm - 0.025 : 0.15;
+    const pxU = 512 / (TAU * 0.064 * M.L), pxV = 512 / sleeveLen;
+    const emblemBox = [0.055 * pxU, 0.055 * pxV, 0.03 * pxV];
+    const left = composeSleeve(sleeveColor, sleeveImgs, { ...sl, piping: o.shoulderPiping, pipingU: 0.68, emblem: o.sleeveEmblem ? emblemCanvas : null, emblemBox });
+    const right = composeSleeve(sleeveColor, sleeveImgs, { ...sl, piping: o.shoulderPiping, pipingU: 0.32 });
+    if (o.poloTrim || o.bomber) for (const sleeve of [left, right]) {
+      const c = sleeve.getContext("2d");
+      if (o.bomber) {
+        c.fillStyle = main;
+        c.fillRect(0, 512 * 0.89, 512, 512 * 0.11);
+        c.fillStyle = trim;
+        for (const y of [512 * 0.918, 512 * 0.965]) c.fillRect(0, y, 512, 7);
+      } else {
+        c.fillStyle = item.colors.ribAccent || "#1f2a44";
+        c.fillRect(0, 512 * 0.94, 512, 9);
+        c.fillStyle = trim;
+        c.fillRect(0, 512 * 0.965, 512, 8);
+      }
+    }
+    const material = garmentMaterial(composeTopAtlas(bodyCanvas, left, right), { vertexColors: !!o.sportsCollar });
+    if (o.bomber) {
+      material.userData.bomberPanels = { main, accent };
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.bomberBody = { value: new THREE4.Color(main).convertSRGBToLinear() };
+        shader.uniforms.bomberSleeve = { value: new THREE4.Color(accent).convertSRGBToLinear() };
+        shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute float panelMix;\nvarying float vPanelMix;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvPanelMix = panelMix;");
+        shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vPanelMix;\nuniform vec3 bomberBody;\nuniform vec3 bomberSleeve;").replace("#include <map_fragment>", `#include <map_fragment>
+        #ifdef USE_MAP
+          vec3 atlasBase = vUv.y < 0.5 ? bomberSleeve : bomberBody; // [r128] vUv (bản mới: vMapUv)
+          vec3 panelColor = mix(bomberBody, bomberSleeve, vPanelMix);
+          diffuseColor.rgb *= panelColor / max(atlasBase, vec3(0.001));
+        #endif`);
+      };
+      material.customProgramCacheKey = () => "hust-bomber-panels-v1";
+    }
+    const parts = [skinnedPart(geo, material)];
+    if (o.sportsCollar) parts.push({ joint: "torso", obj: sportsCollar(M, accent, trim) });
     if (o.collar === "hood" && !o.zipper) {
       const g = new THREE4.Group();
       const cordMat = lowpolyMat("#f2f2f2", { flatShading: false });
@@ -1597,6 +1934,9 @@
       parts.push({ joint: "torso", obj: g });
     }
     return { parts };
+  }
+  function bottomHemY(G, o) {
+    return o.length === "shorts" ? G.kn[1] + 0.16 : G.an[1] + (o.length === "capri" ? 0.16 : 0.035);
   }
   function bottomGeometry(M, o) {
     const P = M.P[1];
@@ -1627,19 +1967,32 @@
             lg = M.leg(s, x, y, z, fitT + 8e-3, { thighOnly: true, flare: 0.02 });
             lg = Math.max(lg, G.kn[1] + 0.16 - y);
           } else {
-            const flare = o.fit === "wide" ? 0.03 : o.cuff ? -0.012 : 2e-3;
+            const flare = o.track ? o.cuff ? -8e-3 : 0.023 : o.fit === "wide" ? 0.03 : o.cuff ? -0.012 : 2e-3;
             lg = M.leg(s, x, y, z, fitT, { flare });
             lg = Math.max(lg, G.an[1] + (length === "capri" ? 0.16 : 0.035) - y);
           }
           d = smin(d, lg, 0.03);
         }
       }
+      if (o.track && length === "shorts" && !o.skirt && y < P - 0.17) {
+        const gap = 0.012 * M.b.sx * smooth(P - 0.17, P - 0.31, y);
+        d = Math.max(d, gap - Math.abs(x));
+      }
       return Math.max(d, y - waistTop);
     };
     const g = surfaceNets(field, [-0.36, -0.02, -0.25], [0.36, P + 0.1, 0.25], o.skirt ? 85e-4 : 95e-4);
     relax(g, 1, 0.4);
-    skinByDistance(g, M.segments);
+    skinByDistance(g, M.segments.filter((segment) => segment.bone === 0 || segment.bone >= 8));
     return perTriangleUV(g, (x, y, z, cx, cy) => {
+      if (o.track && !o.skirt) {
+        const G = M.legs[cx >= 0 ? "L" : "R"];
+        const axisX = G.hp[0] * (1 - smooth(P - 0.18, P - 0.035, y));
+        const th2 = Math.atan2(x - axisX, z);
+        const u = wrap((th2 - G.s * Math.PI / 2) / TAU);
+        const origin = G.s > 0 ? 0 : 0.5;
+        const hemY = bottomHemY(G, o);
+        return [origin + u * 0.5, clamp01((y - hemY) / (waistTop - hemY)), 0.5, origin, true];
+      }
       if (!o.skirt && cy < P - 0.1) {
         const G = M.legs[cx >= 0 ? "L" : "R"];
         const th2 = Math.atan2(x - G.hp[0], z);
@@ -1650,16 +2003,121 @@
       return [wrap((th - Math.PI / 2) / TAU), y * 2.4, 1, 0, false];
     });
   }
+  function trackPantsCanvas(main, accent, imgs, o, M, printColor) {
+    var _a, _b;
+    const W = 1024, H = 1024, half = W / 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const c = canvas.getContext("2d");
+    const fabric = composePlain(main, imgs, { patternScale: o.patternScale });
+    const G = M.legs.L;
+    const hemY = bottomHemY(G, o), waistY = M.P[1] + 0.078;
+    const py = (y) => (1 - (y - hemY) / (waistY - hemY)) * H;
+    for (let side = 0; side < 2; side++) {
+      const x = side * half;
+      c.drawImage(fabric, x, 0, half, H);
+      if (o.sideStripe) {
+        const stripeWidth = (_a = o.trackStripeWidth) != null ? _a : 0.08;
+        const bias = Math.min((_b = o.trackStripeBias) != null ? _b : 0.035, stripeWidth * 0.45);
+        c.fillStyle = accent;
+        for (let row = 0; row < H; row++) {
+          const worldY = hemY + (1 - (row + 0.5) / H) * (waistY - hemY);
+          const fit = 1 - 0.6 * smooth(M.P[1] - 0.18, M.P[1] - 0.035, worldY);
+          const center = side === 0 ? 1 - bias * fit : bias * fit;
+          const start = center - stripeWidth * fit / 2, end = center + stripeWidth * fit / 2;
+          c.fillRect(x + Math.max(0, start) * half, row, (Math.min(1, end) - Math.max(0, start)) * half, 1);
+          if (start < 0) c.fillRect(x + (1 + start) * half, row, -start * half, 1);
+          if (end > 1) c.fillRect(x, row, (end - 1) * half, 1);
+        }
+      }
+    }
+    if (o.elasticWaist) {
+      const bandH = py(waistY - 0.043);
+      c.fillStyle = "rgba(0,0,0,0.10)";
+      c.fillRect(0, 0, W, bandH);
+      c.strokeStyle = "rgba(0,0,0,0.18)";
+      c.lineWidth = 2;
+      for (let y = 8; y < bandH; y += 12) {
+        c.beginPath();
+        c.moveTo(0, y);
+        c.lineTo(W, y);
+        c.stroke();
+      }
+      c.strokeStyle = "rgba(255,255,255,0.10)";
+      c.lineWidth = 1;
+      for (let x = 0; x < W; x += 7) {
+        c.beginPath();
+        c.moveTo(x, 0);
+        c.lineTo(x + 2, bandH);
+        c.stroke();
+      }
+    }
+    if (o.zipPockets) {
+      for (let side = 0; side < 2; side++) {
+        const x = half * (side + (side === 0 ? 0.89 : 0.11));
+        const slant = side === 0 ? -1 : 1;
+        const y0 = py(waistY - 0.07), y1 = py(waistY - 0.205);
+        c.strokeStyle = shade(main, -0.05);
+        c.lineWidth = 9;
+        c.beginPath();
+        c.moveTo(x, y0);
+        c.lineTo(x + slant * 12, y1);
+        c.stroke();
+        c.strokeStyle = shade(main, 0.1);
+        c.lineWidth = 2;
+        c.beginPath();
+        c.moveTo(x + 2, y0);
+        c.lineTo(x + slant * 12 + 2, y1);
+        c.stroke();
+        c.fillStyle = "#4b5361";
+        c.fillRect(x - 3, y0 - 3, 6, 10);
+      }
+    }
+    c.fillStyle = "rgba(0,0,0,0.10)";
+    const hemH = (o.cuff ? 0.045 : 0.012) / (waistY - hemY) * H;
+    c.fillRect(0, H - hemH, W, hemH);
+    c.fillRect(0, H - hemH - 3, W, 2);
+    if (o.sideTag) {
+      const x = half * 1.13, y = py(M.P[1] - 0.17);
+      c.fillStyle = "#161918";
+      c.fillRect(x - 10, y, 20, 61);
+      c.fillStyle = "#f5f4ee";
+      c.font = '800 12px "Be Vietnam Pro", system-ui, sans-serif';
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      [..."HUST"].forEach((ch, i) => c.fillText(ch, x, y + 9 + i * 14));
+    }
+    if (o.wordmark) {
+      const printY = o.wordmarkVertical ? hemY + 0.075 : M.P[1] - 0.15;
+      const y = py(printY);
+      c.fillStyle = printColor;
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      if (o.wordmarkVertical) {
+        c.save();
+        c.translate(half * 0.86, y);
+        c.rotate(-Math.PI / 2);
+        c.font = '800 34px "Be Vietnam Pro", system-ui, sans-serif';
+        c.fillText("HUST", 0, 0, 146);
+        c.restore();
+      } else {
+        c.font = 'italic 800 28px "Be Vietnam Pro", system-ui, sans-serif';
+        c.fillText("HUST", half * 0.78, y, 112);
+      }
+    }
+    return canvas;
+  }
   function buildBottom(ctx) {
     const { item, rig, imgs } = ctx;
     const o = item.options || {};
     const M = rig.model;
     const main = item.colors.main, accent = item.colors.accent || shade(main, 0.4);
-    const keyOpts = { skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff };
+    const keyOpts = { skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff, track: o.track };
     const geo = cached(`bottom|${M.name}|${JSON.stringify(keyOpts)}`, () => bottomGeometry(M, o));
-    const plain = composePlain(main, imgs, { denim: o.denim, sideStripe: o.sideStripe ? accent : null, patternScale: o.patternScale });
-    const mat = garmentMaterial(plain, { roughness: o.denim ? 0.95 : 0.88 });
-    mat.map.wrapT = THREE4.RepeatWrapping;
+    const plain = o.track ? trackPantsCanvas(main, accent, imgs, o, M, item.colors.print || accent) : composePlain(main, imgs, { denim: o.denim, sideStripe: o.sideStripe ? accent : null, patternScale: o.patternScale });
+    const mat = garmentMaterial(plain, { roughness: o.fleece ? 0.98 : o.denim ? 0.95 : 0.88 });
+    mat.map.wrapT = o.track ? THREE4.ClampToEdgeWrapping : THREE4.RepeatWrapping;
     const parts = [skinnedPart(geo, mat)];
     const b = M.b, kz = Math.min(b.sx, b.sz);
     if (!o.skirt && o.belt !== false) {
@@ -1689,7 +2147,7 @@
     return { parts };
   }
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/items/gear.js
+  // avatar/src/js/items/gear.js
   var THREE5 = __toESM(require_three());
   var import_RoundedBoxGeometry = __toESM(require_RoundedBoxGeometry());
   var DS = THREE5.DoubleSide;
@@ -2166,7 +2624,7 @@
   }
   function buildCard(ctx) {
     var _a;
-    const { item, rig, cardCanvas, emblem } = ctx;
+    const { item, rig, cardCanvas, emblem, emblemCanvas } = ctx;
     const type = ((_a = item.options) == null ? void 0 : _a.type) || "day-deo";
     const b = rig.build;
     const g = new THREE5.Group();
@@ -2178,25 +2636,52 @@
     const cardTex = toTexture(cardCanvas);
     const makeCard = (scale, holder) => {
       const c = new THREE5.Group();
-      const w = 0.12 * scale, h2 = 0.0757 * scale;
+      const portrait = cardCanvas.height > cardCanvas.width;
+      const w = (portrait ? 0.0757 : 0.12) * scale, h2 = (portrait ? 0.12 : 0.0757) * scale;
+      c.userData.holderHeight = h2 + (holder === "silicone" ? 0.026 : 0.012);
       if (holder === "silicone") {
-        const frame = rbox(w + 0.016, h2 + 0.022, 8e-3, 8e-3, lowpolyMat(holderColor, { roughness: 0.6 }), 3);
-        frame.position.y = -3e-3;
+        const roundedPath = (Path2, width, height, radius) => {
+          const p = new Path2(), x = -width / 2, y = -height / 2;
+          p.moveTo(x + radius, y);
+          p.lineTo(x + width - radius, y);
+          p.quadraticCurveTo(x + width, y, x + width, y + radius);
+          p.lineTo(x + width, y + height - radius);
+          p.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+          p.lineTo(x + radius, y + height);
+          p.quadraticCurveTo(x, y + height, x, y + height - radius);
+          p.lineTo(x, y + radius);
+          p.quadraticCurveTo(x, y, x + radius, y);
+          return p;
+        };
+        const outerW = w + 0.024, outerH = h2 + 0.026;
+        const plastic = lowpolyMat(holderColor, { roughness: 0.42 });
+        const outline = roundedPath(THREE5.Shape, outerW, outerH, 9e-3);
+        outline.holes.push(roundedPath(THREE5.Path, w - 2e-3, h2 - 2e-3, 3e-3));
+        const geometry = new THREE5.ExtrudeGeometry(outline, { depth: 5e-3, steps: 1, bevelEnabled: true, bevelThickness: 8e-4, bevelSize: 8e-4, bevelSegments: 2, curveSegments: 10 });
+        const frame = new THREE5.Mesh(geometry, plastic);
+        frame.position.z = -2e-3;
+        frame.name = "red-card-frame";
         c.add(frame);
-        const slot = new THREE5.Mesh(new THREE5.BoxGeometry(0.026, 5e-3, 2e-3), lowpolyMat(shade(holderColor, -0.3)));
-        slot.position.set(0, h2 / 2 + 2e-3, 42e-4);
+        const backing = rbox(outerW - 2e-3, outerH - 2e-3, 2e-3, 8e-3, plastic, 3);
+        backing.position.z = -4e-3;
+        c.add(backing);
+        const slotMat = lowpolyMat(shade(holderColor, -0.38));
+        const slot = rbox(0.026, 4e-3, 1e-3, 18e-4, slotMat, 3);
+        slot.position.set(0, outerH / 2 - 6e-3, 38e-4);
+        slot.name = "holder-attachment-slot";
         c.add(slot);
+        c.userData.attachmentLocal = slot.position.toArray();
       } else {
         c.add(rbox(w + 0.012, h2 + 0.012, 5e-3, 4e-3, new THREE5.MeshStandardMaterial({ color: "#eef3f8", transparent: true, opacity: 0.35, roughness: 0.1 })));
       }
       const face = decal(cardTex, w, h2, { transparent: false });
-      face.position.z = 45e-4;
+      face.position.z = holder === "silicone" ? 22e-4 : 45e-4;
       c.add(face);
       return c;
     };
     if (type === "day-deo") {
       const ribbonMat = new THREE5.MeshStandardMaterial({
-        map: toTexture(ribbonTexture(`${((emblem == null ? void 0 : emblem.name) || "").toUpperCase()}  ·  ${(emblem == null ? void 0 : emblem.wordmark) || ""}`, main, textColor)),
+        map: toTexture(ribbonTexture(((emblem == null ? void 0 : emblem.name) || "Đại học Bách khoa Hà Nội").toUpperCase(), main, textColor, { logo: emblemCanvas, wordmark: (emblem == null ? void 0 : emblem.wordmark) || "HUST" })),
         side: DS,
         roughness: 0.7
       });
@@ -2210,15 +2695,38 @@
           [s * 8e-3, 0.25, chestZ(0.25) + 8e-3]
         ], 0.02, ribbonMat));
       }
-      const ring = new THREE5.Mesh(new THREE5.TorusGeometry(8e-3, 25e-4, 4, 10), metal);
-      ring.position.set(0, 0.246, chestZ(0.25) + 0.01);
+      const hardwareZ = chestZ(0.25) + 0.013;
+      for (const side of [-1, 1]) {
+        const rivet = new THREE5.Mesh(new THREE5.CylinderGeometry(28e-4, 28e-4, 14e-4, 12), metal);
+        rivet.rotation.x = Math.PI / 2;
+        rivet.position.set(side * 8e-3, 0.257, hardwareZ);
+        g.add(rivet);
+      }
+      const ring = new THREE5.Mesh(new THREE5.TorusGeometry(8e-3, 13e-4, 6, 24), metal);
+      ring.position.set(0, 0.244, hardwareZ);
+      ring.name = "lanyard-split-ring";
       g.add(ring);
-      const hook = new THREE5.Mesh(new THREE5.CapsuleGeometry(45e-4, 0.018, 2, 6), metal);
-      hook.position.set(0, 0.229, chestZ(0.23) + 0.012);
+      const swivel = new THREE5.Mesh(new THREE5.CylinderGeometry(27e-4, 27e-4, 9e-3, 10), metal);
+      swivel.position.set(0, 0.231, hardwareZ);
+      g.add(swivel);
+      const hook = tube([
+        [0, 0.228, hardwareZ],
+        [-7e-3, 0.224, hardwareZ],
+        [-9e-3, 0.213, hardwareZ],
+        [-4e-3, 0.207, hardwareZ],
+        [5e-3, 0.208, hardwareZ],
+        [9e-3, 0.217, hardwareZ],
+        [6e-3, 0.223, hardwareZ]
+      ], 135e-5, metal);
+      hook.name = "lanyard-lobster-clasp";
       g.add(hook);
+      const gate = tube([[6e-3, 0.223, hardwareZ], [5e-3, 0.215, hardwareZ], [3e-3, 0.209, hardwareZ]], 9e-4, metal);
+      g.add(gate);
       const card = makeCard(1, "silicone");
-      card.position.set(0, 0.168, chestZ(0.17) + 0.016);
       card.rotation.x = -0.06;
+      const attachment = new THREE5.Vector3(...card.userData.attachmentLocal).applyEuler(card.rotation);
+      card.position.set(0, 0.211 - attachment.y, hardwareZ - attachment.z);
+      card.name = "student-card-holder";
       g.add(card);
     } else {
       const card = makeCard(0.85, "clear");
@@ -2227,7 +2735,7 @@
       card.rotation.set(-0.1, 0.32, 0);
       g.add(card);
       const clip = new THREE5.Mesh(new THREE5.BoxGeometry(0.02, 0.025, 6e-3), metal);
-      clip.position.set(x - 4e-3, 0.325, chestZ(0.32) + 8e-3);
+      clip.position.set(x - 4e-3, card.position.y + card.userData.holderHeight / 2 + 5e-3, chestZ(0.32) + 8e-3);
       clip.rotation.y = 0.32;
       g.add(clip);
     }
@@ -2477,7 +2985,7 @@
     return { parts: [{ joint: "head", obj: g }] };
   }
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/items/index.js
+  // avatar/src/js/items/index.js
   var BUILDERS = {
     hair: buildHair,
     top: buildTop,
@@ -2492,9 +3000,15 @@
     audio: buildAudio
   };
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/studio.js
+  // avatar/src/js/studio.js
   var SLOT_ORDER = ["hair", "top", "bottom", "footwear", "hat", "bag", "card", "eyewear", "mask", "audio", "handheld"];
   var clone = (o) => JSON.parse(JSON.stringify(o));
+  function normalizeOverrides(overrides, catalog) {
+    var _a;
+    const clean = clone(overrides || {});
+    for (const item of catalog.items) if (item.fixedColors && ((_a = clean[item.id]) == null ? void 0 : _a.colors)) delete clean[item.id].colors;
+    return clean;
+  }
   function merge(base, over) {
     if (!over) return clone(base);
     const out = clone(base);
@@ -2546,7 +3060,7 @@
       this.items = new Map(this.catalog.items.map((it) => [it.id, it]));
       this.state = merge(clone(this.catalog.defaults), opts.state || {});
       this.state.equipped = { ...this.catalog.defaults.equipped, ...((_a = opts.state) == null ? void 0 : _a.equipped) || {} };
-      this.state.overrides = ((_b = opts.state) == null ? void 0 : _b.overrides) || {};
+      this.state.overrides = normalizeOverrides((_b = opts.state) == null ? void 0 : _b.overrides, this.catalog);
       this.idle = (_c = opts.idle) != null ? _c : !matchMedia("(prefers-reduced-motion: reduce)").matches;
       this.slots = {};
       this._tokens = {};
@@ -2683,7 +3197,9 @@
     resolveItem(id) {
       const base = this.items.get(id);
       if (!base) return null;
-      return merge(base, this.state.overrides[id]);
+      const item = merge(base, this.state.overrides[id]);
+      if (base.fixedColors) item.colors = { ...base.colors };
+      return item;
     }
     itemsForSlot(slot) {
       return this.catalog.items.filter((i) => i.slot === slot);
@@ -2698,12 +3214,14 @@
     async setState(state) {
       this.state = merge(clone(this.catalog.defaults), state);
       this.state.equipped = { ...this.catalog.defaults.equipped, ...state.equipped || {} };
-      this.state.overrides = state.overrides || {};
+      this.state.overrides = normalizeOverrides(state.overrides, this.catalog);
       await this._rebuildAll();
       this._emit();
     }
     // -------------------------------------------------- Huy hiệu & thẻ
-    _drawEmblem() {
+    async _drawEmblem() {
+      var _a;
+      await loadImage((_a = this.state.emblem) == null ? void 0 : _a.logo);
       this.emblemCanvas = drawEmblem(this.state.emblem);
     }
     async _drawCard() {
@@ -2721,7 +3239,7 @@
         } catch (_) {
         }
       }
-      this._drawEmblem();
+      await this._drawEmblem();
       await this._drawCard();
       if (this.rig) {
         this.scene.remove(this.rig.root);
@@ -2786,6 +3304,8 @@
       return (_a = this.state.overrides)[id] || (_a[id] = {});
     }
     async setItemColor(id, key, color) {
+      var _a;
+      if ((_a = this.items.get(id)) == null ? void 0 : _a.fixedColors) return;
       const ov = this._override(id);
       ov.colors = { ...ov.colors || {}, [key]: color };
       await this._refreshItem(id);
@@ -2823,7 +3343,7 @@
     }
     async setEmblem(patch) {
       this.state.emblem = { ...this.state.emblem, ...patch };
-      this._drawEmblem();
+      await this._drawEmblem();
       await this._drawCard();
       await Promise.all(SLOT_ORDER.map((s) => this._buildSlot(s)));
       this._applyRules();
@@ -2880,7 +3400,7 @@
     }
   };
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/thumbs.js
+  // avatar/src/js/thumbs.js
   var THREE7 = __toESM(require_three());
   var VIEW = {
     hair: [0.5, 0.25, 1],
@@ -2975,10 +3495,9 @@
     }
   };
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/data/catalog.js
+  // avatar/src/data/catalog.js
   var RED = "#b3141d";
   var WINE = "#7a1c26";
-  var CREAM = "#f6e7c8";
   var NAVY = "#1f2a44";
   var SLOTS = [
     { id: "hair", label: "Tóc", allowNone: true },
@@ -2994,7 +3513,6 @@
     { id: "handheld", label: "Đồ cầm tay", allowNone: true }
   ];
   var HAIR_COLORS = ["#1c1714", "#3b2a20", "#5a3a26", "#8a5a36", "#b98a52", "#6d6d72", "#7b2f3a", "#2f3f6b"];
-  var SCHOOL_TOPS = [RED, WINE, "#f4f2ee", NAVY, "#a9abb0"];
   var ITEMS = [
     // ---------------------------------------------------------------- TÓC
     { id: "toc-ngan", slot: "hair", name: "Tóc ngắn", colors: { main: "#1c1714" }, palette: HAIR_COLORS, options: { style: "ngan" } },
@@ -3006,37 +3524,138 @@
     { id: "toc-bui", slot: "hair", name: "Búi cao", colors: { main: "#3b2a20" }, palette: HAIR_COLORS, options: { style: "bui" } },
     // ---------------------------------------------------------------- ÁO — phong cách áo trường (data của bạn)
     {
-      id: "ao-polo-truong",
-      slot: "top",
-      group: "truong",
-      name: "Polo lớp viền trắng",
-      colors: { main: RED, accent: RED, trim: "#ffffff", print: "#ffffff" },
-      palette: SCHOOL_TOPS,
-      textures: { front: null, back: null, pattern: null },
-      accepts: ["front", "back", "pattern"],
-      options: { sleeve: "short", collar: "polo", placket: [0, 0.26], piping: true, wordmark: "chest-left", sleeveEmblem: true }
+      "id": "ao-polo-truong",
+      "slot": "top",
+      "group": "truong",
+      "name": "Polo cotton HUST đỏ đô",
+      "colors": {
+        "main": "#a51f28",
+        "accent": "#a51f28",
+        "trim": "#ffffff",
+        "ribAccent": "#101c35",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "short",
+        "collar": "polo",
+        "placket": [
+          0,
+          0.2
+        ],
+        "poloTrim": true,
+        "wordmark": "chest-left",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo polo cộc tay (Sản phẩm Best Seller học đường)",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-polo-coc-tay-san-pham-best-seller-hoc-duong"
+      }
     },
     {
-      id: "ao-thun-truong",
-      slot: "top",
-      group: "truong",
-      name: "Áo thun thể thao lớp",
-      colors: { main: RED, trim: "#ffffff", print: "#ffffff" },
-      palette: SCHOOL_TOPS,
-      textures: { front: null, back: null },
-      accepts: ["front", "back"],
-      options: { sleeve: "short", collar: "crew", sidePiping: true, wordmark: "chest-left", sleeveEmblem: true }
+      "id": "ao-thun-truong",
+      "slot": "top",
+      "group": "truong",
+      "name": "Áo thể thao cổ tròn HUST",
+      "colors": {
+        "main": "#a51f28",
+        "trim": "#ffffff",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "short",
+        "collar": "crew",
+        "wordmark": "chest-left",
+        "sleeveEmblem": true,
+        "shoulderPiping": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo thể thao cổ tròn",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-the-thao-co-tron"
+      }
     },
     {
-      id: "ao-khoac-gio",
-      slot: "top",
-      group: "truong",
-      name: "Áo khoác gió có mũ",
-      colors: { main: RED, trim: "#ffffff", print: "#ffffff", zipper: WINE },
-      palette: SCHOOL_TOPS,
-      textures: { front: null, back: null },
-      accepts: ["front", "back"],
-      options: { sleeve: "long", collar: "hood", zipper: true, piping: true, weltPockets: true, hemBand: true, cuffs: true, wordmark: "chest-left", sleeveEmblem: true }
+      "id": "ao-khoac-gio",
+      "slot": "top",
+      "group": "truong",
+      "name": "Áo khoác gió HUST có mũ",
+      "colors": {
+        "main": "#a51f28",
+        "trim": "#ffffff",
+        "print": "#ffffff",
+        "zipper": "#333236"
+      },
+      "palette": [
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "hood",
+        "zipper": true,
+        "piping": true,
+        "weltPockets": true,
+        "hemBand": true,
+        "cuffs": true,
+        "wordmark": "chest-left",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo khoác gió",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-khoac-gio"
+      }
     },
     {
       id: "ao-khoac-the-thao",
@@ -3063,35 +3682,687 @@
       options: { sleeve: "long", collar: "shirt", placket: [0, 1], pocket: true, tucked: true, cuffs: true }
     },
     {
-      id: "ao-ni-truong",
-      slot: "top",
-      group: "truong",
-      name: "Áo nỉ không mũ",
-      colors: { main: NAVY, print: "#ffffff" },
-      palette: [NAVY, "#f3f1ec", RED, "#a9abb0"],
-      textures: { front: null, back: null },
-      accepts: ["front", "back"],
-      options: { sleeve: "long", collar: "crew", cuffs: true, hemBand: true, wordmark: "chest-big", sleeveEmblem: true }
+      "id": "ao-ni-truong",
+      "slot": "top",
+      "group": "truong",
+      "name": "Sweater HUST xanh tím than",
+      "colors": {
+        "main": "#101c35",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#101c35",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "crew",
+        "cuffs": true,
+        "hemBand": true,
+        "wordmark": "chest-big",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo Sweater màu xanh tím than",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-sweater-mau-xanh-tim-than"
+      }
     },
     {
-      id: "ao-hoodie-truong",
-      slot: "top",
-      group: "truong",
-      name: "Hoodie lớp",
-      colors: { main: RED, print: "#ffffff" },
-      palette: [RED, "#a9abb0", NAVY, "#f3f1ec"],
-      textures: { front: null, back: null },
-      accepts: ["front", "back"],
-      options: { sleeve: "long", collar: "hood", kangaroo: true, cuffs: true, hemBand: true, wordmark: "chest-big", sleeveEmblem: true }
+      "id": "ao-hoodie-truong",
+      "slot": "top",
+      "group": "truong",
+      "name": "Hoodie HUST đỏ đô",
+      "colors": {
+        "main": "#a51f28",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "hood",
+        "kangaroo": true,
+        "cuffs": true,
+        "hemBand": true,
+        "wordmark": "chest-big",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo Hoodie màu đỏ đô (Trang phục best seller học đường)",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-hoodie-mau-do-do-trang-phuc-best-seller-hoc-duong"
+      }
+    },
+    // ---------------------------------------------------------------- CÁC MẪU HUST TỪ MAY PHƯƠNG THẢO
+    {
+      "id": "ao-so-mi-nam-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Sơ mi HUST nam màu ghi",
+      "colors": {
+        "main": "#c5c8cd",
+        "accent": "#b3b7bc"
+      },
+      "palette": [
+        "#c5c8cd",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "shirt",
+        "placket": [
+          0,
+          1
+        ],
+        "cuffs": true,
+        "pocket": false,
+        "tucked": false
+      },
+      "emblem": "chest-left",
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo sơ mi Nam",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-so-mi-nam"
+      }
+    },
+    {
+      "id": "ao-so-mi-nu-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Sơ mi HUST nữ màu ghi",
+      "colors": {
+        "main": "#c5c8cd",
+        "accent": "#b3b7bc"
+      },
+      "palette": [
+        "#c5c8cd",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "shirt",
+        "placket": [
+          0,
+          1
+        ],
+        "cuffs": true,
+        "pocket": false,
+        "tucked": false,
+        "waistFit": true
+      },
+      "emblem": "chest-left",
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo sơ mi nữ",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-so-mi-nu"
+      }
+    },
+    {
+      "id": "ao-thun-trang-nguc-trai-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Áo thun HUST trắng · ngực trái",
+      "colors": {
+        "main": "#f8f8f6",
+        "print": "#a51f28"
+      },
+      "palette": [
+        "#f8f8f6",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "short",
+        "collar": "crew",
+        "wordmark": "chest-left",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo thun cổ tròn màu trắng (thêu ngực trái)",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-thun-co-tron-mau-trang-theu-nguc-trai"
+      }
+    },
+    {
+      "id": "ao-thun-trang-giua-nguc-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Áo thun HUST trắng · giữa ngực",
+      "colors": {
+        "main": "#f8f8f6",
+        "print": "#a51f28"
+      },
+      "palette": [
+        "#f8f8f6",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "short",
+        "collar": "crew",
+        "wordmark": "chest-big",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo thun cổ tròn màu trắng (thêu giữa ngực)",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-thun-co-tron-mau-trang-theu-giua-nguc"
+      }
+    },
+    {
+      "id": "ao-thun-do-giua-nguc-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Áo thun HUST đỏ đô · giữa ngực",
+      "colors": {
+        "main": "#a51f28",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "short",
+        "collar": "crew",
+        "wordmark": "chest-big",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo thun cổ tròn màu đỏ đô (thêu giữa ngực)",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-thun-co-tron-mau-do-do-theu-giua-nguc"
+      }
+    },
+    {
+      "id": "ao-thun-ghi-nguc-trai-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Áo thun HUST ghi · ngực trái",
+      "colors": {
+        "main": "#aeb0b2",
+        "print": "#a51f28"
+      },
+      "palette": [
+        "#aeb0b2",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "short",
+        "collar": "crew",
+        "wordmark": "chest-left",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo thun cổ tròn màu ghi (thêu ngực trái)",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-thun-co-tron-mau-ghi-theu-nguc-trai"
+      }
+    },
+    {
+      "id": "ao-polo-the-thao-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Áo thể thao có cổ HUST",
+      "colors": {
+        "main": "#a51f28",
+        "accent": "#a51f28",
+        "trim": "#ffffff",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "short",
+        "collar": "polo",
+        "placket": [
+          0,
+          0.2
+        ],
+        "shoulderPiping": true,
+        "wordmark": "chest-left",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo thể thao có cổ",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-the-thao-co-co"
+      }
+    },
+    {
+      "id": "ao-bomber-xanh-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Bomber HUST xanh than · tay trắng",
+      "colors": {
+        "main": "#101c35",
+        "accent": "#f5f4ef",
+        "trim": "#ffffff",
+        "print": "#ffffff",
+        "ribAccent": "#ffffff"
+      },
+      "palette": [
+        "#101c35",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "stand",
+        "bomber": true,
+        "accentSleeves": true,
+        "cuffs": true,
+        "hemBand": true,
+        "wordmark": "chest-left",
+        "sleeveEmblem": true,
+        "weltPockets": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo khoác Bomber màu xanh than",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-khoac-bomber-mau-xanh-than"
+      }
+    },
+    {
+      "id": "ao-bomber-do-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Bomber HUST đỏ đô · tay ghi",
+      "colors": {
+        "main": "#a51f28",
+        "accent": "#bdc0c2",
+        "trim": "#e7e7e4",
+        "print": "#ffffff",
+        "ribAccent": "#e7e7e4"
+      },
+      "palette": [
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "stand",
+        "bomber": true,
+        "accentSleeves": true,
+        "cuffs": true,
+        "hemBand": true,
+        "wordmark": "chest-left",
+        "sleeveEmblem": true,
+        "weltPockets": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo khoác Bomber màu đỏ đô",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-khoac-bomber-mau-do-do"
+      }
+    },
+    {
+      "id": "ao-ni-trang-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Sweater HUST trắng",
+      "colors": {
+        "main": "#f7f7f3",
+        "print": "#a51f28"
+      },
+      "palette": [
+        "#f7f7f3",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "crew",
+        "cuffs": true,
+        "hemBand": true,
+        "wordmark": "chest-big",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo Sweater màu trắng",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-sweater-mau-trang"
+      }
+    },
+    {
+      "id": "ao-hoodie-ghi-hust",
+      "slot": "top",
+      "group": "truong",
+      "name": "Hoodie HUST màu ghi",
+      "colors": {
+        "main": "#bdbfbe",
+        "print": "#a51f28"
+      },
+      "palette": [
+        "#bdbfbe",
+        "#a51f28",
+        "#7a1c26",
+        "#ffffff",
+        "#101c35",
+        "#a9abb0"
+      ],
+      "textures": {
+        "front": null,
+        "back": null,
+        "pattern": null
+      },
+      "accepts": [
+        "front",
+        "back",
+        "pattern"
+      ],
+      "options": {
+        "sleeve": "long",
+        "collar": "hood",
+        "kangaroo": true,
+        "cuffs": true,
+        "hemBand": true,
+        "wordmark": "chest-big",
+        "sleeveEmblem": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Áo Hoodie màu ghi",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/ao-hoodie-mau-ghi"
+      }
     },
     // ---------------------------------------------------------------- ÁO — thông dụng
-    { id: "ao-raglan-co-tim", slot: "top", name: "Áo raglan cổ tim", colors: { main: "#e7e9ee", accent: "#2f7be0", trim: "#ffffff" }, palette: ["#e7e9ee", "#ffffff", "#f2efe6"], accepts: ["front"], textures: {}, options: { sleeve: "short", collar: "crew", collarAccent: true, accentSleeves: true, vneck: true } },
+    { id: "ao-raglan-co-tim", slot: "top", group: "truong", name: "Áo GDTC HUST trắng · xanh", colors: { main: "#ffffff", accent: "#1689ca", trim: "#ffffff" }, palette: ["#ffffff", "#e7e9ee", "#f2efe6"], accepts: ["front"], textures: {}, emblem: "chest-left", options: { sleeve: "short", collar: "polo", collarAccent: true, accentSleeves: true, vneck: true, sportsCollar: true } },
     { id: "ao-thun", slot: "top", name: "Áo thun trơn", colors: { main: "#f2efe8" }, palette: ["#f2efe8", "#1f1f22", "#e65a4f", "#3d7bd9", "#f2c94c", "#7bc4a4"], textures: {}, accepts: ["front", "back"], options: { sleeve: "short", collar: "crew" } },
     { id: "ao-ke-ngang", slot: "top", name: "Áo thun kẻ ngang", colors: { main: "#f4f1ea", accent: "#24324f" }, palette: ["#f4f1ea", "#fff7e0"], options: { sleeve: "long", collar: "crew", breton: "#24324f" } },
     { id: "ao-so-mi-caro", slot: "top", name: "Sơ mi caro", colors: { main: "#b8423a" }, palette: ["#b8423a", "#3a5f8a", "#4d6b3c", "#6b6f78"], options: { sleeve: "long", collar: "shirt", placket: [0, 1], pocket: true, cuffs: true, plaid: ["#22324d", "#f1e4c9"] } },
     { id: "ao-the-thao", slot: "top", name: "Áo thể thao sọc", colors: { main: "#2e6fd6", accent: "#ffffff" }, palette: ["#2e6fd6", "#d63a3a", "#1aa36f", "#ff8a1f", "#222"], accepts: ["front", "back"], textures: {}, options: { sleeve: "short", collar: "crew", collarAccent: true, stripes: [[0.62, 0.66], [0.69, 0.71]] } },
     { id: "ao-hoodie", slot: "top", name: "Hoodie trơn", colors: { main: "#8a95a8" }, palette: ["#8a95a8", "#2a2d34", "#e8e2d6", "#b45f4a", "#4f6b52"], accepts: ["front", "back"], textures: {}, options: { sleeve: "long", collar: "hood", kangaroo: true, cuffs: true, hemBand: true } },
     { id: "ao-ba-lo", slot: "top", name: "Áo ba lỗ", colors: { main: "#f2efe8" }, palette: ["#f2efe8", "#1f1f22", "#5c7da8"], options: { sleeve: "none", collar: "crew" } },
+    // ---------------------------------------------------------------- QUẦN THỂ THAO HUST
+    {
+      "id": "quan-the-thao-hust",
+      "slot": "bottom",
+      "group": "truong",
+      "name": "Quần thể thao HUST · ống suông",
+      "colors": {
+        "main": "#101c35",
+        "accent": "#ffffff",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#101c35",
+        "#1f2a44",
+        "#23252d"
+      ],
+      "textures": {},
+      "accepts": [
+        "pattern"
+      ],
+      "options": {
+        "fit": "regular",
+        "track": true,
+        "sideStripe": true,
+        "wordmark": true,
+        "belt": false,
+        "elasticWaist": true,
+        "zipPockets": true,
+        "sideTag": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Quần thể thao",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/quan-the-thao"
+      }
+    },
+    {
+      "id": "quan-the-thao-ni-hust",
+      "slot": "bottom",
+      "group": "truong",
+      "name": "Quần thể thao HUST · nỉ ấm",
+      "colors": {
+        "main": "#101c35",
+        "accent": "#ffffff",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#101c35",
+        "#1f2a44",
+        "#23252d"
+      ],
+      "textures": {},
+      "accepts": [
+        "pattern"
+      ],
+      "options": {
+        "fit": "slim",
+        "track": true,
+        "sideStripe": true,
+        "wordmark": true,
+        "belt": false,
+        "elasticWaist": true,
+        "zipPockets": true,
+        "sideTag": true,
+        "fleece": true
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Quần thể thao cao cấp (Vải nỉ ấm áp)",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/quan-the-thao-cao-cap-vai-ni-am-ap"
+      }
+    },
+    {
+      "id": "quan-short-hust",
+      "slot": "bottom",
+      "group": "truong",
+      "name": "Quần sooc thể thao HUST",
+      "colors": {
+        "main": "#101c35",
+        "accent": "#ffffff",
+        "print": "#ffffff"
+      },
+      "palette": [
+        "#101c35",
+        "#1f2a44",
+        "#23252d"
+      ],
+      "textures": {},
+      "accepts": [
+        "pattern"
+      ],
+      "options": {
+        "fit": "wide",
+        "track": true,
+        "sideStripe": true,
+        "wordmark": true,
+        "belt": false,
+        "elasticWaist": true,
+        "zipPockets": true,
+        "sideTag": true,
+        "length": "shorts",
+        "wordmarkVertical": true,
+        "trackStripeWidth": 0.1
+      },
+      "collection": "hust-phuong-thao",
+      "source": {
+        "name": "May Phương Thảo",
+        "title": "Quần sooc thể thao cao cấp",
+        "url": "https://shop.mayphuongthao.com/dai-hoc-bach-khoa-ha-noi/products/quan-sooc-the-thao-cao-cap"
+      }
+    },
     // ---------------------------------------------------------------- QUẦN · VÁY
     { id: "quan-au", slot: "bottom", group: "truong", name: "Quần âu", colors: { main: "#23252d" }, palette: ["#23252d", "#1f2c4a", "#8f9196", "#4a3a2c"], options: { fit: "regular" } },
     { id: "vay-xep-ly", slot: "bottom", group: "truong", name: "Chân váy xếp ly", colors: { main: "#b5b6ba" }, palette: ["#b5b6ba", "#23252d", "#1f2c4a", WINE], accepts: ["pattern"], textures: {}, options: { skirt: true, skirtLen: 0.36 } },
@@ -3135,7 +4406,7 @@
     { id: "dep-le", slot: "footwear", name: "Dép lê", colors: { main: "#e6e2da", accent: "#4a4f5a" }, palette: ["#e6e2da", "#202125", "#6d8fc7", "#e66a5b"], textures: { upper: null }, accepts: ["upper"], options: { type: "le" } },
     { id: "dep-tong", slot: "footwear", name: "Dép tông", colors: { main: "#2f6fd6", accent: "#f2efe6" }, palette: ["#2f6fd6", "#e14b4b", "#1f1f22", "#f2c94c"], options: { type: "tong" } },
     // ---------------------------------------------------------------- THẺ SINH VIÊN
-    { id: "the-sv-day-deo", slot: "card", group: "truong", name: "Dây đeo + vỏ silicone", colors: { main: RED, accent: RED, text: "#ffffff" }, palette: [RED, WINE, NAVY, "#1aa36f", "#202125"], options: { type: "day-deo" } },
+    { id: "the-sv-day-deo", slot: "card", group: "truong", name: "Dây đeo HUST + vỏ thẻ đỏ", fixedColors: true, colors: { main: "#df1930", accent: "#e31b34", text: "#ffffff" }, palette: ["#df1930"], options: { type: "day-deo" } },
     { id: "the-sv-kep-ao", slot: "card", group: "truong", name: "Thẻ kẹp ngực", colors: { main: RED }, options: { type: "kep-ao" } },
     // ---------------------------------------------------------------- MŨ
     { id: "mu-luoi-trai", slot: "hat", group: "truong", name: "Mũ lưỡi trai lớp", colors: { main: RED, accent: WINE }, palette: [RED, "#f2efe8", "#202125", NAVY], emblem: "front", textures: { front: null }, accepts: ["front"], options: { type: "luoi-trai" } },
@@ -3175,6 +4446,16 @@
     { id: "may-tinh", slot: "handheld", name: "Máy tính cầm tay", colors: { main: "#2b2f36", accent: "#e86a33" }, palette: ["#2b2f36", "#3a5b8c", "#e8e2d6"], options: { type: "may-tinh" } },
     { id: "ong-ban-ve", slot: "handheld", name: "Ống đựng bản vẽ", colors: { main: "#3a3f4a", accent: "#e8b93a" }, palette: ["#3a3f4a", "#1f3b6e", "#c0463f"], options: { type: "ong-ban-ve" } }
   ];
+  for (const item of ITEMS) {
+    if (item.slot !== "top") continue;
+    const rectangular = item.id === "ao-raglan-co-tim";
+    item.textures = {
+      ...item.textures,
+      badge: rectangular ? "avatar/assets/textures/hust-logo.png" : "avatar/assets/textures/hust-logo-round.png"
+    };
+    item.badgeCrop = rectangular ? [261, 40, 246, 370] : [16, 12, 224, 224];
+    item.badgeClip = rectangular ? null : "circle";
+  }
   var DEFAULTS = {
     body: { skin: "#e2b08c", build: "vua", height: 0.97 },
     equipped: {
@@ -3190,21 +4471,24 @@
       audio: null,
       handheld: null
     },
-    // Thương hiệu TỰ TẠO — thay cho logo, chữ "HUST" và con dấu thật của trường
+    // Nhận diện HUST — dùng logo Bách khoa do người dùng cung cấp
     emblem: {
-      name: "Trường Đại học Kỹ thuật Tổ Ong",
-      short: "KTO",
-      wordmark: "TỔ ONG",
-      year: "2026",
-      shape: "khien",
+      name: "Đại học Bách khoa Hà Nội",
+      short: "HUST",
+      wordmark: "HUST",
+      year: "1956",
+      shape: "tron",
       motif: "banh-rang",
       main: RED,
-      accent: CREAM
+      accent: "#ffffff",
+      logo: "avatar/assets/textures/hust-logo.png",
+      logoCrop: [261, 40, 246, 370]
     },
     // Thẻ SV mẫu — toàn bộ là dữ liệu giả
     card: {
-      school: "Trường Đại học Kỹ thuật Tổ Ong",
+      school: "Đại học Bách khoa Hà Nội",
       title: "THẺ SINH VIÊN",
+      orientation: "landscape",
       name: "Nguyễn Minh An",
       id: "26A0001",
       major: "Kỹ thuật phần mềm",
@@ -3212,7 +4496,7 @@
       photo: null,
       // dataURL hoặc đường dẫn ảnh
       template: null,
-      // 'assets/textures/the-sv-nen.png' — ảnh nền thẻ của bạn (1024×646)
+      // 'avatar/assets/textures/the-sv-nen.png' — ảnh nền thẻ của bạn (1024×646)
       drawHeader: true
     }
   };
@@ -3220,7 +4504,7 @@
   var CATALOG = { slots: SLOTS, items: ITEMS, defaults: DEFAULTS, skinTones: SKIN_TONES };
   var catalog_default = CATALOG;
 
-  // ../../../../../../home/claude/phong-on-thi-ao/avatar/src/js/main.js
+  // avatar/src/js/main.js
   var STORE_KEY = "avatar-studio:v1";
   var $ = (s, el = document) => el.querySelector(s);
   function h(tag, attrs = {}, ...kids) {
@@ -3236,8 +4520,21 @@
     return el;
   }
   function loadSaved() {
+    var _a;
     try {
-      return JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+      const state = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+      if (!state) return null;
+      const e = state.emblem;
+      if (e) {
+        const legacy = e.name === "Trường Đại học Kỹ thuật Tổ Ong" || e.wordmark === "TỔ ONG" || e.short === "KTO";
+        if (e.name === "Trường Đại học Kỹ thuật Tổ Ong") e.name = catalog_default.defaults.emblem.name;
+        if (e.short === "KTO") e.short = catalog_default.defaults.emblem.short;
+        if (e.wordmark === "TỔ ONG") e.wordmark = catalog_default.defaults.emblem.wordmark;
+        if (legacy && e.year === "2026") e.year = catalog_default.defaults.emblem.year;
+        if (legacy && e.accent === "#f6e7c8") e.accent = catalog_default.defaults.emblem.accent;
+      }
+      if (((_a = state.card) == null ? void 0 : _a.school) === "Trường Đại học Kỹ thuật Tổ Ong") state.card.school = catalog_default.defaults.card.school;
+      return state;
     } catch (_) {
       return null;
     }
@@ -3319,6 +4616,7 @@
     { id: "emblem", label: "Huy hiệu" }
   ];
   var current = "top";
+  var collectionFilter = { top: "all", bottom: "all" };
   function renderTabs() {
     const nav = $("#tabs");
     nav.replaceChildren(...TABS.map((t) => h("button", {
@@ -3340,9 +4638,9 @@
     active == null ? void 0 : active.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   function thumbCtx() {
-    var _a;
+    var _a, _b;
     const s = studio.state;
-    return { body: s.body, emblemCanvas: studio.emblemCanvas, cardCanvas: studio.cardCanvas, emblem: s.emblem, emblemKey: JSON.stringify(s.emblem) + (((_a = s.card) == null ? void 0 : _a.name) || "") };
+    return { body: s.body, emblemCanvas: studio.emblemCanvas, cardCanvas: studio.cardCanvas, emblem: s.emblem, emblemKey: JSON.stringify(s.emblem) + (((_a = s.card) == null ? void 0 : _a.name) || "") + "|" + (((_b = s.card) == null ? void 0 : _b.orientation) || "landscape") };
   }
   function renderPanel() {
     const body = $("#tabpanel");
@@ -3397,7 +4695,7 @@
       { class: "item", "aria-pressed": String(equipped), onclick: onPick },
       fig,
       h("span", { class: "item-name" }, item.name),
-      item.group === "truong" ? h("span", { class: "tag" }, "Data trường") : null
+      item.group === "truong" ? h("span", { class: "tag" }, item.collection === "hust-phuong-thao" ? "Phương Thảo" : "HUST") : null
     );
   }
   async function busy(fn) {
@@ -3412,7 +4710,10 @@
   }
   function slotPanel(slot) {
     const equippedId = studio.state.equipped[slot.id];
-    const items = studio.itemsForSlot(slot.id);
+    const allItems = studio.itemsForSlot(slot.id);
+    const hasCollection = allItems.some((it) => it.collection === "hust-phuong-thao");
+    const filter = collectionFilter[slot.id] || "all";
+    const items = filter === "shop" ? allItems.filter((it) => it.collection === "hust-phuong-thao") : allItems;
     const grid = h("div", { class: "grid" });
     if (slot.allowNone) {
       grid.append(h(
@@ -3431,16 +4732,44 @@
         renderPanel();
       }));
     }
-    const parts = [section(slot.label, grid)];
+    const parts = [];
+    if (hasCollection) {
+      parts.push(section(
+        "Bộ sưu tập HUST",
+        segmented([["all", "Tất cả"], ["shop", "Đồng phục Phương Thảo"]], filter, (value) => {
+          collectionFilter[slot.id] = value;
+          renderPanel();
+        }, "Lọc bộ sưu tập"),
+        h("p", { class: "hint" }, `${allItems.filter((it) => it.collection === "hust-phuong-thao").length} mẫu trong bộ sưu tập · chọn từng món để phối đồ.`),
+        h(
+          "div",
+          { class: "btn-row" },
+          h("button", { class: "btn ghost small", onclick: () => equipUniform("ao-thun-truong") }, "Bộ GDTC · áo cộc"),
+          h("button", { class: "btn ghost small", onclick: () => equipUniform("ao-khoac-gio") }, "Bộ GDTC · áo khoác")
+        )
+      ));
+    }
+    parts.push(section(slot.label, grid));
     const item = equippedId ? studio.resolveItem(equippedId) : null;
     if (item) parts.push(customizer(item));
     if (slot.id === "card") parts.push(cardEditor());
     return h("div", { class: "stack" }, parts);
   }
+  async function equipUniform(top) {
+    await busy(async () => {
+      await studio.equip("bottom", "quan-the-thao-hust");
+      await studio.equip("top", top);
+    });
+    studio.focus("full");
+    renderPanel();
+  }
   function customizer(item) {
+    var _a;
     const rows = [];
     const base = catalog_default.items.find((i) => i.id === item.id);
-    rows.push(h(
+    if ((_a = base.source) == null ? void 0 : _a.url) rows.push(h("a", { href: base.source.url, target: "_blank", rel: "noopener noreferrer", class: "hint" }, "Xem mẫu tham khảo · May Phương Thảo ↗"));
+    if (base.fixedColors) rows.push(h("p", { class: "note" }, "Dây đeo và vỏ thẻ giữ màu đỏ theo mẫu HUST."));
+    if (!base.fixedColors) rows.push(h(
       "div",
       { class: "field" },
       h("span", { class: "label" }, item.colors.accent ? "Màu chính" : "Màu"),
@@ -3449,7 +4778,7 @@
         refreshThumbs();
       }, `Màu ${item.name}`)
     ));
-    if (item.colors.accent) {
+    if (item.colors.accent && !base.fixedColors) {
       const accents = [base.colors.accent, "#ffffff", "#202125", item.colors.main === "#ffffff" ? "#4b2e9a" : "#f0b53a"];
       rows.push(h(
         "div",
@@ -3558,7 +4887,7 @@
       "div",
       { class: "stack" },
       section(
-        "Huy hiệu tự tạo",
+        "Huy hiệu HUST",
         h(
           "div",
           { class: "emblem-wrap" },
@@ -3566,17 +4895,21 @@
           h(
             "div",
             { class: "stack tight" },
-            text("em-name", "Tên trường (hư cấu hoặc đã được phép)", "name"),
-            text("em-short", "Chữ viết tắt trên huy hiệu (tối đa 4)", "short", { maxlength: "4" }),
+            text("em-name", "Tên trường", "name"),
+            e.logo ? null : text("em-short", "Chữ viết tắt trên huy hiệu (tối đa 4)", "short", { maxlength: "4" }),
             text("em-word", "Chữ in trên áo và dây đeo", "wordmark", { maxlength: "14" }),
-            text("em-year", "Năm thành lập", "year", { inputmode: "numeric", maxlength: "4" })
+            e.logo ? null : text("em-year", "Năm thành lập", "year", { inputmode: "numeric", maxlength: "4" })
           )
         ),
-        h("div", { class: "field" }, h("span", { class: "label" }, "Hình dạng"), segmented(SHAPES, e.shape, async (v) => {
+        h("button", { class: "btn ghost small", onclick: async () => {
+          await update({ logo: e.logo ? null : catalog_default.defaults.emblem.logo, logoCrop: catalog_default.defaults.emblem.logoCrop });
+          renderPanel();
+        } }, e.logo ? "Tự thiết kế huy hiệu" : "Dùng logo Bách khoa đã gửi"),
+        e.logo ? null : h("div", { class: "field" }, h("span", { class: "label" }, "Hình dạng"), segmented(SHAPES, e.shape, async (v) => {
           await update({ shape: v });
           renderPanel();
         }, "Hình dạng")),
-        h("div", { class: "field" }, h("span", { class: "label" }, "Biểu tượng"), segmented(MOTIFS, e.motif, async (v) => {
+        e.logo ? null : h("div", { class: "field" }, h("span", { class: "label" }, "Biểu tượng"), segmented(MOTIFS, e.motif, async (v) => {
           await update({ motif: v });
           renderPanel();
         }, "Biểu tượng")),
@@ -3590,9 +4923,8 @@
         }, "Màu viền huy hiệu"))
       ),
       section(
-        "Vì sao không dùng logo thật",
-        h("p", { class: "note" }, "Logo chữ, con dấu, tên và mẫu thẻ của trường là tài sản được bảo hộ. Ở đây chỉ giữ những thứ chung ai cũng dùng được — màu đỏ, viền trắng, dáng áo khoác gió, dây đeo thẻ — còn chữ in, huy hiệu và hoa văn dây đeo đều được vẽ mới."),
-        h("p", { class: "note" }, 'Nếu web của bạn là dự án chính thức của trường, cách chắc chắn nhất là xin phép dùng logo bằng văn bản rồi đặt ảnh logo vào ô "Hình in" của từng món.')
+        "Nhận diện HUST",
+        h("p", { class: "note" }, "Các áo dùng huy hiệu tròn đỏ–trắng. Riêng áo GDTC trắng–xanh giữ logo chữ nhật đỏ–vàng. Huy hiệu ở phần này dùng cho phụ kiện và thẻ sinh viên mẫu; chữ HUST và màu trang phục có thể chỉnh riêng.")
       )
     );
   }
@@ -3634,6 +4966,15 @@
     headerCb.addEventListener("change", () => update({ drawHeader: headerCb.checked }));
     return section(
       "Nội dung thẻ (dữ liệu mẫu)",
+      h(
+        "div",
+        { class: "field" },
+        h("span", { class: "label" }, "Kiểu thẻ"),
+        segmented([["landscape", "Thẻ ngang"], ["portrait", "Thẻ dọc"]], c.orientation || "landscape", async (orientation) => {
+          await update({ orientation });
+          renderPanel();
+        }, "Hướng thẻ")
+      ),
       preview,
       h(
         "div",
@@ -3667,7 +5008,7 @@
           } }, "Gỡ nền") : null
         )
       ),
-      h("label", { class: "check", for: headerId }, headerCb, h("span", {}, "Vẽ dải tên trường + huy hiệu ở đầu thẻ")),
+      h("label", { class: "check", for: headerId }, headerCb, h("span", {}, "Hiện tên trường và logo ở đầu thẻ")),
       h("p", { class: "hint" }, 'Dấu "MẪU" luôn được in lên thẻ để không ai nhầm với thẻ thật. Không dùng MSSV, ảnh hay mã vạch của sinh viên thật.')
     );
   }
@@ -3687,7 +5028,7 @@
       const optional = ["hat", "eyewear", "handheld", "mask", "audio"].includes(slot.id);
       st.equipped[slot.id] = optional && Math.random() < 0.45 ? null : pick(items).id;
       const it = items.find((i) => i.id === st.equipped[slot.id]);
-      if (it == null ? void 0 : it.palette) st.overrides[it.id] = { ...st.overrides[it.id] || {}, colors: { ...((_a = st.overrides[it.id]) == null ? void 0 : _a.colors) || {}, main: pick(it.palette) } };
+      if ((it == null ? void 0 : it.palette) && !it.fixedColors) st.overrides[it.id] = { ...st.overrides[it.id] || {}, colors: { ...((_a = st.overrides[it.id]) == null ? void 0 : _a.colors) || {}, main: pick(it.palette) } };
     }
     st.body.skin = pick(catalog_default.skinTones);
     busy(() => studio.setState(st)).then(renderPanel);

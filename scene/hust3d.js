@@ -1750,11 +1750,11 @@ function audio(){if(ACX)return ACX;const C=window.AudioContext||window.webkitAud
   for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3.5);}
   rev.buffer=b;const wet=ACX.createGain();wet.gain.value=.2;master.connect(comp);master.connect(rev);rev.connect(wet);wet.connect(comp);comp.connect(ACX.destination);return ACX;}
 /* additive piano tone: slightly stretched partials, two detuned strings, fast-then-slow decay, felt-hammer thump */
-function noteOn(m,vel=.78){const ac=audio();if(!ac)return;if(ac.state==='suspended')ac.resume();if(voices[m])noteOff(m,true);
+function noteOn(m,vel=.78,bus,vs){/*[piano-net] bus/vs: remote notes use their own gain bus + voice map*/vs=vs||voices;bus=bus||master;const ac=audio();if(!ac)return;if(ac.state==='suspended')ac.resume();if(vs[m])noteOff(m,true,vs);
   const f=440*Math.pow(2,(m-69)/12),t=ac.currentTime+.005,out=ac.createGain();out.gain.value=1;
   const lp=ac.createBiquadFilter();lp.type='lowpass';lp.Q.value=.4;lp.frequency.setValueAtTime(Math.min(15000,f*(8+vel*10)+900),t);
-  lp.frequency.exponentialRampToValueAtTime(Math.max(f*2.2,500),t+2.2);lp.connect(out);out.connect(master);
-  const pan=ac.createStereoPanner?ac.createStereoPanner():null;if(pan){pan.pan.value=Math.max(-.6,Math.min(.6,(m-64)/40));out.disconnect();out.connect(pan);pan.connect(master);}
+  lp.frequency.exponentialRampToValueAtTime(Math.max(f*2.2,500),t+2.2);lp.connect(out);out.connect(bus||master);/*[piano-net]*/
+  const pan=ac.createStereoPanner?ac.createStereoPanner():null;if(pan){pan.pan.value=Math.max(-.6,Math.min(.6,(m-64)/40));out.disconnect();out.connect(pan);pan.connect(bus||master);/*[piano-net]*/}
   const tail=Math.max(1.4,8*Math.pow(110/f,.6)),B=.00032,np=f>1600?4:f>800?6:9,stop=t+tail*2.6,oscs=[];
   for(let n=1;n<=np;n++){const fn=n*f*Math.sqrt(1+B*n*n);if(fn>17000)break;
     const amp=vel*.26/Math.pow(n,1.1)*(n===2?.85:1)*(n===4?.6:1),tau=tail/(1+.45*(n-1));
@@ -1765,11 +1765,11 @@ function noteOn(m,vel=.78){const ac=audio();if(!ac)return;if(ac.state==='suspend
   const nb=ac.createBuffer(1,ac.sampleRate*.05|0,ac.sampleRate),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=(Math.random()*2-1)*Math.pow(1-i/nd.length,4);
   const ns=ac.createBufferSource();ns.buffer=nb;const bp=ac.createBiquadFilter();bp.type='bandpass';bp.frequency.value=Math.min(4000,f*2.5);bp.Q.value=1.2;
   const ng=ac.createGain();ng.gain.value=vel*.22;ns.connect(bp);bp.connect(ng);ng.connect(out);ns.start(t);
-  voices[m]={out,oscs,sus:false};}
-function noteOff(m,now){const v=voices[m];if(!v||!ACX)return;if(pedal&&!now){v.sus=true;return;}
+  vs[m]={out,oscs,sus:false};/*[piano-net]*/}
+function noteOff(m,now,vs,pd){/*[piano-net] vs/pd: remote voice map + remote pedal*/vs=vs||voices;if(vs===voices)pd=pedal;const v=vs[m];if(!v||!ACX)return;if(pd&&!now){v.sus=true;return;}
   const t=ACX.currentTime;v.out.gain.cancelScheduledValues(t);v.out.gain.setValueAtTime(v.out.gain.value,t);v.out.gain.setTargetAtTime(0,t,now?.02:.09);
-  v.oscs.forEach(o=>{try{o.stop(t+.7);}catch(_){}});delete voices[m];}
-function setPedal(on){pedal=on;if(!on)for(const m in voices)if(voices[m].sus&&!held[m])noteOff(+m);}
+  v.oscs.forEach(o=>{try{o.stop(t+.7);}catch(_){}});delete vs[m];}
+function setPedal(on){on=!!on;if(on!==pedal)pnOut({t:'p',on});/*[piano-net]*/pedal=on;if(!on)for(const m in voices)if(voices[m].sus&&!held[m])noteOff(+m);}
 /* 3D key + on-screen key feedback */
 const pbKeys=$('#pb-keys');let keyEls={},shift=0;
 const SOLF=['Đô','Đô#','Rê','Rê#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si'];
@@ -1777,9 +1777,31 @@ const UPPER={},LOWER={};for(const [c,m] of Object.entries(KEYMAP)){if(['Comma','
 function keyFor(m){const r=m-12*shift;const c=r>=60?UPPER[r]:LOWER[r];return c?labelOf(c):null;}
 function pressVisual(m,down){const k=PIANO.userData.keys[m];if(k){k.im.setMatrixAt(k.i,T(k.x,k.y-(down?.008:0),k.z,down?.05:0));k.im.instanceMatrix.needsUpdate=true;}
   if(keyEls[m])keyEls[m].classList.toggle('on',down);}
-function keyDown(m){if(m<21||m>108||held[m])return;held[m]=1;noteOn(m);pressVisual(m,true);onPlayed(m);}
-function keyUp(m){if(!held[m])return;delete held[m];noteOff(m);pressVisual(m,false);}
+function keyDown(m){if(m<21||m>108||held[m])return;held[m]=1;noteOn(m);pressVisual(m,true);onPlayed(m);pnOut({t:'d',m,v:.78});/*[piano-net]*/}
+function keyUp(m){if(!held[m])return;delete held[m];noteOff(m);pressVisual(m,false);pnOut({t:'u',m});/*[piano-net]*/}
 function releaseAll(){for(const m in held)keyUp(+m);}
+/* [piano-net] đàn qua mạng: nốt mình chơi được gửi ra window.__PIANO_NET.out (js/piano-net.js gom gói, gửi kênh khu);
+   nốt của bạn khác vào api.pianoRemote(ev) → phát bằng cùng bộ tổng hợp nhưng qua bus âm lượng riêng (rbus) và kho
+   voice riêng (rvoices), nên không đụng tới tiếng đàn của chính mình. Không cần ngồi đàn để nghe; trình duyệt chưa cho
+   phát âm thì bỏ qua tiếng (vẫn nhún phím) và bật lại ở lần bấm/gõ kế tiếp. Nốt treo quá 12 giây thì tự nhả. */
+function pnOut(e){try{const n=window.__PIANO_NET;if(n&&n.out)n.out(e);}catch(_){}}
+const rvoices={},rheld={},rtm={};let rbus=null,rgain=1,rpedal=false,rwait=false;
+function rWait(){if(rwait)return;rwait=true;const go=()=>{rwait=false;window.removeEventListener('pointerdown',go,true);window.removeEventListener('keydown',go,true);
+    try{audio();if(ACX&&ACX.state!=='running'){const p=ACX.resume();if(p&&p.catch)p.catch(()=>{});}}catch(_){}};
+  window.addEventListener('pointerdown',go,true);window.addEventListener('keydown',go,true);}
+function rAudio(){try{if(!ACX){const ua=navigator.userActivation;if(ua&&!ua.hasBeenActive){rWait();return null;}if(!audio())return null;}
+    if(!rbus){rbus=ACX.createGain();rbus.gain.value=rgain;rbus.connect(master);}
+    if(ACX.state!=='running'){const p=ACX.resume();if(p&&p.catch)p.catch(()=>{});rWait();return null;}return ACX;}catch(_){return null;}}
+function pianoRemoteGain(g){rgain=Math.max(0,Math.min(1.5,+g||0));if(rbus&&ACX)try{rbus.gain.setTargetAtTime(rgain,ACX.currentTime,.08);}catch(_){}}
+function rUp(m,force){clearTimeout(rtm[m]);delete rtm[m];delete rheld[m];if(!held[m])pressVisual(m,false);noteOff(m,!!force,rvoices,rpedal);}
+function pianoRemote(e){if(!e)return;if(e.g!=null)pianoRemoteGain(e.g);
+  if(e.t==='p'){rpedal=!!e.on;if(!rpedal)for(const m in rvoices)if(rvoices[m].sus&&!rheld[m])noteOff(+m,false,rvoices,false);return;}
+  const m=e.m|0;if(m<21||m>108)return;
+  if(e.t==='d'){rheld[m]=1;if(!held[m])pressVisual(m,true);
+    if(rgain>.001&&rAudio())noteOn(m,Math.max(.1,Math.min(1,e.v==null?.78:+e.v||.78)),rbus,rvoices);
+    clearTimeout(rtm[m]);rtm[m]=setTimeout(()=>rUp(m,true),12000);}
+  else if(e.t==='u'&&rheld[m])rUp(m,false);}
+function pianoRemoteReset(){for(const m in rheld)rUp(+m,true);rpedal=false;for(const m in rvoices)noteOff(+m,true,rvoices);}
 function buildKeys(){pbKeys.textContent='';keyEls={};const lo=48+12*shift;let wi=0;
   for(let m=lo;m<=lo+31;m++){if(m<21||m>108)continue;const b=[1,3,6,8,10].includes(m%12),el=document.createElement('div');
     const r=m-12*shift,labs=Object.entries(KEYMAP).filter(([c,v])=>v===r).map(([c])=>labelOf(c)).join(' ');
@@ -1935,7 +1957,7 @@ function arrive(fl,idx,pose){const l=LIFTS[idx%LIFTS.length];l.floor=fl;l.y=LBAS
   camera.rotation.order='YXZ';camera.rotation.set(-pitch,-yaw,0);
   canvas.classList.add('walk');dpad.hidden=false;setActive(null);$('#m-orbit').setAttribute('aria-pressed',false);$('#m-walk').setAttribute('aria-pressed',true);setHint();}
 const lights=[];scene.traverse(o=>{if(o.isLight)lights.push(o);});
-Object.assign(ME,{api:{camera,controls,scene,viewPose,flyTo,keys,PIANO,sit,MZ,ROOF,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get level(){return level;},get rider(){return rider;},blockedAt:(x,z,lv)=>{const o=level;level=lv;try{return blocked(x,z,x,z);}finally{level=o;}},groundY,ext:on=>{if(on){if(mode==="piano")standUp();mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw,lv)=>{tween=null;rider=null;mode="walk";level=lv;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode!=="orbit")setMode("orbit");enterWalk(p,yw,6);},stopWalk:()=>{if(mode!=="orbit")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode!=="orbit")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:OWN,group:scene,lights,
+Object.assign(ME,{api:{camera,controls,scene,viewPose,flyTo,keys,PIANO,sit,pianoRemote,pianoRemoteGain,pianoRemoteReset,/*[piano-net]*/MZ,ROOF,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get level(){return level;},get rider(){return rider;},blockedAt:(x,z,lv)=>{const o=level;level=lv;try{return blocked(x,z,x,z);}finally{level=o;}},groundY,ext:on=>{if(on){if(mode==="piano")standUp();mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw,lv)=>{tween=null;rider=null;mode="walk";level=lv;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode!=="orbit")setMode("orbit");enterWalk(p,yw,6);},stopWalk:()=>{if(mode!=="orbit")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode!=="orbit")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:OWN,group:scene,lights,
   activate(arr){root.hidden=false;renderer.shadowMap.needsUpdate=true;last=performance.now();
     if(arr)arrive(arr.floor,arr.idx,arr.pose);else{controls.enabled=mode==='orbit';if(!started)intro();}started=true;},
   deactivate(){if(mode==='piano')standUp();root.hidden=true;controls.enabled=false;for(const k in keys)keys[k]=0;ceilingGroup.visible=true;roofG.visible=true;

@@ -16,6 +16,11 @@ import { loadImage, loadImageSet, drawEmblem, drawStudentCard, blobShadow, makeC
 export const SLOT_ORDER = ['hair', 'top', 'bottom', 'footwear', 'hat', 'bag', 'card', 'eyewear', 'mask', 'audio', 'handheld'];
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
+function normalizeOverrides(overrides, catalog) {
+  const clean = clone(overrides || {});
+  for (const item of catalog.items) if (item.fixedColors && clean[item.id]?.colors) delete clean[item.id].colors;
+  return clean;
+}
 function merge(base, over) {
   if (!over) return clone(base);
   const out = clone(base);
@@ -67,7 +72,7 @@ export class AvatarStudio {
     this.items = new Map(this.catalog.items.map((it) => [it.id, it]));
     this.state = merge(clone(this.catalog.defaults), opts.state || {});
     this.state.equipped = { ...this.catalog.defaults.equipped, ...(opts.state?.equipped || {}) };
-    this.state.overrides = opts.state?.overrides || {};
+    this.state.overrides = normalizeOverrides(opts.state?.overrides, this.catalog);
     this.idle = opts.idle ?? !matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.slots = {};
     this._tokens = {};
@@ -80,8 +85,8 @@ export class AvatarStudio {
   _initScene() {
     const r = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     r.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-    r.outputEncoding = THREE.sRGBEncoding; // [r128]
-    r.toneMapping = THREE.NoToneMapping;
+    r.outputEncoding = THREE.sRGBEncoding; // [r128] chưa có outputColorSpace
+    r.toneMapping = THREE.NoToneMapping;    // [r128] chưa có NeutralToneMapping
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.domElement.style.display = 'block';
@@ -106,7 +111,7 @@ export class AvatarStudio {
     key.shadow.bias = -0.0005;
     key.shadow.normalBias = 0.02;
     scene.add(key);
-    const rim = new THREE.DirectionalLight('#c9d6ff', 0.4);
+    const rim = new THREE.DirectionalLight('#c9d6ff', 0.4); // [r128]
     rim.position.set(-3, 2.5, -2.5);
     scene.add(rim);
 
@@ -208,7 +213,9 @@ export class AvatarStudio {
   resolveItem(id) {
     const base = this.items.get(id);
     if (!base) return null;
-    return merge(base, this.state.overrides[id]);
+    const item = merge(base, this.state.overrides[id]);
+    if (base.fixedColors) item.colors = { ...base.colors };
+    return item;
   }
   itemsForSlot(slot) { return this.catalog.items.filter((i) => i.slot === slot); }
 
@@ -220,13 +227,16 @@ export class AvatarStudio {
   async setState(state) {
     this.state = merge(clone(this.catalog.defaults), state);
     this.state.equipped = { ...this.catalog.defaults.equipped, ...(state.equipped || {}) };
-    this.state.overrides = state.overrides || {};
+    this.state.overrides = normalizeOverrides(state.overrides, this.catalog);
     await this._rebuildAll();
     this._emit();
   }
 
   // -------------------------------------------------- Huy hiệu & thẻ
-  _drawEmblem() { this.emblemCanvas = drawEmblem(this.state.emblem); }
+  async _drawEmblem() {
+    await loadImage(this.state.emblem?.logo);
+    this.emblemCanvas = drawEmblem(this.state.emblem);
+  }
   async _drawCard() {
     const c = this.state.card || {};
     const [photo, template] = await Promise.all([loadImage(c.photo), loadImage(c.template)]);
@@ -237,14 +247,14 @@ export class AvatarStudio {
   // -------------------------------------------------- Mặc đồ
   async _rebuildAll() {
     if (document.fonts?.ready) { try { await document.fonts.ready; } catch (_) { /* bỏ qua */ } }
-    this._drawEmblem();
+    await this._drawEmblem();
     await this._drawCard();
     if (this.rig) { this.scene.remove(this.rig.root); disposeTree(this.rig.root); }
     for (const s of Object.values(this.slots)) for (const p of s.parts) disposeTree(p.obj);
     this.slots = {};
     const hairItem = this.resolveItem(this.state.equipped.hair);
     this.rig = buildRig({ ...this.state.body, browColor: hairItem?.colors?.main });
-    linearize(this.rig.root);
+    linearize(this.rig.root); // [r128]
     this.scene.add(this.rig.root);
     await Promise.all(SLOT_ORDER.map((s) => this._buildSlot(s)));
     this._applyRules();
@@ -265,7 +275,7 @@ export class AvatarStudio {
     if (!builder) { console.warn('[avatar-studio] Chưa có builder cho slot', slot); return; }
     const res = builder({ item, rig: this.rig, imgs, emblemCanvas: this.emblemCanvas, cardCanvas: this.cardCanvas, emblem: this.state.emblem, hatOn: !!this.state.equipped.hat });
     res.parts = mountParts(this.rig, res.parts);
-    for (const p of res.parts) linearize(p.obj);
+    for (const p of res.parts) linearize(p.obj); // [r128]
     this.slots[slot] = { id, ...res };
   }
 
@@ -293,6 +303,7 @@ export class AvatarStudio {
   _override(id) { return (this.state.overrides[id] ||= {}); }
 
   async setItemColor(id, key, color) {
+    if (this.items.get(id)?.fixedColors) return;
     const ov = this._override(id);
     ov.colors = { ...(ov.colors || {}), [key]: color };
     await this._refreshItem(id);
@@ -324,7 +335,7 @@ export class AvatarStudio {
   }
   async setEmblem(patch) {
     this.state.emblem = { ...this.state.emblem, ...patch };
-    this._drawEmblem();
+    await this._drawEmblem();
     await this._drawCard();
     // huy hiệu + chữ in xuất hiện ở nhiều món → dựng lại tất cả
     await Promise.all(SLOT_ORDER.map((s) => this._buildSlot(s)));
