@@ -34,6 +34,18 @@
   /* Nhân vật ngồi (js/avatar2.js) có khớp hông cao 0,53 m trên gốc nhân vật và lùi 0,1 m về sau; mặt ghế chuẩn (ghế tựa
      thư viện) cao ≈0,49 m. Ghế có mặt ngồi cao/thấp khác thì đặt y = mặt ngồi − SEAT_TOP để hông vừa chạm mặt ghế. */
   const SEAT_TOP = 0.49;
+  // Chỗ ngồi ghi từ gốc của đồ nội thất, còn hông nhân vật lùi 0,1 m
+  // so với root. Đặt root tiến lên để hông nằm giữa mặt đệm.
+  function librarySeat(s, kind, floorOf) {
+    const top = /^island/.test(s.n) ? 0.53 : /^arm/.test(s.n) ? 0.46 : /^(sofa|cube|bench7)/.test(s.n) ? 0.48 : /^(bench|booth)/.test(s.n) ? 0.50 : s.n === 'chair' ? 0.495 : 0.485;
+    const forward = /^sofa/.test(s.n) ? 0.14 : 0.10;
+    return { x: s.x + Math.sin(s.ry) * forward, y: s.y + top - SEAT_TOP, z: s.z + Math.cos(s.ry) * forward, ry: s.ry, floor: floorOf(s.y), kind };
+  }
+  function roofSeat(s) {
+    // Gối lười đã bù +0,1 m trong nguồn, ghế nằm dùng tư thế riêng.
+    const shift = s.kind === 'bench' ? 0.1 : 0;
+    return Object.assign({}, s, { x: s.x + Math.sin(s.ry) * shift, z: s.z + Math.cos(s.ry) * shift, y: s.y + (s.kind === 'lounger' ? -0.04 : 0), floor: 0 });
+  }
   /* đường dẫn gốc của web (để trang công cụ trong tools/ cũng tải được file GLB) */
   const ROOT = ((document.currentScript && document.currentScript.src) || '').replace(/scene\/adapter\.js.*$/, '');
 
@@ -195,7 +207,7 @@
       const ry = alongX ? (face > 0 ? 0 : Math.PI) : (face > 0 ? Math.PI / 2 : -Math.PI / 2);
       const c = alongX ? (b.min.x + b.max.x) / 2 : (b.min.z + b.max.z) / 2, y = top - SEAT_TOP;
       for (const d of [-0.6, 0, 0.6]) {
-        const s = sc + face * 0.05;                                        // hông (lùi 0,1 m sau gốc nhân vật) ngay giữa mặt ngồi
+        const s = sc + face * 0.10;                                        // hông (lùi 0,1 m sau gốc nhân vật) ngay giữa mặt ngồi
         EXT.seats.push(alongX ? { x: c + d, y, z: s, ry, floor: 0, kind: 'bench' } : { x: s, y, z: c + d, ry, floor: 0, kind: 'bench' });
       }
     });
@@ -220,8 +232,7 @@
     const mA = new THREE.Matrix4().copy(A.group.matrixWorld).invert().multiply(A.api.roomG.matrixWorld);
     const v = new THREE.Vector3();
     const expand = (s, out, floorOf) => {
-      const lift = /^island/.test(s.n) ? 0.04 : 0;                       // "đảo thuyền" tầng 6: mặt ngồi cao 0,53 m
-      const push = (x, z, kind) => out.push({ x, y: s.y + lift, z, ry: s.ry, floor: floorOf(s.y), kind });
+      const push = (x, z, kind) => out.push(librarySeat(Object.assign({}, s, { x, z }), kind, floorOf));
       if (/^sofa/.test(s.n)) for (const lx of [-0.5, 0, 0.5]) push(s.x + Math.cos(s.ry) * lx, s.z - Math.sin(s.ry) * lx, 'sofa');
       else push(s.x, s.z, /^arm/.test(s.n) ? 'arm' : /^(bench|booth|island)/.test(s.n) ? 'bench' : /^cube/.test(s.n) ? 'stool' : 'chair');
     };
@@ -239,8 +250,8 @@
     const seatsB = [];
     for (const s of log) if (s.tag === 'B') expand(s, seatsB, levelB);
     // ghế đàn piano (tầng 6): ngồi vào là mở bàn phím đàn
-    // ghế băng của đàn: tâm cách thân đàn 0,78 m, mặt ngồi cao 0,54 m → gốc nhân vật 0,70 m (hông lùi 0,1 m vào giữa ghế)
-    { const P = B.api.PIANO, a = P.localToWorld(V(0, 0, 0.70)), c = P.localToWorld(V(0, 0, 0));
+    // Hông ở tâm ghế z=0,78; root tiến 0,1 m về phía đàn để bù tư thế ngồi.
+    { const P = B.api.PIANO, a = P.localToWorld(V(0, 0, 0.68)), c = P.localToWorld(V(0, 0, 0));
       B.group.worldToLocal(a); B.group.worldToLocal(c);
       seatsB.push({ x: a.x, y: B.api.groundY(a.x, a.z) + 0.54 - SEAT_TOP, z: a.z, ry: Math.atan2(c.x - a.x, c.z - a.z), floor: 0, kind: 'piano' }); }
 
@@ -253,7 +264,7 @@
         get camera() { return api.camera; },
         grid(f) {
           const k = (mod === A ? 'A' : mod === B ? 'B' : 'D') + f;
-          if (!gridCache[k]) gridCache[k] = Grid.sample(o.bx[0], o.bz[0], o.bx[1], o.bz[1], 0.4, (x, z) => this.free(x, z, f), 0);
+          if (!gridCache[k]) gridCache[k] = Grid.sample(o.bx[0], o.bz[0], o.bx[1], o.bz[1], 0.25, (x, z) => this.free(x, z, f), f);
           if (mod === B && f === 0) { const g = gridCache[k]; for (let j = 0; j < g.nz; j++) for (let i = 0; i < g.nx; i++) g.floor[j * g.nx + i] = api.groundY(g.cx(i), g.cz(j)); }
           return gridCache[k];
         },
@@ -306,7 +317,8 @@
     /* sân thượng tầng 10 (module D): mặt sàn phẳng y = 0, trời mở */
     if (D) {
       const dapi = D.api, KS = dapi.KS;
-      SceneAPI.spaces.D = roomSpace(D, dapi.seats(), {
+      const roofSeats = dapi.seats().map(roofSeat);
+      SceneAPI.spaces.D = roomSpace(D, roofSeats, {
         floors: [0], bx: [dapi.X0, dapi.X1], bz: [dapi.Z0, dapi.Z1],
         free: (x, z) => !dapi.blocked(x, z), camFree: (x, z) => x > dapi.X0 - 1 && x < dapi.X1 + 1 && z > dapi.Z0 - 1 && z < dapi.Z1 + 1 && !(x < KS.x1 + 0.3 && x > KS.x0 - 0.3 && Math.abs(z) < 4.3),
         ceil: () => 30, floorOf: () => 0,

@@ -25,8 +25,18 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const args = Object.fromEntries(process.argv.slice(2).map(a => { const [k, ...v] = a.replace(/^--/, '').split('='); return [k, v.length ? v.join('=') : true]; }));
+// Accept both --port=8741 and --port 8741 (including arguments added by preview hosts).
+const args = {};
+for (let i = 2; i < process.argv.length; i++) {
+  const arg = process.argv[i];
+  if (!arg.startsWith('--') || arg === '--') continue;
+  const [key, ...value] = arg.slice(2).split('=');
+  if (value.length) args[key] = value.join('=');
+  else if (process.argv[i + 1] && !process.argv[i + 1].startsWith('--')) args[key] = process.argv[++i];
+  else args[key] = true;
+}
 const PORT = +(args.port || 8741);
+if (!Number.isInteger(PORT) || PORT < 1024 || PORT > 65535) throw new Error('Port phải là số nguyên từ 1024 đến 65535.');
 const ROOT = path.resolve(args.root || path.join(HERE, '..'));
 const ADMIN_PW = args.admin || 'admin-thu';
 const SHIM = path.join(HERE, 'fake-supabase.js');

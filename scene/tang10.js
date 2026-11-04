@@ -626,7 +626,7 @@ function updateScopeView(){const w=innerWidth,h=innerHeight,rr=Math.min(w*.46,h*
 
 const KMAP={KeyW:'f',ArrowUp:'f',KeyS:'b',ArrowDown:'b',KeyA:'l',ArrowLeft:'l',KeyD:'r',ArrowRight:'r'};
 addEventListener('keydown',e=>{if(e.key==='Escape'&&mode!=='orbit'&&!(window.__POTA&&mode==='walk')){leaveLook();return;}
-  if(mode!=='walk')return;if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;});
+  if(mode!=='walk'||window.__POTA)return;if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;});
 addEventListener('keyup',e=>{if(KMAP[e.code])keys[KMAP[e.code]]=0;if(e.key==='Shift')keys.run=0;});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=0;});
 dpad.querySelectorAll('button').forEach(b=>{const k=b.dataset.k;
@@ -634,12 +634,12 @@ dpad.querySelectorAll('button').forEach(b=>{const k=b.dataset.k;
   const off=()=>{keys[k]=0;b.classList.remove('held');};
   b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);});
 let look=null,down=null,pinch=null;const ptrs=new Map();
-canvas.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY,t:performance.now()};ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+canvas.addEventListener('pointerdown',e=>{if(window.__POTA&&mode!=='scope'&&mode!=='gaze')return;down={x:e.clientX,y:e.clientY,t:performance.now()};ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(mode==='orbit')return;look={x:e.clientX,y:e.clientY};try{canvas.setPointerCapture(e.pointerId);}catch(_){}
   if(mode==='scope'&&ptrs.size===2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),f:fovTarget};look=null;down=null;}});
 canvas.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pinch&&ptrs.size===2){const [a,b]=[...ptrs.values()];setFov(pinch.f*pinch.d/Math.max(20,Math.hypot(a.x-b.x,a.y-b.y)));return;}
-  if(!look||mode==='orbit')return;const s=(touch?.006:.0045)*(mode==='scope'?camera.fov/FOV0:1)*(window.__LOOK_K||1);slew=null;
+  if(!look||mode==='orbit'||(window.__POTA&&mode==='walk'))return;const s=(touch?.006:.0045)*(mode==='scope'?camera.fov/FOV0:1)*(window.__LOOK_K||1);slew=null;
   yaw+=(e.clientX-look.x)*s;pitch+=(e.clientY-look.y)*s;pitch=Math.max(-1.5,Math.min(mode==='scope'?.4:1.2,pitch));look={x:e.clientX,y:e.clientY};});
 const dropPtr=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;};
 canvas.addEventListener('pointerup',dropPtr);canvas.addEventListener('pointercancel',dropPtr);
@@ -718,7 +718,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;elapsed+=dt;
       if(Math.abs(dy)<.0005&&Math.abs(slew.pitch-pitch)<.0005)slew=null;}
     if(mode==='walk'){const sp=(keys.run?5.5:2.8)*dt*(window.__WALK_K||1),fx=Math.sin(yaw),fz=-Math.cos(yaw);
       let mx=(keys.f-keys.b)*fx+(keys.r-keys.l)*-fz,mz=(keys.f-keys.b)*fz+(keys.r-keys.l)*fx;
-      const len=Math.hypot(mx,mz);if(len>0){mx=mx/len*sp;mz=mz/len*sp;const p=camera.position;if(!blocked(p.x+mx,p.z))p.x+=mx;if(!blocked(p.x,p.z+mz))p.z+=mz;}
+      const len=Math.hypot(mx,mz);if(len>0){mx=mx/Math.max(1,len)*sp;mz=mz/Math.max(1,len)*sp;const p=camera.position;if(!blocked(p.x+mx,p.z))p.x+=mx;if(!blocked(p.x,p.z+mz))p.z+=mz;}
       camera.position.y=1.6+(Math.hypot(camera.position.x-SD.x,camera.position.z-SD.z)<SD.r?SD.h:0);}
     camera.rotation.order='YXZ';camera.rotation.set(-pitch,-yaw,0);
   }else if(!tween&&mode==='orbit')controls.update();

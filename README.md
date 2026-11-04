@@ -6,6 +6,30 @@ Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn th
 - Bật nhiều người thật bằng Supabase: mục 2 cùng file.
 - Thay mô hình 3D, cập nhật Phòng thay đồ hay sân thượng: `docs/HOP_DONG_CANH.md`.
 
+## Đợt 3 — tiếp tục từ mã đã push (04/11/2026)
+
+- Giữ Phòng thay đồ mới đã tích hợp: 88 món, logo và thẻ HUST, tương thích dữ liệu trang phục cũ.
+- Di chuyển WASD đồng thời kéo chuột trái/phải; điện thoại dùng cần điều khiển và ngón tay xoay cảnh riêng. Gõ chat, mở vòng hành động, mất focus đều giải phóng phím di chuyển.
+- Bấm ghế để đi tới rồi ngồi, hoặc nhấn **E** cạnh ghế trống; hiệu chỉnh mặt ngồi và hướng theo loại ghế. Không dịch chuyển tới ghế khi sai tầng hoặc không tìm được đường; kiểm tra ghế lại lúc tới nơi.
+- Bỏ nút dịch chuyển ở thanh dưới. Tới khu khác qua cửa/thang máy/cầu thang; tìm người ở tầng khác chỉ hướng dẫn đường đi.
+- **Giữ Q** hoặc giữ nút ✋ để chọn hành động; chạm nhanh để giữ vòng mở. Có vẫy tay, đọc sách, điện thoại, laptop; **1–8** chọn nhanh, **0** dừng, **Esc** đóng. Hỗ trợ Tab/mũi tên/Enter.
+- Chat hiện trên đầu người gửi; kiểm duyệt xoá cả tin và bong bóng. Trạng thái ghế/hoạt động gửi nhanh, kênh cũ không ảnh hưởng khu mới, piano dọn nốt đang chờ khi đổi khu.
+- Lỗi tải cảnh/WebGL có thông báo và nút tải lại, không kẹt ở màn chờ.
+
+### Kiểm tra và chạy trên máy phát triển
+
+Không cần cài gói để chạy web tĩnh và các kiểm thử Node dưới đây (Node 18+):
+
+```bash
+npm run check
+npm test
+npm start
+```
+
+`npm start` mở bản ngoại tuyến tại `http://localhost:3000`. `npm run dev` mở **Supabase giả lập chỉ để phát triển**; dùng `?nguoi=1`, `?nguoi=2`, `?nguoi=3` để tạo các máy khách riêng. Hosting thật phục vụ tệp tĩnh với cấu hình Supabase của bạn; không dùng máy chủ giả lập làm backend thật.
+
+Kiểm thử tự động gồm điều khiển, ghế, vòng hành động/chat, mạng/piano, chức năng ngoại tuyến và ba máy khách HTTP/SSE độc lập. Phiên này kiểm tra được thông báo lỗi WebGL trên trình duyệt; **chưa xác nhận hình ảnh 3D/FPS trên thiết bị có WebGL, Supabase thật hoặc tải đông người**. Xem `TINH_TRANG_DOT_3.md` và checklist trong hướng dẫn cài đặt.
+
 ## Đợt 2 (phần 1) — đã làm
 
 | Mục góp ý | Đã làm |
@@ -25,7 +49,7 @@ Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn th
 
 | Mục góp ý | Đã làm |
 |---|---|
-| 5. Tìm người | Tab **👥 Mọi người**: ai đang online, đang ở đâu ("Thư viện · Phòng 401", "Sân trước thư viện"…), cách mình bao nhiêu mét, sắp theo gần → xa, ô tìm theo tên (gõ không dấu cũng được). Nút 🚶 **Đến chỗ bạn ấy** (cùng tầng thì tự đi bộ tới, khác tầng/khu thì chuyển cảnh rồi đứng cạnh), **@** nhắc tên, **✉️** nhắn riêng. Bạn nào bật "Ẩn trạng thái & vị trí" thì không hiện vị trí và không "đến chỗ" được. |
+| 5. Tìm người | Tab **👥 Mọi người**: tên, vị trí, khoảng cách và tìm tên không dấu. Nút 🚶 đi bộ tới người cùng tầng; người ở tầng/khu khác có nút 🧭 hướng dẫn đi qua cửa/thang máy, không dịch chuyển. Có **@** nhắc tên và **✉️** nhắn riêng. Người ẩn vị trí không có nút tới chỗ. |
 | 5. Nhắc tên @ | Gõ `@` trong ô chat là hiện gợi ý tên những bạn cùng khu (kênh Gần tôi: chỉ người ở gần); chọn bằng chuột, ↑ ↓ Enter. Người được nhắc thấy thông báo vàng + tiếng chuông. |
 | 5. Kênh chat | **💬 Cả khu** (mọi người cùng khu), **📍 Gần tôi** (chỉ người trong 8 m cùng tầng nhận được; QTV đổi bán kính được), **✉️ Nhắn riêng** (chỉ câu mẫu, chỉ hai người đọc được — kiểm tra bằng RLS trên máy chủ). |
 | 11. NPC | **Chú bảo vệ** ở cửa chính, **Cô thủ thư** ngồi quầy lễ tân tầng 1, **Cô trực phòng 401** đứng trước các dãy bàn. Chỉ có mặt 8:00–21:00 giờ Hà Nội, nhãn tím "NPC", bấm vào để nghe lời nhắn, **không tính vào số người online**, ghế của NPC không ai ngồi đè. Danh sách NPC cũng hiện ở tab Mọi người. |
@@ -124,16 +148,16 @@ docs/             hướng dẫn cài đặt, hợp đồng cảnh
 
 ## Chưa làm được / cần lưu ý
 
-- **Chưa chạy trên một dự án Supabase thật** (môi trường làm việc không truy cập được Supabase). Logic SQL đã chạy trên Postgres thật; phần realtime mới thử với bản giả lập. Lần đầu cài, hãy thử 2–3 máy và 2 tài khoản trước khi mở rộng.
-- **Chưa thử tải 500–800 người.** Gói Free chỉ hợp vài chục người cùng lúc; xem mục 3 của hướng dẫn cài đặt.
-- **Tốc độ khung hình chưa đo trên máy thật** (máy làm việc chỉ có đồ hoạ giả lập ~1–2 khung hình/giây). Nhân vật mới nặng hơn nhân vật khối cũ nên mặc định chỉ vẽ 40 người gần nhất (điện thoại 16); chỉnh `maxAvatars` trong `config.js` nếu máy yếu.
+- **Chưa chạy trên một dự án Supabase thật trong phiên này**, và chưa chạy lại SQL trên PostgreSQL. Bài thử ba máy khách dùng Supabase giả lập nên không xác nhận JWT/RLS thật. Cần làm checklist hai thiết bị trong hướng dẫn cài đặt.
+- **Chưa thử tải đông người.** Sức chứa phụ thuộc số người cùng khu và lượng broadcast phát tới từng người; xem mục 3 của hướng dẫn cài đặt.
+- **Tốc độ khung hình chưa đo trên máy thật.** Trình duyệt kiểm tra phiên này không khởi tạo được WebGL; đã xác nhận thông báo xử lý lỗi. Mặc định chỉ vẽ 40 người gần nhất (điện thoại 16); chỉnh `maxAvatars` trong `config.js` nếu máy yếu.
 - Sân thượng tầng 10 dùng hiệu ứng toả sáng (bloom) như bản gốc; trên máy yếu có thể nặng.
 - Nhập họ tên + MSSV **không xác minh được danh tính thật**. Vì vậy web không hiển thị "đã xác minh", và chỉ hiện MSSV dạng `2023****`.
 - Lời nhắc sức khoẻ theo khuyến nghị phổ biến (quy tắc 20-20-20, đứng dậy sau 30–60 phút), không phải chỉ định y khoa.
 
 ## Bản quyền & dữ liệu
 
-- **Hình ảnh và âm thanh:** mô hình 3D, Phòng thay đồ và sân thượng tự dựng; huy hiệu trên đồ là trường giả "Tổ Ong", không dùng logo HUST. Âm thanh do máy tự tạo.
+- **Hình ảnh và âm thanh:** Phòng thay đồ hiện dùng logo HUST trong tài nguyên áo/thẻ; đây là bản demo không phải trang chính thức. Âm thanh do máy tự tạo.
 - **Thư viện & phông chữ:** phông Be Vietnam Pro (SIL OFL), KaTeX (MIT), supabase-js (MIT), Three.js (MIT).
 - **Ghi rõ không phải trang chính thức:** web có dòng "không phải trang chính thức của ĐHBK Hà Nội".
 - **Dữ liệu cá nhân:** cần người phụ trách chốt thời hạn lưu dữ liệu và nội dung thông báo về dữ liệu theo Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15 trước khi mở công khai.

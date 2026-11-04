@@ -29,6 +29,7 @@
     }
     function flush() {
       timer = null; if (!q.length) return;
+      if (o.shouldSend && !o.shouldSend()) { q.length = 0; return; }
       const t = now(); if (t < last + GAP) { schedule(); return; }
       const part = q.splice(0, MAXE), base = part[0][0];
       const msg = { s: ++seq, t: Math.round(base), e: part.map(x => [Math.min(60000, Math.round(x[0] - base)), x[1], x[2], x[3]]) };
@@ -38,6 +39,8 @@
     }
     function push(e) {
       if (!e || (e.t !== 'd' && e.t !== 'u' && e.t !== 'p')) return;
+      if (e.t !== 'p' && (!Number.isInteger(e.m) || e.m < 21 || e.m > 108)) return;
+      if (e.t === 'd' && e.v != null && !Number.isFinite(e.v)) return;
       if (o.shouldSend && !o.shouldSend()) { q.length = 0; return; }
       if (q.length >= MAXQ) {
         if (e.t === 'd') { stats.dropped++; return; }
@@ -49,7 +52,8 @@
       q.push([now(), e.t, a, v]);
       schedule();
     }
-    return { push, flush, stats, get queued() { return q.length; } };
+    function reset() { q.length = 0; if (timer != null) (o.clearTimeout || clearTimeout)(timer); timer = null; }
+    return { push, flush, reset, stats, get queued() { return q.length; } };
   }
 
   /* ---------- nhận: đệm rung + phát lại theo nhịp ---------- */
@@ -60,10 +64,10 @@
       if (ev.t === 'd') s.held.add(ev.m); else if (ev.t === 'u') s.held.delete(ev.m); else s.ped = ev.on;
     }
     function onMsg(p) {
-      if (!p || typeof p !== 'object' || !Array.isArray(p.e) || !isFinite(p.t)) return 0;
+      if (!p || typeof p !== 'object' || typeof p.u !== 'string' || !p.u || p.u.length > 128 || !Array.isArray(p.e) || p.e.length > 64 || !Number.isFinite(p.t) || !Number.isInteger(p.s) || p.s < 1) return 0;
       if (o.selfId && p.u === o.selfId()) return 0;
       const t = now(); let s = peers.get(p.u);
-      if (!s) { s = { held: new Set(), ped: false, off: null, seq: 0, at: t }; peers.set(p.u, s); }
+      if (!s) { if (peers.size >= 128) return 0; s = { held: new Set(), ped: false, off: null, seq: 0, at: t }; peers.set(p.u, s); }
       if (t - s.at > 3000) { s.off = null; s.seq = 0; }               // lâu không nghe: đo lại độ trễ
       if (typeof p.s === 'number') { if (p.s <= s.seq && s.seq - p.s < 1000) return 0; s.seq = p.s; }  // gói trùng / đến muộn
       s.at = t;
@@ -73,10 +77,12 @@
       for (const x of p.e.slice(0, 64)) {
         if (!Array.isArray(x)) continue;
         const ty = x[1]; if (ty !== 'd' && ty !== 'u' && ty !== 'p') continue;
-        const dt = Math.max(0, Math.min(2000, +x[0] || 0)), a = x[2] | 0;
+        if (!Number.isFinite(x[0]) || !Number.isInteger(x[2]) || (ty === 'p' ? x[2] !== 0 && x[2] !== 1 : x[2] < 21 || x[2] > 108)) continue;
+        if (ty === 'd' && (!Number.isInteger(x[3]) || x[3] < 1 || x[3] > 127)) continue;
+        const dt = Math.max(0, Math.min(2000, x[0])), a = x[2];
         const ev = ty === 'p' ? { t: 'p', on: !!a } : { t: ty, m: a, v: Math.max(0, Math.min(127, x[3] | 0)) / 127 };
         const delay = Math.max(0, Math.min(1500, p.t + dt + s.off + J - t));
-        later(() => { track(s, ev); o.play(ev, p.u); }, delay); n++;
+        later(() => { if (peers.get(p.u) !== s) return; track(s, ev); o.play(ev, p.u); }, delay); n++;
       }
       return n;
     }
@@ -89,7 +95,10 @@
         peers.delete(u);
       }
     }
-    function reset() { peers.clear(); }
+    function reset() {
+      for (const [u, s] of peers) { for (const m of s.held) o.play({ t: 'u', m }, u); if (s.ped) o.play({ t: 'p', on: false }, u); }
+      peers.clear();
+    }
     return { onMsg, tick, reset, peers };
   }
 
@@ -132,7 +141,7 @@
     }, 250);
     if (World.ev) World.ev.on('zone-changed', z => {
       toasted = false;
-      if (z !== 'lib_b') { rx.reset(); const a = api(); if (a && a.pianoRemoteReset) a.pianoRemoteReset(); }
+      if (z !== 'lib_b') { tx.reset(); rx.reset(); const a = api(); if (a && a.pianoRemoteReset) a.pianoRemoteReset(); }
     });
   }
 

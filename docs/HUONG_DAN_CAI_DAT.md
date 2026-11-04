@@ -5,7 +5,9 @@ Có 2 cách chạy:
 | Cách | Ai thấy ai? | Cần gì? |
 |---|---|---|
 | **Ngoại tuyến** (mặc định) | Chỉ mình bạn, dữ liệu lưu trên trình duyệt | Không cần gì, dùng để xem thử |
-| **Trực tuyến** | Mọi người thấy nhau, nhắn tin, câu hỏi chung, bảng xếp hạng thật | Một dự án Supabase miễn phí (khoảng 20 phút cài đặt) |
+| **Trực tuyến** | Mọi người thấy nhau, nhắn tin, câu hỏi chung, bảng xếp hạng thật | Một dự án Supabase đã cấu hình |
+
+`config.js` trong repo cố ý để trống hai giá trị Supabase. Chỉ đưa mã lên hosting sẽ vẫn chạy ngoại tuyến; cần hoàn tất mục 2 để người dùng trên các máy tương tác được với nhau.
 
 ---
 
@@ -35,9 +37,9 @@ Sau đó mở `http://localhost:8000`. Trang quản trị nằm ở `http://loca
 Người học không cần email. Mỗi trình duyệt được cấp một mã ẩn danh, nên quay lại cùng trình duyệt sẽ giữ nguyên giờ học.
 1. Vào **Authentication → Sign In / Providers**.
 2. Bật **Allow anonymous sign-ins**, rồi bấm **Save**.
-3. **Quan trọng:** vào **Authentication → Rate Limits** và nâng mục *anonymous sign-ins* lên khoảng `1000` mỗi giờ.
+3. Vào **Authentication → Rate Limits**, điều chỉnh mục *anonymous sign-ins* theo số người dự kiến cùng dùng mạng trường.
    - Mặc định Supabase chỉ cho **30 lượt mỗi giờ cho một địa chỉ IP**.
-   - Sinh viên dùng chung Wi-Fi trường sẽ có chung IP, nên nếu không nâng sẽ bị chặn rất nhanh.
+   - Sinh viên dùng chung Wi-Fi trường sẽ có chung IP, nên nếu không nâng có thể bị chặn. Xem [tài liệu đăng nhập ẩn danh](https://supabase.com/docs/guides/auth/auth-anonymous) và [giới hạn Auth](https://supabase.com/docs/guides/auth/rate-limits).
 
 ### Bước 3. Tạo cơ sở dữ liệu
 1. Vào **SQL Editor → New query**, dán toàn bộ `supabase/schema.sql`, rồi bấm **Run**.
@@ -65,10 +67,12 @@ Chạy lại `schema.sql` nhiều lần vẫn an toàn, dữ liệu cũ không b
 Khoá *anon* được phép để công khai trong trang web, vì mọi quyền đã được khoá bằng RLS và các hàm trên máy chủ. **Tuyệt đối không** dán khoá `service_role`.
 
 ### Bước 6. Đưa web lên mạng
-Tải **toàn bộ thư mục** (gồm `index.html`, `admin.html`, `config.js`, `css/`, `js/`, `scene/`, `vendor/`) lên một trong các dịch vụ dưới đây. Cả ba đều miễn phí cho web tĩnh:
+Tải **toàn bộ mã chạy của web** (gồm `index.html`, `admin.html`, `phong-thay-do.html`, `config.js`, `css/`, `js/`, `avatar/`, `scene/`, `vendor/`) lên hosting tĩnh. Giữ nguyên cấu trúc thư mục và tên file; không chỉ tải mỗi `index.html`:
 - **GitHub Pages:** đẩy lên một repo, rồi vào Settings → Pages → chọn nhánh `main`.
 - **Netlify:** kéo thả thư mục vào <https://app.netlify.com/drop>.
 - **Cloudflare Pages / Vercel:** tạo dự án tĩnh, không cần lệnh build.
+
+Repo đã có `netlify.toml`, `vercel.json` và `.nojekyll` cho các nền tảng tương ứng. Với GitHub Pages của repo này, URL có thêm `/study-with-huster/`; các tài nguyên dùng đường dẫn tương đối để chạy được dưới thư mục đó. File GLB của sân trước và thư mục `avatar/assets/` phải được đưa lên cùng web. Không đưa thư mục `.git/`, tệp kiểm thử hay khoá bí mật lên hosting.
 
 Web đã đóng gói sẵn thư viện và phông chữ trong `vendor/`, nên không phụ thuộc CDN ngoài. Thứ duy nhất gọi ra ngoài là thời tiết từ Open-Meteo; nếu bị chặn, web vẫn chạy bình thường.
 
@@ -86,25 +90,38 @@ Nếu nhập sai mật khẩu 8 lần liên tiếp, trang quản trị bị kho�
 
 ## 3. Giới hạn của gói miễn phí — đọc kỹ trước khi mở cho đông người
 
-Theo trang [Realtime Limits](https://supabase.com/docs/guides/realtime/limits) của Supabase (kiểm tra lại vì có thể đổi):
+Theo trang [Realtime Limits](https://supabase.com/docs/guides/realtime/limits) của Supabase, đối chiếu ngày 04/11/2026 (giới hạn có thể thay đổi):
 
-| | Free | Pro (~25 USD/tháng) |
+| | Free | Pro |
 |---|---|---|
 | Kết nối realtime cùng lúc | 200 | 500 |
 | Tin realtime mỗi giây | 100 | 500 |
 | Cập nhật hiện diện (presence) mỗi giây | 20 | 50 |
+| Lần gọi Presence mỗi client trong 30 giây | 5 | 5 |
 
 Web đã được làm cho tiết kiệm:
 - Vị trí nhân vật chỉ gửi khoảng 1 lần mỗi 1,2 giây khi đang đi, người xem tự nội suy.
 - Ngồi học thì không gửi vị trí.
-- Trạng thái chỉ cập nhật tối đa 1 lần mỗi 8 giây.
+- Presence gộp thay đổi tối thiểu 8 giây/lần; khi đông sẽ thưa hơn. Ghế và hoạt động dùng thêm broadcast nhỏ để người cùng khu thấy sớm, không gọi `track()` liên tục.
 - Tin nhắn và bảng xếp hạng đi qua cơ sở dữ liệu.
+- Đàn piano gom nốt theo khoảng 50 ms; rời khu sẽ xoá hàng đợi và nhả nốt còn giữ. Người nghe có thể tắt riêng trong Âm thanh.
 
 Dù vậy:
-- **Gói Free phù hợp để thử với vài chục người cùng lúc.**
-- **Mục tiêu 500–800 người cùng lúc cần gói Pro và phải thử tải trước.** Thiết kế hiện tại dùng một kênh hiện diện chung cho cả trường; trên 500 người nên tách kênh theo khu.
-- Dự án Free bị **tạm dừng nếu khoảng 1 tuần không có hoạt động**. Hãy vào dashboard bấm Restore trước ngày mở.
+- **Số kết nối tối đa không phải sức chứa đã kiểm chứng của trò chơi.** Ví dụ theo [cách tính sự kiện Realtime](https://supabase.com/docs/guides/realtime/settings), một broadcast tới 100 người tính khoảng 100 sự kiện. Đàn gửi liên tục 20 gói/giây cho 5 người nghe đã tạo khoảng 100 lượt nhận/giây, chưa tính vị trí, hiện diện và chat.
+- Bắt đầu bằng nhóm nhỏ, theo dõi Realtime Reports trên dự án thật rồi tăng dần. **Chưa có phép đo tải để cam kết vài chục, 500 hay 800 người.** Giữ piano nhiều người nghe hoặc mở đông người cần điều chỉnh tần suất/gói dịch vụ và đo lại; hiện diện hiện dùng một kênh chung toàn khuôn viên.
+- Trước buổi mở, kiểm tra dự án đang hoạt động và đăng nhập được từ hai mạng khác nhau.
 - Có thể chỉnh `posIntervalMs` và `presenceGapMs` trong `config.js` để giảm lưu lượng hơn nữa.
+
+### Kiểm tra trước khi mời người dùng
+
+1. Mở URL đã triển khai trên hai trình duyệt hoặc hai thiết bị; đăng nhập hai hồ sơ khác nhau. Góc kết nối phải báo trực tuyến; nếu báo ngoại tuyến, kiểm tra `config.js`.
+2. Vào cùng khu: thấy nhân vật, đi bộ, kéo góc nhìn khi giữ WASD, thử chọn cùng một ghế, đứng dậy rồi ngồi lại. Ghế đang có người phải bị từ chối hoặc giải quyết xung đột.
+3. Gửi chat Cả khu/Gần tôi và chọn vẫy tay, đọc sách, điện thoại, laptop: máy kia phải thấy đúng người. Thử người vào khu sau khi hoạt động đã bắt đầu.
+4. Ở tầng 6–7, bật Âm thanh trên máy nghe và chơi đàn; tắt riêng tiếng đàn người khác rồi thử lại. Chuyển khu khi nốt đang ngân, không được phát lại nốt từ khu cũ.
+5. Tắt mạng rồi bật lại: trạng thái chuyển sang kết nối lại, người dùng trở lại danh sách, không cần tải lại trang. Đóng một tab và kiểm tra nó biến mất.
+6. Xem Console, Realtime Reports, lỗi Auth và nhật ký SQL. Kiểm thử bằng máy chủ giả chỉ kiểm tra giao thức ứng dụng, **không xác nhận RLS/JWT, giới hạn hay độ trễ của Supabase thật**.
+
+Kiểm thử lõi chạy bằng `node tools/test-network.mjs` (không cần trình duyệt). Kiểm thử ba người giả lập: `node tools/kiem_tra_nhieu_nguoi.mjs` sau khi cài Playwright/Chromium theo chú thích đầu file. Công cụ giả lập chỉ chạy trên máy phát triển, không dùng làm backend công khai.
 
 ---
 

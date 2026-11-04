@@ -1044,7 +1044,7 @@ root.querySelector('[data-action=climb]').addEventListener('click',()=>enterWalk
 root.querySelector('[data-action=go401]').addEventListener('click',()=>enterWalk(V(-.6,Y4+1.6,-10.2),0));
 const KMAP={KeyW:'f',ArrowUp:'f',KeyS:'b',ArrowDown:'b',KeyA:'l',ArrowLeft:'l',KeyD:'r',ArrowRight:'r'};
 addEventListener('keydown',e=>{if(e.key==='Escape'&&mode==='walk'&&!window.__POTA){setMode('orbit');return;}
-  if(mode!=='walk')return;if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;
+  if(mode!=='walk')return;if(window.__POTA){if(rider&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName||'')&&!e.target?.isContentEditable&&e.key.length===1&&'1234670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);return;}if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;
   if(rider&&e.key.length===1&&'1234670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);});
 addEventListener('keyup',e=>{if(KMAP[e.code])keys[KMAP[e.code]]=0;if(e.key==='Shift')keys.run=0;});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=0;});
@@ -1053,8 +1053,8 @@ dpad.querySelectorAll('button').forEach(b=>{const k=b.dataset.k;
   const off=()=>{keys[k]=0;b.classList.remove('held');};
   b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);});
 let look=null;
-canvas.addEventListener('pointerdown',e=>{if(mode!=='walk')return;look={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(!look||mode!=='walk')return;const s=(touch?.006:.0045)*(window.__LOOK_K||1);
+canvas.addEventListener('pointerdown',e=>{if(mode!=='walk'||window.__POTA)return;look={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{if(!look||mode!=='walk'||window.__POTA)return;const s=(touch?.006:.0045)*(window.__LOOK_K||1);
   yaw+=(e.clientX-look.x)*s;pitch+=(e.clientY-look.y)*s;pitch=Math.max(-1.2,Math.min(1.2,pitch));look={x:e.clientX,y:e.clientY};});
 const endLook=()=>look=null;canvas.addEventListener('pointerup',endLook);canvas.addEventListener('pointercancel',endLook);
 $('#t-night').addEventListener('click',e=>{nightTarget=nightTarget?0:1;e.currentTarget.setAttribute('aria-pressed',!!nightTarget);});
@@ -1075,12 +1075,12 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     let mx=(keys.f-keys.b)*fx+(keys.r-keys.l)*-fz, mz=(keys.f-keys.b)*fz+(keys.r-keys.l)*fx;
     const len=Math.hypot(mx,mz),p=camera.position;
     rider=LIFTS.find(l=>inCab(l,p.x,p.z)&&(l.phase==='moving'||l.phase==='xfer'?rider===l:Math.abs(l.y-base)<.6))||null;
-    if(len>0){mx=mx/len*sp;mz=mz/len*sp;
+    if(len>0){mx=mx/Math.max(1,len)*sp;mz=mz/Math.max(1,len)*sp;
       /* on the stairs, walking follows the curve of the flight and the view turns with it */
       const st=base<MZ+.1?stairAt(p.x,p.z,-.22):null;
       if(st&&!rider&&st.u<.97){const tx=st.m*Math.sin(st.a),tz=-Math.cos(st.a),d=mx*tx+mz*tz;
         if(Math.abs(d)>sp*.25){const sg=Math.sign(d),r=Math.hypot(st.m*p.x-L,p.z),rc=Math.min(STR.ro-.4,Math.max(STR.ri+.4,r)),[nx,nz]=sP(st.m,rc,st.a-sg*sp/r);mx=nx-p.x;mz=nz-p.z;
-          if(keys.f&&!keys.b){const want=Math.atan2(tx*sg,-tz*sg);let dy=want-yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));yaw+=dy*Math.min(1,dt*4);}}}
+          if(keys.f&&!keys.b&&!window.__POTA){const want=Math.atan2(tx*sg,-tz*sg);let dy=want-yaw;dy=Math.atan2(Math.sin(dy),Math.cos(dy));yaw+=dy*Math.min(1,dt*4);}}}
       let s=surface(p.x+mx,p.z,base);if(s!==null){p.x+=mx;base=s;}s=surface(p.x,p.z+mz,base);if(s!==null){p.z+=mz;base=s;}}
     /* walking out through the front doors leads back onto the campus */
     if(!rider&&base<.3&&p.z>ZF-.8&&Math.abs(p.x)<1.5&&len>0&&mz>0){for(const kk in keys)keys[kk]=0;ctx.exitLibrary();}
@@ -1880,7 +1880,8 @@ function standUp(){stopDemo();releaseAll();setPedal(false);pb.hidden=true;hud.cl
   $('#m-walk').setAttribute('aria-pressed',true);setHint();}
 $('#pb-up').addEventListener('click',standUp);sitBtn.addEventListener('click',sit);
 root.querySelector('[data-action=play]').addEventListener('click',sit);
-addEventListener('keydown',e=>{if(mode!=='piano'){if(mode==='walk'&&e.code==='KeyE'&&!sitBtn.hidden){e.preventDefault();sit();}return;}
+addEventListener('keydown',e=>{if(mode!=='piano'){if(!window.__POTA&&mode==='walk'&&e.code==='KeyE'&&!sitBtn.hidden){e.preventDefault();sit();}return;}
+  if(/^(INPUT|TEXTAREA)$/.test(e.target?.tagName||'')||e.target?.isContentEditable)return;
   if(e.target&&e.target.tagName==='SELECT'&&!KEYMAP[e.code]&&e.code!=='Escape')return;
   e.stopImmediatePropagation();
   if(e.key==='Escape'){standUp();return;}
@@ -1907,7 +1908,7 @@ $('#m-orbit').addEventListener('click',()=>setMode('orbit'));
 $('#m-walk').addEventListener('click',()=>setMode('walk'));
 const KMAP={KeyW:'f',ArrowUp:'f',KeyS:'b',ArrowDown:'b',KeyA:'l',ArrowLeft:'l',KeyD:'r',ArrowRight:'r'};
 addEventListener('keydown',e=>{if(mode==='piano')return;if(e.key==='Escape'&&mode==='walk'&&!window.__POTA){setMode('orbit');return;}
-  if(mode!=='walk')return;if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;
+  if(mode!=='walk')return;if(window.__POTA){if(rider&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName||'')&&!e.target?.isContentEditable&&e.key.length===1&&'1234670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);return;}if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;
   if(rider&&e.key.length===1&&'1234670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);});
 addEventListener('keyup',e=>{if(KMAP[e.code])keys[KMAP[e.code]]=0;if(e.key==='Shift')keys.run=0;});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=0;});
@@ -1916,8 +1917,8 @@ dpad.querySelectorAll('button').forEach(b=>{const k=b.dataset.k;
   const off=()=>{keys[k]=0;b.classList.remove('held');};
   b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);});
 let look=null;
-canvas.addEventListener('pointerdown',e=>{if(mode!=='walk')return;look={x:e.clientX,y:e.clientY};try{canvas.setPointerCapture(e.pointerId);}catch(_){}});
-canvas.addEventListener('pointermove',e=>{if(!look||mode!=='walk')return;const s=(touch?.006:.0045)*(window.__LOOK_K||1);
+canvas.addEventListener('pointerdown',e=>{if(mode!=='walk'||window.__POTA)return;look={x:e.clientX,y:e.clientY};try{canvas.setPointerCapture(e.pointerId);}catch(_){}});
+canvas.addEventListener('pointermove',e=>{if(!look||mode!=='walk'||window.__POTA)return;const s=(touch?.006:.0045)*(window.__LOOK_K||1);
   yaw+=(e.clientX-look.x)*s;pitch+=(e.clientY-look.y)*s;pitch=Math.max(-1.2,Math.min(1.2,pitch));look={x:e.clientX,y:e.clientY};});
 const endLook=()=>look=null;canvas.addEventListener('pointerup',endLook);canvas.addEventListener('pointercancel',endLook);
 
@@ -1939,7 +1940,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     const sp=(keys.run?6:3)*dt*(window.__WALK_K||1),fx=Math.sin(yaw),fz=-Math.cos(yaw);
     let mx=(keys.f-keys.b)*fx+(keys.r-keys.l)*-fz, mz=(keys.f-keys.b)*fz+(keys.r-keys.l)*fx;
     const len=Math.hypot(mx,mz),p=camera.position;
-    if(len>0){mx=mx/len*sp;mz=mz/len*sp;if(!blocked(p.x+mx,p.z,p.x,p.z))p.x+=mx;if(!blocked(p.x,p.z+mz,p.x,p.z))p.z+=mz;}
+    if(len>0){mx=mx/Math.max(1,len)*sp;mz=mz/Math.max(1,len)*sp;if(!blocked(p.x+mx,p.z,p.x,p.z))p.x+=mx;if(!blocked(p.x,p.z+mz,p.x,p.z))p.z+=mz;}
     rider=LIFTS.find(l=>inCab(l,p.x,p.z)&&(l.phase==='moving'||l.floor===level))||null;
     if(rider)eyeY=rider.y+1.6;else eyeY+=((baseY(p.x,p.z)+1.6)-eyeY)*Math.min(1,dt*10);p.y=eyeY;
     camera.rotation.order='YXZ';camera.rotation.set(-pitch,-yaw,0);
@@ -2276,14 +2277,14 @@ function setMode(m){if(m===mode)return;$('#m-orbit').setAttribute('aria-pressed'
 $('#m-orbit').addEventListener('click',()=>setMode('orbit'));$('#m-walk').addEventListener('click',()=>setMode('walk'));
 root.querySelector('[data-action=enter]').addEventListener('click',()=>enterWalk(0,24,0));
 const KMAP={KeyW:'f',ArrowUp:'f',KeyS:'b',ArrowDown:'b',KeyA:'l',ArrowLeft:'l',KeyD:'r',ArrowRight:'r'};
-addEventListener('keydown',e=>{if(e.key==='Escape'&&mode==='walk'&&!window.__POTA){setMode('orbit');return;}if(mode!=='walk')return;if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&mode==='walk'&&!window.__POTA){setMode('orbit');return;}if(mode!=='walk'||window.__POTA)return;if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;});
 addEventListener('keyup',e=>{if(KMAP[e.code])keys[KMAP[e.code]]=0;if(e.key==='Shift')keys.run=0;});
 addEventListener('blur',()=>{for(const kk in keys)keys[kk]=0;});
 dpad.querySelectorAll('button').forEach(b=>{const kk=b.dataset.k;const on=e=>{e.preventDefault();keys[kk]=1;b.classList.add('held');try{b.setPointerCapture(e.pointerId);}catch(_){}};
   const off=()=>{keys[kk]=0;b.classList.remove('held');};b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('lostpointercapture',off);});
 let look=null;
-canvas.addEventListener('pointerdown',e=>{if(mode!=='walk')return;look={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
-canvas.addEventListener('pointermove',e=>{if(!look||mode!=='walk')return;const s=(touch?.006:.0045)*(window.__LOOK_K||1);yaw+=(e.clientX-look.x)*s;pitch+=(e.clientY-look.y)*s;pitch=Math.max(-1.2,Math.min(1.3,pitch));look={x:e.clientX,y:e.clientY};});
+canvas.addEventListener('pointerdown',e=>{if(mode!=='walk'||window.__POTA)return;look={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',e=>{if(!look||mode!=='walk'||window.__POTA)return;const s=(touch?.006:.0045)*(window.__LOOK_K||1);yaw+=(e.clientX-look.x)*s;pitch+=(e.clientY-look.y)*s;pitch=Math.max(-1.2,Math.min(1.3,pitch));look={x:e.clientX,y:e.clientY};});
 const endLook=()=>look=null;canvas.addEventListener('pointerup',endLook);canvas.addEventListener('pointercancel',endLook);
 $('#t-night').addEventListener('click',e=>{nightTarget=nightTarget?0:1;e.currentTarget.setAttribute('aria-pressed',!!nightTarget);});
 $('#meta').textContent=`Khu D · Thư viện Tạ Quang Bửu · ${treesAt.length} cây xanh · hồ sen · 7 tòa nhà`;
@@ -2296,7 +2297,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     if(kk>=1){const d=tween.done;tween=null;d&&d();}}
   if(mode==='walk'){const sp=(keys.run?9:4)*dt,fx=Math.sin(yaw),fz=-Math.cos(yaw);
     let mx=(keys.f-keys.b)*fx+(keys.r-keys.l)*-fz,mz=(keys.f-keys.b)*fz+(keys.r-keys.l)*fx;const len=Math.hypot(mx,mz),p=camera.position;
-    if(len>0){mx=mx/len*sp;mz=mz/len*sp;
+    if(len>0){mx=mx/Math.max(1,len)*sp;mz=mz/Math.max(1,len)*sp;
       /* walking up to the library's glass doors takes you inside */
       if(p.z+mz<LIB.z+2.3&&Math.abs(p.x)<3.2&&p.z>LIB.z+1){keys.f=keys.b=keys.l=keys.r=0;ctx.enterLibrary();}
       else{if(!hitC(p.x+mx,p.z))p.x+=mx;if(!hitC(p.x,p.z+mz))p.z+=mz;}}

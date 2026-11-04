@@ -434,3 +434,6 @@ body.po-wheel-on .po-wheel-btn { background: var(--accent); color: var(--accent-
 .po-bubbles .po-bubble.out { opacity: 0; transform: translateY(-6px) scale(.92); }
 .po-bubbles .po-bubble.icon { font-size: 20px; line-height: 1.1; padding: 4px 8px; }
 .po-tag.pinned .po-name { display: none; }
+
+.po-startup-error { max-width: 440px; margin: 18px auto 0; padding: 0 16px; }
+.po-startup-error p { line-height: 1.6; }
