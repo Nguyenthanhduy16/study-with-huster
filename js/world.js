@@ -1128,14 +1128,21 @@
     const list = [];
     for (const o of others.values()) {
       if (o.seat < 0) {
-        const el = Math.min(1.6, (performance.now() - o.pt) / 1000);
+        /* đoán vị trí hiện tại = gói gần nhất + vận tốc × thời gian (tối đa 2,5 s; quá lâu không có gói thì đứng chờ).
+           Nhân vật đi theo vận tốc nhận được (không trễ sau vị trí thật) và chỉ được kéo nhẹ về chỗ đoán,
+           nên gói mới tới không làm giật; bước chân và hướng mặt lấy theo vận tốc nên không rung. */
+        const el = Math.min(2.5, (performance.now() - o.pt) / 1000), going = (o.vx || o.vz) && el < 2.5;
         const tx = o.px + o.vx * el, tz = o.pz + o.vz * el;
-        const dx = tx - o.x, dz = tz - o.z, d = Math.hypot(dx, dz);
-        if (d > 25) { o.x = tx; o.z = tz; }
-        const ox = o.x, oz = o.z, k = Math.min(1, dt * 6); o.x += dx * k; o.z += dz * k; o.y += (o.ty - o.y) * Math.min(1, dt * 8);
-        o.speed = Math.min(9, Math.hypot(o.x - ox, o.z - oz) / Math.max(dt, 1e-3));
-        if (o.speed > 0.3) o.tyaw = Math.atan2(o.x - ox, o.z - oz);
-        o.yaw += ang(o.tyaw - o.yaw) * Math.min(1, dt * 8);
+        const ox = o.x, oz = o.z;
+        if (Math.hypot(tx - o.x, tz - o.z) > 25) { o.x = tx; o.z = tz; }
+        if (going) { o.x += o.vx * dt; o.z += o.vz * dt; }
+        const k = Math.min(1, dt * (going ? 3 : 6)); o.x += (tx - o.x) * k; o.z += (tz - o.z) * k; o.y += (o.ty - o.y) * Math.min(1, dt * 8);
+        const meas = Math.min(9, Math.hypot(o.x - ox, o.z - oz) / Math.max(dt, 1e-3));
+        o.speed = (o.speed || 0) + (meas - (o.speed || 0)) * Math.min(1, dt * 8);
+        if (going && Math.hypot(o.vx, o.vz) > 0.3) o.tyaw = Math.atan2(o.vx, o.vz);
+        else if (o.speed > 0.3 && meas > 0.3) o.tyaw = Math.atan2(o.x - ox, o.z - oz);
+        // xoay người dần, tối đa ~4 rad/s: gói mới đổi hướng không làm nhân vật quay giật
+        o.yaw += Math.max(-4 * dt, Math.min(4 * dt, ang(o.tyaw - o.yaw) * Math.min(1, dt * 8)));
         o.av.root.position.set(o.x, o.y, o.z); o.av.root.rotation.y = o.yaw;
       } else o.speed = 0;
       o.av.update(dt, o.speed);
@@ -1234,18 +1241,29 @@
 
   /* Gửi vị trí THƯA để tiết kiệm lượt tin realtime: khi bắt đầu đi, khi rẽ gấp, tối đa ~1 lần/1,2 giây khi đang đi,
      và một lần khi dừng. Người nhận tự ngoại suy theo vận tốc. */
-  let lastHead = 0;
-  function sendPos(now, moving) {
+  /* Gửi theo kiểu "dead reckoning": người xem đoán vị trí = gói trước + vận tốc × thời gian. Chỉ gửi khi cần:
+     lúc bắt đầu đi, tối đa mỗi posIntervalMs, và khi vị trí thật lệch khỏi chỗ người xem đang đoán > 0,35 m
+     (đi vòng / kéo chuột đổi hướng) — đi thẳng thì vẫn thưa, rẽ thì gửi dày hơn (cách nhau ≥ 250 ms).
+     Vận tốc gửi đi được làm mượt (~0,15 s) thay vì vận tốc của đúng một khung hình.
+     Một khung hình đứng yên (vướng va chạm, cầu thang) không tính là dừng: phải đứng yên liên tục ≥ 0,25 s. */
+  let lastPosCall = 0, svx = 0, svz = 0, stillSince = 0, sent = null;
+  function sendPos(now, movingNow) {
+    const dt = Math.min(0.1, Math.max(0, (now - (lastPosCall || now)) / 1000)); lastPosCall = now;
+    if (!wasMoving) { svx = me.vx; svz = me.vz; }
+    else { const a = Math.min(1, dt / 0.15); svx += (me.vx - svx) * a; svz += (me.vz - svz) * a; }
+    if (movingNow) stillSince = 0; else if (!stillSince) stillSince = now;
+    const moving = movingNow || (wasMoving && now - stillSince < 250);
     const POS_MS = APP.posIntervalMs || 1200;
     if (moving) {
-      const head = Math.atan2(me.vx, me.vz), turn = Math.abs(ang(head - lastHead));
-      if (!wasMoving || now - lastSend > POS_MS || (turn > 0.6 && now - lastSend > 400)) {
-        lastSend = now; lastHead = head;
-        ev.emit('pos', { x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), r: +me.yaw.toFixed(2), vx: +me.vx.toFixed(2), vz: +me.vz.toFixed(2), s: 1 });
+      let err = Infinity;
+      if (sent) { const t = (now - sent.t) / 1000; err = Math.hypot(sent.x + sent.vx * t - me.x, sent.z + sent.vz * t - me.z); }
+      if (!wasMoving || now - lastSend > POS_MS || (err > 0.35 && now - lastSend > 250)) {
+        lastSend = now; sent = { t: now, x: me.x, z: me.z, vx: svx, vz: svz };
+        ev.emit('pos', { x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), r: +me.yaw.toFixed(2), vx: +svx.toFixed(2), vz: +svz.toFixed(2), s: 1 });
       }
       wasMoving = true;
     } else if (wasMoving) {
-      wasMoving = false; lastSend = now;
+      wasMoving = false; lastSend = now; sent = null; svx = svz = 0;
       ev.emit('pos', { x: +me.x.toFixed(2), y: +me.y.toFixed(2), z: +me.z.toFixed(2), r: +me.yaw.toFixed(2), s: 0 });
       sendRest();
     }
