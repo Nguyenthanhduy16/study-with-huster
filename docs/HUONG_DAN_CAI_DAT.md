@@ -11,6 +11,43 @@ Có 2 cách chạy:
 
 ---
 
+## 0. Danh sách kiểm tra triển khai (làm theo thứ tự, đánh dấu từng ô)
+
+Chi tiết từng bước ở mục 2. Dùng danh sách này trong ngày đưa web lên mạng.
+
+**A. Supabase**
+- [ ] Tạo dự án mới ở <https://supabase.com> → **New project**, vùng **Southeast Asia (Singapore)**. Chờ trạng thái *Healthy*.
+- [ ] **Authentication → Sign In / Providers → Allow anonymous sign-ins**: bật → **Save**.
+- [ ] **Authentication → Rate Limits**: nâng *anonymous sign-ins* (mặc định 30 lượt/giờ/IP; cả lớp dùng chung Wi-Fi trường là chung IP). Ví dụ 300–500 nếu mời vài trăm người.
+- [ ] **SQL Editor → New query**: dán toàn bộ `supabase/schema.sql` → **Run**. Phải báo *Success*, không có dòng `ERROR`.
+- [ ] Query mới: dán `supabase/seed_questions.sql` → **Run** (133 câu mẫu).
+- [ ] Query mới: `select admin_set_initial_password('mat-khau-rieng-it-nhat-8-ky-tu');` → **Run**. **Không có mật khẩu mặc định**: chưa chạy lệnh này thì không ai (kể cả bạn) vào được trang quản trị.
+- [ ] **Database → Publications → supabase_realtime**: có đủ 6 bảng `messages`, `public_profiles`, `notices`, `events`, `cheers`, `app_settings`.
+- [ ] Kiểm tra nhanh trong SQL Editor: `select count(*) from questions;` ra 133; `select count(*) from admin_secret;` ra 1.
+
+**B. config.js**
+- [ ] **Project Settings → API** (hoặc **Data API**): chép **Project URL** vào `window.SUPABASE_URL`, chép khoá **anon** (tab *Legacy API Keys*, chuỗi `eyJ…`) vào `window.SUPABASE_ANON_KEY`.
+- [ ] Tuyệt đối không dán khoá `service_role` / `sb_secret_…`. Nếu lỡ dán, web tự chạy ngoại tuyến và báo lỗi trong Console; hãy **đổi khoá** trong Supabase ngay.
+- [ ] Nếu dùng tên miền riêng cho Supabase (custom domain), thêm `https://ten-mien` và `wss://ten-mien` vào `connect-src` trong `netlify.toml` và `vercel.json`, nếu không CSP sẽ chặn kết nối.
+
+**C. Đưa web lên (chọn một)**
+- [ ] **Netlify**: nối repo (Netlify tự đọc `netlify.toml`, không cần lệnh build) hoặc kéo thả cả thư mục vào <https://app.netlify.com/drop>.
+- [ ] **Vercel**: **Add New → Project** → chọn repo → *Framework Preset: Other*, để trống Build Command và Output Directory → **Deploy** (`vercel.json` có sẵn header).
+- [ ] **GitHub Pages**: **Settings → Pages → Deploy from a branch → main / (root)**. Lưu ý: GitHub Pages **không** đọc `netlify.toml`/`vercel.json` (không có CSP, mọi file được cache khoảng 10 phút), nên sau khi sửa `config.js` chờ khoảng 10 phút hoặc tải lại cứng (Ctrl+Shift+R).
+- [ ] Mở `https://ten-mien/scene/exterior/thu-vien-ta-quang-buu.glb`: phải tải về tệp khoảng 9,4 MB (không phải trang 404 hay tệp con trỏ LFS vài trăm byte).
+
+**D. Thử bằng 2 thiết bị (ví dụ một laptop và một điện thoại 4G, để khác mạng)**
+- [ ] Mở URL trên cả hai, đăng nhập hai tên/MSSV khác nhau. Góc trên báo trực tuyến; số "đang học" là 2 trên cả hai máy.
+- [ ] Cùng ở sân trước: thấy nhân vật của nhau; đi bộ trên máy này thì máy kia thấy di chuyển trong vòng 1–2 giây.
+- [ ] Gửi chat *Cả khu*: máy kia nhận ngay. Gửi tin thứ hai liền: bị báo "Chậm lại…".
+- [ ] Vẫy tay (giữ Q hoặc nút ✋): máy kia thấy. Nhắn riêng bằng câu mẫu: chỉ người nhận thấy.
+- [ ] Một máy vào thư viện: máy kia thấy bạn ấy chuyển khu và nhân vật biến khỏi sân.
+- [ ] Tắt Wi-Fi/4G trên một máy 10 giây rồi bật lại: tự nối lại, không cần tải lại trang. Đóng tab: máy kia còn 1 người sau khoảng 10–30 giây.
+- [ ] Vào `admin.html` bằng mật khẩu vừa đặt, ẩn một tin nhắn: tin biến mất ở máy kia.
+- [ ] Mở F12 → Console trên máy tính: không có lỗi đỏ về `Content-Security-Policy`, `401` hoặc `permission denied`.
+
+---
+
 ## 1. Chạy thử ngay (ngoại tuyến)
 
 Trình duyệt chặn một số tính năng khi mở thẳng file, nên hãy chạy qua một máy chủ nhỏ:
@@ -44,10 +81,11 @@ Người học không cần email. Mỗi trình duyệt được cấp một mã
 ### Bước 3. Tạo cơ sở dữ liệu
 1. Vào **SQL Editor → New query**, dán toàn bộ `supabase/schema.sql`, rồi bấm **Run**.
 2. Mở tiếp một query mới, dán `supabase/seed_questions.sql` (133 câu mẫu), rồi bấm **Run**.
-3. **Đặt mật khẩu quản trị ngay** (mật khẩu mặc định là `doi-mat-khau-ngay`):
+3. **Đặt mật khẩu quản trị** (không có mật khẩu mặc định; trước khi chạy lệnh này trang quản trị bị khoá):
    ```sql
    select admin_set_initial_password('mat-khau-rieng-it-nhat-8-ky-tu');
    ```
+   Dự án đã chạy bản cũ có mật khẩu mặc định `doi-mat-khau-ngay`: chạy lại `schema.sql` sẽ vô hiệu hoá mật khẩu đó, nên cần chạy lệnh trên một lần.
 
 Chạy lại `schema.sql` nhiều lần vẫn an toàn, dữ liệu cũ không bị xoá. Khi sửa phiên bản sau, cứ dán lại và chạy.
 
@@ -111,6 +149,8 @@ Dù vậy:
 - Bắt đầu bằng nhóm nhỏ, theo dõi Realtime Reports trên dự án thật rồi tăng dần. **Chưa có phép đo tải để cam kết vài chục, 500 hay 800 người.** Giữ piano nhiều người nghe hoặc mở đông người cần điều chỉnh tần suất/gói dịch vụ và đo lại; hiện diện hiện dùng một kênh chung toàn khuôn viên.
 - Trước buổi mở, kiểm tra dự án đang hoạt động và đăng nhập được từ hai mạng khác nhau.
 - Có thể chỉnh `posIntervalMs` và `presenceGapMs` trong `config.js` để giảm lưu lượng hơn nữa.
+- Mỗi người mở 4 kênh trên **một** kết nối WebSocket (hiện diện chung, kênh khu, tin nhắn của khu, thay đổi CSDL chung). Mỗi thay đổi `public_profiles`/`events` được Realtime kiểm tra RLS cho từng người đang nghe, nên càng đông thì CSDL càng bận; theo dõi *Database → Reports* khi tăng người.
+- Kênh vị trí/cử chỉ/hiện diện là kênh broadcast công khai (chưa dùng Realtime Authorization). Người cố ý sửa mã trình duyệt có thể gửi gói vị trí giả; dữ liệu thật (giờ học, sao, tin nhắn, nhắn riêng, quản trị) vẫn được bảo vệ bằng RLS và hàm trên máy chủ.
 
 ### Kiểm tra trước khi mời người dùng
 
@@ -121,7 +161,7 @@ Dù vậy:
 5. Tắt mạng rồi bật lại: trạng thái chuyển sang kết nối lại, người dùng trở lại danh sách, không cần tải lại trang. Đóng một tab và kiểm tra nó biến mất.
 6. Xem Console, Realtime Reports, lỗi Auth và nhật ký SQL. Kiểm thử bằng máy chủ giả chỉ kiểm tra giao thức ứng dụng, **không xác nhận RLS/JWT, giới hạn hay độ trễ của Supabase thật**.
 
-Kiểm thử lõi chạy bằng `node tools/test-network.mjs` (không cần trình duyệt). Kiểm thử ba người giả lập: `node tools/kiem_tra_nhieu_nguoi.mjs` sau khi cài Playwright/Chromium theo chú thích đầu file. Công cụ giả lập chỉ chạy trên máy phát triển, không dùng làm backend công khai.
+Kiểm thử lõi chạy bằng `node tools/test-network.mjs` (không cần trình duyệt). Kiểm thử ba trình duyệt Chromium thật qua Supabase giả lập: `node tools/kiem_tra_nhieu_nguoi.mjs --port=3103` sau khi cài Playwright/Chromium theo chú thích đầu file (máy không có GPU dựng hình bằng SwiftShader nên mất khoảng 7–10 phút; thêm `--out=thu-muc` để chụp ảnh). Kiểm tra quyền SQL trên Postgres 16 thường: chạy lần lượt `tools/supabase-gia-lap.sql`, `supabase/schema.sql`, `supabase/seed_questions.sql`, `tools/kiem_tra_sql.sql` bằng `psql -v ON_ERROR_STOP=1` trên một CSDL trống. Công cụ giả lập chỉ chạy trên máy phát triển, không dùng làm backend công khai.
 
 ---
 
@@ -132,7 +172,9 @@ Kiểm thử lõi chạy bằng `node tools/test-network.mjs` (không cần trì
 | Màn chờ báo "Không đăng nhập ẩn danh được" | Chưa bật Anonymous sign-ins (bước 2). |
 | Báo lỗi sau khi nhiều bạn vào cùng lúc | Nâng giới hạn Anonymous sign-ins (bước 2.3). |
 | Không thấy người khác, tin nhắn không hiện ngay | Kiểm tra Realtime (bước 4). Xem tab Console của trình duyệt (F12). |
-| "Sai mật khẩu quản trị" | Chạy lại `select admin_set_initial_password('...')` trong SQL Editor. |
+| "Sai mật khẩu quản trị" | Chưa đặt mật khẩu hoặc quên: chạy `select admin_set_initial_password('...')` trong SQL Editor. |
+| Console báo `Refused to connect … Content-Security-Policy` | `SUPABASE_URL` không phải `*.supabase.co` (tên miền riêng): thêm tên miền vào `connect-src` trong `netlify.toml`/`vercel.json`. |
+| Sửa `config.js` mà máy khác vẫn chạy ngoại tuyến | GitHub Pages cache khoảng 10 phút: chờ rồi tải lại cứng (Ctrl+Shift+R). |
 | Máy nóng, giật | Vào "Của tôi → Đồ hoạ → Nhẹ". |
 | Muốn xoá sạch sau đợt thử | Vào admin.html → Dữ liệu → Xoá (gõ `XOA DU LIEU`). |
 

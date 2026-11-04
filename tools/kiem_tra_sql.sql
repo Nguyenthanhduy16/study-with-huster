@@ -42,6 +42,44 @@ end $$;
 select pg_temp.dat((select count(*) from app_settings) = 1, 'anon đọc được app_settings');
 reset role;
 
+-- không có mật khẩu quản trị mặc định
+select pg_temp.dat(not exists (select 1 from admin_secret where pw_hash = extensions.crypt('doi-mat-khau-ngay', pw_hash)), 'không còn mật khẩu quản trị mặc định công khai');
+
+-- nhắn riêng: chỉ người gửi và người nhận đọc được; người thứ ba (C) không thấy, kể cả qua bộ lọc
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+select pg_temp.dat((send_dm('11111111-1111-1111-1111-111111111111', 0)->>'ok')::boolean, 'B nhắn riêng cho A');
+select pg_temp.dat((select count(*) from cheers where kind = 'dm') = 1, 'B (người gửi) đọc lại được tin riêng');
+reset role;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select pg_temp.dat((select count(*) from cheers where kind = 'dm') = 1, 'A (người nhận) đọc được tin riêng');
+reset role;
+set request.jwt.claim.sub = '33333333-3333-3333-3333-333333333333';
+set role authenticated;
+select pg_temp.dat((select count(*) from cheers) = 0, 'C (người thứ ba) không đọc được tin riêng của A và B');
+select pg_temp.dat((select count(*) from cheers where to_uid = '11111111-1111-1111-1111-111111111111') = 0, 'C lọc theo to_uid của A vẫn không thấy gì');
+-- phiên ẩn danh chưa có hồ sơ không được báo cáo (3 phiên ẩn danh không ẩn được tin của người khác)
+select pg_temp.dat(not coalesce((qa_report('m', (select max(id) from messages))->>'ok')::boolean, false), 'phiên chưa đăng ký không báo cáo được');
+do $$ begin
+  begin perform admin_set_initial_password('chiem-quyen-123'); raise exception 'KHÔNG ĐẠT: authenticated gọi được admin_set_initial_password';
+  exception when insufficient_privilege then raise notice 'đạt: trình duyệt không gọi được admin_set_initial_password'; end;
+  begin perform _admin_ok('x'); raise exception 'KHÔNG ĐẠT: authenticated gọi được hàm nội bộ _admin_ok';
+  exception when insufficient_privilege then raise notice 'đạt: trình duyệt không gọi được hàm nội bộ _admin_ok'; end;
+  begin perform 1 from admin_secret; raise exception 'KHÔNG ĐẠT: đọc được admin_secret';
+  exception when insufficient_privilege then raise notice 'đạt: chặn đọc admin_secret (băm mật khẩu)'; end;
+  begin update public_profiles set display_name = 'Giả mạo'; raise exception 'KHÔNG ĐẠT: sửa thẳng public_profiles';
+  exception when insufficient_privilege then raise notice 'đạt: chặn sửa thẳng public_profiles'; end;
+end $$;
+reset role;
+set role anon;
+do $$ begin
+  begin perform register_profile('Nguyễn Văn Ẩn', '20231111', true, '{}'::jsonb); raise exception 'KHÔNG ĐẠT: anon gọi được register_profile';
+  exception when insufficient_privilege then raise notice 'đạt: chưa đăng nhập thì không gọi được hàm người học'; end;
+end $$;
+select pg_temp.dat(not (admin_login('doi-mat-khau-ngay')->>'ok')::boolean, 'mật khẩu mặc định cũ không đăng nhập được');
+reset role;
+
 -- ẩn tin ⇒ có sự kiện hide_msg cho Realtime
 select admin_set_initial_password('mat-khau-thu-123');
 select max(id) as msg_id from messages \gset
@@ -70,6 +108,6 @@ select pg_temp.dat(not exists (select 1 from admin_fail where k = '10.0.0.1'), '
 -- dọn
 delete from profiles where id in ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222');
 delete from events where kind = 'hide_msg';
-select admin_set_initial_password('doi-mat-khau-ngay');
+delete from admin_secret where id = 1;   -- trả về trạng thái chưa đặt mật khẩu
 \o
 \echo 'TẤT CẢ ĐẠT'
