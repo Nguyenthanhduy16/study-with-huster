@@ -40,6 +40,14 @@ Tin ở kênh Cả khu và Gần tôi hiện trên đầu đúng người gửi,
 - Âm lượng nhỏ dần khi ra xa đàn, nhỏ hơn khi ở tầng 7.
 - Tắt riêng được bằng mục "🎹 Tiếng đàn của bạn khác" trong hộp Âm thanh.
 
+## 🔄 Phiên làm tiếp (04/11/2026)
+
+- ✅ Dựng lại lịch sử git: commit "Ban goc" (chỉ chứa các file bị sửa ở Đợt 3) → "Ban chup dot 3 giua chung" → các sửa tiếp theo.
+- ✅ Sửa máy chủ Supabase giả lập (`tools/fake-supabase-server.mjs`): trước đây nó thay nhầm dòng *ví dụ* trong chú thích của `config.js` nên web luôn chạy ngoại tuyến khi thử nhiều người.
+- ✅ `node tools/kiem_tra_nhieu_nguoi.mjs` (3 Chromium + Supabase giả lập): **ĐẠT TẤT CẢ** — đăng nhập 3 người, đếm online, thấy nhân vật của nhau, vị trí truyền sang máy khác, chat, chống spam, QTV ẩn tin ⇒ biến mất ở máy khác, cử chỉ, đổi khu, mất kết nối rồi tự nối lại, đóng tab, không gói nào phải gửi qua HTTP.
+- 🔧 Đang làm song song (4 nhánh riêng, sẽ gộp vào `main`): A — kéo chuột xoay camera khi đang đi (mục 2); B — ngồi đúng mọi ghế (mục 3); C — bỏ nút dịch chuyển + Radial Menu + bong bóng chat (mục 4, 5); D — rà lớp mạng, piano qua mạng, tệp triển khai, hướng dẫn cài đặt (mục 6, 7).
+- ⏳ Chưa làm: gộp 4 nhánh, kiểm tra chung sau khi gộp, cập nhật README (mục Đợt 3, dòng "không dùng logo HUST").
+
 ## ⚠️ Cần bạn lưu ý
 - **Quyền dùng logo HUST và tên mẫu áo Phương Thảo:** bản Phòng thay đồ mới dùng ảnh logo thật; cần xác nhận được phép trước khi mở công khai. Dòng 136 của `README.md` (ghi "trường giả Tổ Ong, không dùng logo HUST") nay không còn đúng — sẽ sửa khi hoàn tất.
 - **Chưa chạy trên Supabase thật** và chưa đo tốc độ khung hình trên máy thật (môi trường làm việc chỉ có đồ hoạ giả lập). Trang phục mới nặng hơn trang phục cũ.
