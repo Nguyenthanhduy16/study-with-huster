@@ -41,6 +41,13 @@ js, k = re.subn(r'(function place\(n,x,y,z,ry=0,s=1(?:,sy)?\)\{)', lambda m: m.g
 if k < 3:
     errors.append(f'Móc "ghế": cần ít nhất 3 hàm place(), tìm thấy {k}')
 
+# Tên prop đi cùng từng bộ phận InstancedMesh để lớp cảnh ẩn đúng món trùng,
+# không đoán theo số instance/vị trí (hai loại ghế có thể đứng sát nhau).
+PROP_INSTANCE = 'const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);'
+if js.count(PROP_INSTANCE) < 3:
+    errors.append('Móc "tên đồ nội thất": cần ít nhất 3 bộ dựng InstancedMesh')
+js = js.replace(PROP_INSTANCE, PROP_INSTANCE + 'im.userData.propName=k;')
+
 # ---------- móc 1b: chỗ ngồi dựng bằng khối (không qua place) — ghế dài, băng ghế gỗ, đảo "thuyền", ghế đệm ----------
 SEAT_FN = 'window.__S=(n,x,y,z,ry)=>(window.__SEATLOG=window.__SEATLOG||[]).push({tag:window.__SEATTAG,n:n,x:x,y:y,z:z,ry:ry});\n'
 def seat_hook(old, extra, name):
@@ -106,7 +113,7 @@ API_A = ('api:{camera,controls,scene,roomG,ROOMZ,Y4,FH,viewPose,flyTo,surface,ke
          'orbitTo:(p,t,d)=>{if(mode==="walk")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},'
          'orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},'
          'busy:()=>!!tween},')
-API_B = ('api:{camera,controls,scene,viewPose,flyTo,keys,PIANO,sit,MZ,ROOF,'
+API_B = ('api:{camera,controls,scene,viewPose,flyTo,keys,PIANO,sit,MZ,ROOF,plantColliders:cols7,'
          'get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get level(){return level;},get rider(){return rider;},'
          'blockedAt:(x,z,lv)=>{const o=level;level=lv;try{return blocked(x,z,x,z);}finally{level=o;}},groundY,'
          'ext:on=>{if(on){if(mode==="piano")standUp();mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},'

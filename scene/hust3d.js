@@ -26,7 +26,7 @@ function defineProp(n,parts){PROPS[n]={parts,list:[]};}
 function place(n,x,y,z,ry=0,s=1){if(/^(chair|sofa|arm|cube)/.test(n))(window.__SEATLOG=window.__SEATLOG||[]).push({tag:window.__SEATTAG,n:n,x:x,y:y,z:z,ry:ry});PROPS[n].list.push(T(x,y,z,0,ry,0,s,s,s));}
 function buildProps(){const tmp=new THREE.Matrix4();
   for(const k in PROPS){const P=PROPS[k];if(!P.list.length)continue;
-    for(const p of P.parts){const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);
+    for(const p of P.parts){const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);im.userData.propName=k;
       P.list.forEach((M,i)=>{tmp.multiplyMatrices(M,p.t);im.setMatrixAt(i,tmp);});
       im.castShadow=p.cast!==false;im.receiveShadow=true;im.frustumCulled=false;scene.add(im);}}}
 
@@ -413,7 +413,7 @@ function defineProp(n,parts){PROPS[n]={parts,list:[]};}
 function place(n,x,y,z,ry=0,s=1){if(/^(chair|sofa|arm|cube)/.test(n))(window.__SEATLOG=window.__SEATLOG||[]).push({tag:window.__SEATTAG,n:n,x:x,y:y,z:z,ry:ry});PROPS[n].list.push(T(x,y,z,0,ry,0,s,s,s));}
 function buildProps(){const tmp=new THREE.Matrix4();
   for(const k in PROPS){const P=PROPS[k];if(!P.list.length)continue;
-    for(const p of P.parts){const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);
+    for(const p of P.parts){const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);im.userData.propName=k;
       P.list.forEach((M,i)=>{tmp.multiplyMatrices(M,p.t);im.setMatrixAt(i,tmp);});
       im.castShadow=p.cast!==false;im.receiveShadow=true;im.frustumCulled=false;scene.add(im);}}}
 const faceTo=(x,z,tx,tz)=>Math.atan2(tx-x,tz-z);
@@ -1155,7 +1155,7 @@ function defineProp(n,parts){PROPS[n]={parts,list:[]};}
 function place(n,x,y,z,ry=0,s=1){if(/^(chair|sofa|arm|cube)/.test(n))(window.__SEATLOG=window.__SEATLOG||[]).push({tag:window.__SEATTAG,n:n,x:x,y:y,z:z,ry:ry});PROPS[n].list.push(T(x,y,z,0,ry,0,s,s,s));}
 function buildProps(){const tmp=new THREE.Matrix4();
   for(const k in PROPS){const P=PROPS[k];if(!P.list.length)continue;
-    for(const p of P.parts){const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);
+    for(const p of P.parts){const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);im.userData.propName=k;
       P.list.forEach((M,i)=>{tmp.multiplyMatrices(M,p.t);im.setMatrixAt(i,tmp);});
       im.castShadow=p.cast!==false;im.receiveShadow=true;im.frustumCulled=false;scene.add(im);}}}
 const faceTo=(x,z,tx,tz)=>Math.atan2(tx-x,tz-z);
@@ -1958,7 +1958,7 @@ function arrive(fl,idx,pose){const l=LIFTS[idx%LIFTS.length];l.floor=fl;l.y=LBAS
   camera.rotation.order='YXZ';camera.rotation.set(-pitch,-yaw,0);
   canvas.classList.add('walk');dpad.hidden=false;setActive(null);$('#m-orbit').setAttribute('aria-pressed',false);$('#m-walk').setAttribute('aria-pressed',true);setHint();}
 const lights=[];scene.traverse(o=>{if(o.isLight)lights.push(o);});
-Object.assign(ME,{api:{camera,controls,scene,viewPose,flyTo,keys,PIANO,sit,pianoRemote,pianoRemoteGain,pianoRemoteReset,/*[piano-net]*/MZ,ROOF,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get level(){return level;},get rider(){return rider;},blockedAt:(x,z,lv)=>{const o=level;level=lv;try{return blocked(x,z,x,z);}finally{level=o;}},groundY,ext:on=>{if(on){if(mode==="piano")standUp();mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw,lv)=>{tween=null;rider=null;mode="walk";level=lv;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode!=="orbit")setMode("orbit");enterWalk(p,yw,6);},stopWalk:()=>{if(mode!=="orbit")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode!=="orbit")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:OWN,group:scene,lights,
+Object.assign(ME,{api:{camera,controls,scene,viewPose,flyTo,keys,PIANO,sit,pianoRemote,pianoRemoteGain,pianoRemoteReset,/*[piano-net]*/MZ,ROOF,plantColliders:cols7,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get level(){return level;},get rider(){return rider;},blockedAt:(x,z,lv)=>{const o=level;level=lv;try{return blocked(x,z,x,z);}finally{level=o;}},groundY,ext:on=>{if(on){if(mode==="piano")standUp();mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw,lv)=>{tween=null;rider=null;mode="walk";level=lv;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode!=="orbit")setMode("orbit");enterWalk(p,yw,6);},stopWalk:()=>{if(mode!=="orbit")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode!=="orbit")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:OWN,group:scene,lights,
   activate(arr){root.hidden=false;renderer.shadowMap.needsUpdate=true;last=performance.now();
     if(arr)arrive(arr.floor,arr.idx,arr.pose);else{controls.enabled=mode==='orbit';if(!started)intro();}started=true;},
   deactivate(){if(mode==='piano')standUp();root.hidden=true;controls.enabled=false;for(const k in keys)keys[k]=0;ceilingGroup.visible=true;roofG.visible=true;
@@ -2004,7 +2004,7 @@ const PROPS={};const part=(g,m,t,cast)=>({g,m,t:t||T(),cast});
 function defineProp(n,parts){PROPS[n]={parts,list:[]};}
 function place(n,x,y,z,ry=0,s=1,sy){if(/^(chair|sofa|arm|cube)/.test(n))(window.__SEATLOG=window.__SEATLOG||[]).push({tag:window.__SEATTAG,n:n,x:x,y:y,z:z,ry:ry});PROPS[n].list.push(T(x,y,z,0,ry,0,s,sy||s,s));}
 function buildProps(){const tmp=new THREE.Matrix4();for(const k in PROPS){const P=PROPS[k];if(!P.list.length)continue;
-  for(const p of P.parts){const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);P.list.forEach((M,i)=>{tmp.multiplyMatrices(M,p.t);im.setMatrixAt(i,tmp);});
+  for(const p of P.parts){const im=new THREE.InstancedMesh(p.g,p.m,P.list.length);im.userData.propName=k;P.list.forEach((M,i)=>{tmp.multiplyMatrices(M,p.t);im.setMatrixAt(i,tmp);});
     im.castShadow=p.cast!==false;im.receiveShadow=true;im.frustumCulled=false;scene.add(im);}}}
 const cols=[];   // walking colliders: rectangles [x0,x1,z0,z1] and circles [x,z,r]
 const solid=(x0,x1,z0,z1)=>cols.push([x0,x1,z0,z1]);

@@ -30,6 +30,8 @@ npm start
 
 Kiểm thử tự động gồm điều khiển, ghế, vòng hành động/chat, mạng/piano, chức năng ngoại tuyến và ba máy khách HTTP/SSE độc lập. Phiên này kiểm tra được thông báo lỗi WebGL trên trình duyệt; **chưa xác nhận hình ảnh 3D/FPS trên thiết bị có WebGL, Supabase thật hoặc tải đông người**. Xem `TINH_TRANG_DOT_3.md` và checklist trong hướng dẫn cài đặt.
 
+Hai nhánh WIP về ghế và giao diện đã được tích hợp trên nền có bản vá thang máy/Supabase. Bổ sung xử lý đường đi bị kẹt, ghế trùng, radial sát mép, kéo camera từ nhãn và bong bóng trên màn hình nhỏ. `npm test` có hồi quy bảo vệ chuyển camera thang máy. Các bài kiểm tra render riêng là `npm run test:render`, `npm run test:ui`, `npm run test:lift` (cần Playwright/Chromium); không coi chúng đã đạt chỉ vì các kiểm thử Node đạt.
+
 ## Đợt 2 (phần 1) — đã làm
 
 | Mục góp ý | Đã làm |

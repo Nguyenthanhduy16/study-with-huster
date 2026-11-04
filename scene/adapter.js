@@ -46,6 +46,46 @@
     const shift = s.kind === 'bench' ? 0.1 : 0;
     return Object.assign({}, s, { x: s.x + Math.sin(s.ry) * shift, z: s.z + Math.cos(s.ry) * shift, y: s.y + (s.kind === 'lounger' ? -0.04 : 0), floor: 0 });
   }
+  /* Bỏ chỗ ngồi bị đặt trùng (hai món đồ cách nhau < 0,35 m cùng độ cao, trừ các chỗ của sofa) và ẩn món thừa.
+     Đồ nội thất dựng bằng InstancedMesh theo thứ tự place(), cùng thứ tự với nhật ký ghế → chỉ số instance của món
+     thừa = số món cùng tên đứng trước nó. Mỗi bộ phận của món là một InstancedMesh có count = số món cùng tên. */
+  function dropDuplicates(mod, list) {
+    const keep = [], zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (const s of list) {
+      const dup = keep.find(k => !/^sofa/.test(k.n) && !/^sofa/.test(s.n) && Math.abs(k.y - s.y) < 0.3 && Math.hypot(k.x - s.x, k.z - s.z) < 0.35);
+      if (!dup) { keep.push(s); continue; }
+      const same = list.filter(x => x.n === s.n), idx = same.indexOf(s);
+      mod.group.traverse(o => {
+        if (!o.isInstancedMesh || o.userData.propName !== s.n || o.count !== same.length) return;
+        o.setMatrixAt(idx, zero); o.instanceMatrix.needsUpdate = true;
+      });
+    }
+    return keep;
+  }
+  function islandSeat(s, cx, cz) {
+    const fx = Math.sin(s.ry), fz = Math.cos(s.ry), tx = Math.cos(s.ry), tz = -Math.sin(s.ry), dx = s.x - cx, dz = s.z - cz;
+    let lx = dx * tx + dz * tz, lz = dx * fx + dz * fz;
+    lx = Math.sign(lx) * Math.min(Math.abs(lx), 1.42);
+    const t = (Math.abs(lx) + 2.6) / 5.2, half = 2.4 * t * (1 - t);
+    lz = Math.min(lz, half - 0.12);
+    return Object.assign({}, s, { x: cx + tx * lx + fx * lz, z: cz + tz * lx + fz * lz });
+  }
+  /* chậu cây lớn (scale 1,9) ở hai đầu dãy bàn cong tầng 7 phía −z nằm sát sau lưng ghế (lá phủ lên người ngồi):
+     dời ra phía kính 0,5 m theo bán kính dãy bàn và thu nhỏ còn 1,5 */
+  function movePlants(mod, mz) {
+    const L = 7.5;                                           // tâm dãy bàn cong tầng 7: (0, ±L)
+    const colliders = mod.api && mod.api.plantColliders;
+    if (!colliders) return;                                  // giữ hình và va chạm cùng chỗ nếu mô hình cũ chưa có API
+    mod.group.children.forEach(o => {
+      if (!o.isGroup || Math.abs(o.scale.x - 1.9) > 1e-3 || Math.abs(o.position.y - mz) > 0.05) return;
+      const dx = o.position.x, dz = o.position.z + L, r = Math.hypot(dx, dz);
+      if (o.position.z > -L || Math.abs(r - 15.4) > 0.05) return;
+      const collider = colliders.find(c => Math.hypot(c[0] - o.position.x, c[1] - o.position.z) < 0.01 && Math.abs(c[2] - 0.5) < 0.01);
+      if (!collider) return;
+      o.position.set(dx / r * 15.9, o.position.y, dz / r * 15.9 - L); o.scale.setScalar(1.5);
+      collider[0] = o.position.x; collider[1] = o.position.z; collider[2] *= 1.5 / 1.9;
+    });
+  }
   /* đường dẫn gốc của web (để trang công cụ trong tools/ cũng tải được file GLB) */
   const ROOT = ((document.currentScript && document.currentScript.src) || '').replace(/scene\/adapter\.js.*$/, '');
 
@@ -248,7 +288,18 @@
     const hB = lv => lv === 6 ? 0 : lv === 7 ? BMZ : BROOF;
     const levelB = y => hB(lvlB(y));
     const seatsB = [];
-    for (const s of log) if (s.tag === 'B') expand(s, seatsB, levelB);
+    /* "thuyền" gỗ tầng 6: mặt đệm hình thấu kính dài 5,2 m, rộng tối đa 0,6 m mỗi bên tựa lưng. Hai chỗ ở hai đầu
+       (lx = ±1,8) chỉ còn 0,31 m mặt đệm mà hông đặt ở 0,45 m → nhân vật ngồi lơ lửng ngoài mép. Dời vào |lx| ≤ 1,42
+       và giữ hông cách mép đệm ≥ 0,12 m (vẫn cách tấm tựa giữa ≥ 0,3 m). */
+    const isl = log.filter(s => s.tag === 'B' && s.n === 'island');
+    const icx = isl.reduce((a, s) => a + s.x, 0) / (isl.length || 1), icz = isl.reduce((a, s) => a + s.z, 0) / (isl.length || 1);
+    /* Mô hình đặt trùng hai món ở cùng một chỗ (ghế đen cạnh bàn tròn tầng 6 chồng lên ghế xanh/ghế bành). Chỉ giữ món
+       đặt trước, ẩn món thừa để nhân vật không ngồi xuyên qua nó và hai người không ngồi chồng lên nhau. */
+    const logB = dropDuplicates(B, log.filter(s => s.tag === 'B'));
+    for (const s of logB) expand(s.n === 'island' ? islandSeat(s, icx, icz) : s, seatsB, levelB);
+    /* chậu cây tầng 7 (hai đầu dãy bàn cong phía −z) đặt ngay sau lưng ghế: dời ra sát kính và thu nhỏ */
+    movePlants(B, BMZ);
+    H.renderer.shadowMap.needsUpdate = true;
     // ghế đàn piano (tầng 6): ngồi vào là mở bàn phím đàn
     // Hông ở tâm ghế z=0,78; root tiến 0,1 m về phía đàn để bù tư thế ngồi.
     { const P = B.api.PIANO, a = P.localToWorld(V(0, 0, 0.68)), c = P.localToWorld(V(0, 0, 0));

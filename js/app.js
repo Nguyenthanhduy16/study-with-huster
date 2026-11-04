@@ -613,9 +613,10 @@
     function open(mode, src, x, y, pid, ts) {
       if (W.open || !can() || busyUi()) return false;
       if (!root) build();
-      const vw = innerWidth, vh = innerHeight, R = Math.max(110, Math.min(165, Math.min(vw, vh) / 2 - 22));
+      const vw = innerWidth, vh = innerHeight, R = Math.max(48, Math.min(165, (vw - 24) / 2, (vh - 64) / 2));
       let cx = vw / 2, cy = vh / 2;
       if (src === 'key' && mouse) { cx = U.clamp(mouse.x, R + 12, vw - R - 12); cy = U.clamp(mouse.y, R + 12, vh - R - 40); }
+      else cy = U.clamp(cy, R + 12, vh - R - 40);
       returnFocus = document.activeElement;
       st = { mode, src, pid, sel: -2, t: ts == null ? performance.now() : ts, cx, cy, R, ax: x != null ? x : (mouse ? mouse.x : cx), ay: y != null ? y : (mouse ? mouse.y : cy), moved: false };
       // Pause travel before choosing an activity; closing the wheel never resumes an old route.
@@ -623,7 +624,7 @@
       const toggle = $('#po-wheel-btn'); if (toggle) toggle.setAttribute('aria-expanded', 'true');
       ring.style.width = ring.style.height = (R * 2) + 'px';
       ring.style.left = (cx - R) + 'px'; ring.style.top = (cy - R) + 'px';
-      hint.style.top = (cy + R + 10) + 'px'; hint.style.left = cx + 'px';
+      hint.style.top = (cy + R + 10) + 'px'; hint.style.left = (vw / 2) + 'px';
       setSel(-1);
       hintText();
       root.hidden = false; W.open = true; document.body.classList.add('po-wheel-on');
@@ -654,17 +655,24 @@
       if (World.setAct(net.me.id, it.k)) toast(`${E.icon} ${E.label} — bước đi hoặc chọn "Dừng" để cất đi.`, '', 3500);
       else toast('Lúc này chưa làm được việc đó.');
     }
+    /* giữ Q / giữ nút: con trỏ nằm trên vòng → chọn đúng ô dưới con trỏ (tính từ TÂM vòng). Vòng bị đẩy vào trong khi
+       chuột/nút ở sát mép màn hình nên tâm vòng có thể lệch khỏi chỗ bắt đầu giữ — tính theo chỗ bắt đầu thì sáng nhầm ô bên cạnh.
+       Con trỏ ngoài vòng (vuốt nhanh từ nút ✋) → chọn theo hướng kéo tính từ chỗ bắt đầu giữ. */
     function moveHold(x, y) {
       if (!st || st.mode !== 'hold') return;
       if (Math.hypot(x - st.ax, y - st.ay) > 10) st.moved = true;
-      setSel(sectorAt(x - st.ax, y - st.ay, false));
+      const dc = Math.hypot(x - st.cx, y - st.cy);
+      if (dc < st.R * 0.38) { setSel(-1); return; }                        // giữa vòng = không chọn
+      const onRing = sectorAt(x - st.cx, y - st.cy, true);
+      setSel(onRing >= 0 ? onRing : st.moved ? sectorAt(x - st.ax, y - st.ay, false) : -1);
     }
-    /* thả: có ô đang sáng → chọn; bấm nhanh (theo thời điểm của sự kiện, không phụ thuộc khung hình chậm) → vòng đứng yên */
+    /* thả: bấm nhanh không rê (theo thời điểm của sự kiện, không phụ thuộc khung hình chậm) → vòng đứng yên;
+       có ô đang sáng → chọn; còn lại → đóng */
     function release(ts) {
       if (!st || st.mode !== 'hold') return;
       const quick = (ts == null ? performance.now() : ts) - st.t < 320 && !st.moved;
-      if (st.sel >= 0) choose(st.sel);
-      else if (quick) { st.mode = 'toggle'; hintText(); setSel(-1); hub.focus({ preventScroll: true }); }
+      if (quick) { st.mode = 'toggle'; hintText(); setSel(-1); hub.focus({ preventScroll: true }); }
+      else if (st.sel >= 0) choose(st.sel);
       else close();
     }
     /* ---- phím ---- */
