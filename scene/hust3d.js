@@ -982,6 +982,16 @@ const liftAt=(x,z)=>LIFTS.find(l=>Math.abs(z-l.z)<.96&&x>XW-.45);
 const inCab=(l,x,z)=>x>XW+.25&&x<CX1-.3&&Math.abs(z-l.z)<.68;
 const onLanding=(x,z)=>{const ax=Math.abs(x);return ax>LAND.x0-.05&&ax<LAND.x1+.3&&z>LAND.z0&&z<LAND.z1;};
 const onMezz=(x,z)=>onLanding(x,z)||!inside(x,z,FR+.3);
+// Physical camera footprint: furniture is handled by visibility, not floor clearance.
+function cameraInside(x,z,foot){
+  if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(foot))return false;
+  const m=.08,lvl=levelOf(foot);
+  if(lvl===4&&z<ZB+1.1)return x>(z>ZB?-XW+m:ROOM.X0+m)&&x<(z>ZB?XW-m:ROOM.X1-m)&&z>ROOMZ+ROOM.Z0+m;
+  if(foot<.3&&x<-XW+m)return x>BRM.x0+m&&z>BRM.z0+m&&z<BRM.z1-m&&!(x>-XW-m&&Math.abs(z)>BRM.open-m);
+  if(x<-XW+m||x>XW-m||z<ZB+m||z>ZF-m)return false;
+  if(foot>=FH-.3&&inside(x,z,FR+m)){const ax=Math.abs(x);return lvl===2&&ax>LAND.x0+m&&ax<LAND.x1-m&&z>Math.max(LAND.z0,-7.75)+m&&z<LAND.z1-m;}
+  return true;
+}
 /* the walkable surface height at (x,z) for someone standing at height cur, or null */
 function surface(x,z,cur){const lvl=levelOf(cur),l=liftAt(x,z);
   if(l){const door=x<=XW+.25&&Math.abs(z-l.z)<.42;
@@ -1103,7 +1113,7 @@ function arrive(fl,idx,pose){const l=LIFTS[idx%LIFTS.length];l.floor=fl;l.y=LBAS
   camera.rotation.order='YXZ';camera.rotation.set(-pitch,-yaw,0);
   canvas.classList.add('walk');dpad.hidden=false;walkUI();setHint();}
 const lights=[];scene.traverse(o=>{if(o.isLight)lights.push(o);});
-Object.assign(ME,{api:{camera,controls,scene,roomG,ROOMZ,Y4,FH,viewPose,flyTo,surface,keys,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get base(){return base;},get rider(){return rider;},inLift:()=>mode==='walk'&&LIFTS.some(l=>inCab(l,camera.position.x,camera.position.z)&&(l.phase==='moving'||l.phase==='xfer'?rider===l:Math.abs(l.y-base)<.6)),ext:on=>{if(on){mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw)=>{tween=null;rider=null;mode="walk";base=Math.round((p.y-1.6)/FH)*FH;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode==="walk")setMode("orbit");enterWalk(p,yw);},stopWalk:()=>{if(mode==="walk")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode==="walk")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:FLOORS,group:scene,lights,
+Object.assign(ME,{api:{camera,controls,scene,roomG,ROOMZ,Y4,FH,viewPose,flyTo,surface,keys,cameraInside,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get base(){return base;},get rider(){return rider;},inLift:()=>mode==='walk'&&LIFTS.some(l=>inCab(l,camera.position.x,camera.position.z)&&(l.phase==='moving'||l.phase==='xfer'?rider===l:Math.abs(l.y-base)<.6)),ext:on=>{if(on){mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw)=>{tween=null;rider=null;mode="walk";base=Math.round((p.y-1.6)/FH)*FH;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode==="walk")setMode("orbit");enterWalk(p,yw);},stopWalk:()=>{if(mode==="walk")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode==="walk")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:FLOORS,group:scene,lights,
   activate(arr){root.hidden=false;renderer.shadowMap.needsUpdate=true;last=performance.now();
     if(arr&&arr.entrance){mode='walk';base=0;eyeY=1.6;rider=null;tween=null;fullView=false;controls.enabled=false;yaw=0;pitch=0;camera.position.set(0,1.6,11.3);
       camera.rotation.order='YXZ';camera.rotation.set(0,0,0);canvas.classList.add('walk');dpad.hidden=false;walkUI();setHint();}
@@ -1698,6 +1708,11 @@ function groundY(x,z){if(inside(x,z,PR))return PY;
   return 0;}
 const liftAt=(x,z)=>LIFTS.find(l=>Math.abs(z-l.z)<.96&&x>WR-.45);
 const inCab=(l,x,z)=>x>WR+.25&&x<CX1-.3&&Math.abs(z-l.z)<.68;
+function cameraInside(x,z,foot){
+  if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(foot))return false;
+  const upper=foot>=MZ-.3&&foot<ROOF-.3;
+  return inside(x,z,WR-.08)&&!(upper&&inside(x,z,FR+.20));
+}
 function blocked(x,z,cx,cz){const l=liftAt(x,z);
   if(l){const door=x<=WR+.25&&Math.abs(z-l.z)<.42;
     if(l.phase==='moving'||l.phase==='xfer')return !(rider===l&&inCab(l,x,z));
@@ -1839,11 +1854,14 @@ const SONGS=[
 ];
 const NI={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
 SONGS.forEach(sg=>sg.notes=sg.n.split(/\s+/).map(t=>{const [nm,d]=t.split(':');const mm=/^([A-G])(#?)(\d)$/.exec(nm);return {m:12*(+mm[3]+1)+NI[mm[1]]+(mm[2]?1:0),d:d?+d:1};}));
-/* [midi-library] Named songs contain metadata only; import your own MIDI to play them. */
-const MIDI=window.PianoMidi;
-if(MIDI)SONGS.push(...MIDI.CATALOG.map(s=>({name:s.name,requiresMidi:true,notes:[]})));
+/* [midi-library-v2] Classical MIDIs are bundled; modern catalog titles require a personal MIDI. */
+const MIDI=window.PianoMidi,LIBRARY=window.PianoLibrary;
+const libraryReady=!!(LIBRARY&&Array.isArray(LIBRARY.entries)&&typeof LIBRARY.load==='function');
+if(libraryReady)SONGS.push(...LIBRARY.entries.map(s=>({id:s.id,name:s.name,builtin:true,source:s.source,license:s.license,licenseUrl:s.licenseUrl,credit:s.credit,notes:[]})));
+const providedCatalog=new Set(libraryReady?LIBRARY.entries.map(s=>s.catalogName).filter(Boolean):[]);
+if(MIDI)SONGS.push(...MIDI.CATALOG.filter(s=>!providedCatalog.has(s.name)).map(s=>({name:s.name,requiresMidi:true,notes:[]})));
 const songSel=$('#pb-song');
-function refreshSongs(){songSel.replaceChildren(new Option('Chơi tự do',''),...SONGS.map((sg,i)=>new Option(sg.name+(sg.requiresMidi?' · cần MIDI':sg.timeline?' · MIDI đã nhập':''),String(i))));}
+function refreshSongs(){songSel.replaceChildren(new Option('Chơi tự do',''),...SONGS.map((sg,i)=>new Option(sg.name+(sg.builtin?' · có sẵn':sg.requiresMidi?' · cần MIDI':sg.timeline?' · MIDI đã nhập':''),String(i))));}
 refreshSongs();
 let song=null,gmode='learn',idx=0,good=0,miss=0,demoT=[],demoOn=false;
 const lane=$('#pb-lane'),guide=$('#pb-guide'),stat=$('#pb-stat'),prog=$('#pb-prog'),tip=$('#pb-tip');
@@ -1851,9 +1869,9 @@ const marker=mk(box(.022,.006,.05),mat('#4d86ff',{emissive:'#3a78ff',emissiveInt
 function markNext(){for(const el of Object.values(keyEls))el.classList.remove('next');marker.visible=false;
   if(!song||idx>=song.notes.length)return;const m=song.notes[idx].m;if(keyEls[m])keyEls[m].classList.add('next');
   const k=PIANO.userData.keys[m];if(k){marker.position.set(k.x,k.y+(k.b?.025:.02),k.z+(k.b?.01:.04));marker.visible=true;}}
-function renderLane(){const pending=!!(song&&song.requiresMidi);$('#pb-demo').disabled=pending;$('#pb-learn').disabled=pending;$('#pb-restart').disabled=pending;
+function renderLane(){const pending=!!(song&&(song.requiresMidi||song.loadError||(song.builtin&&!song.timeline)));$('#pb-demo').disabled=pending;$('#pb-learn').disabled=pending;$('#pb-restart').disabled=pending;
   if(!song){guide.hidden=true;tip.hidden=false;markNext();return;}guide.hidden=false;tip.hidden=true;
-  if(pending){lane.textContent='Chưa có bản nhạc cho '+song.name;stat.textContent='Chọn “Nhập MIDI” để gắn tệp .mid của bạn cho bài này. Tên bài không kèm giai điệu có sẵn.';prog.style.width='0%';markNext();return;}
+  if(pending){lane.textContent=song.loadError?'Chưa mở được '+song.name:'Chưa có bản nhạc cho '+song.name;stat.textContent=song.loadError||'Chọn “Nhập MIDI” để gắn tệp .mid của bạn cho bài này. Tên bài không kèm giai điệu có sẵn.';prog.style.width='0%';markNext();return;}
   const from=Math.max(0,idx-2),to=Math.min(song.notes.length,from+16);let h='';
   for(let i=from;i<to;i++){const n=song.notes[i],k=keyFor(n.m);h+=`<div class="pb-chip${i<idx?' done':''}${i===idx?' now':''}${n.d>=2?' long':''}"><b>${k||'↔'}</b><small>${SOLF[n.m%12]}${n.d>=2?' —':''}</small></div>`;}
   lane.innerHTML=h;prog.style.width=(100*idx/song.notes.length)+'%';
@@ -1864,7 +1882,7 @@ function renderLane(){const pending=!!(song&&song.requiresMidi);$('#pb-demo').di
   markNext();}
 const midiPlayer=MIDI&&MIDI.createPlayer({down:(m,v)=>keyDown(m,v),up:m=>keyUp(m),progress:t=>{if(!song||!song.timeline)return;let lo=0,hi=song.notes.length;while(lo<hi){const mid=(lo+hi)>>1;if(song.notes[mid].at<=t)lo=mid+1;else hi=mid;}if(idx!==Math.max(0,lo-1)){idx=Math.max(0,lo-1);renderLane();}},done:()=>{demoOn=false;if(song){idx=song.notes.length;renderLane();}}});
 function stopDemo(){demoT.forEach(clearTimeout);demoT=[];if(midiPlayer)midiPlayer.stop();if(demoOn){demoOn=false;releaseAll();}}
-function startSong(){stopDemo();idx=0;good=0;miss=0;if(song&&shift!==0){shift=0;buildKeys();}renderLane();if(song&&!song.requiresMidi&&gmode==='demo')playDemo();}
+function startSong(){stopDemo();idx=0;good=0;miss=0;if(song&&shift!==0){shift=0;buildKeys();}showSongInfo();renderLane();if(song&&!song.requiresMidi&&!song.loadError&&gmode==='demo')playDemo();}
 function playDemo(){audio();demoOn=true;renderLane();if(song.timeline&&midiPlayer){midiPlayer.play(song);return;}const beat=60/song.bpm*1000;let t=300;
   song.notes.forEach((n,i)=>{demoT.push(setTimeout(()=>{idx=i;renderLane();keyDown(n.m);},t));demoT.push(setTimeout(()=>keyUp(n.m),t+n.d*beat*.9));t+=n.d*beat;});
   demoT.push(setTimeout(()=>{demoOn=false;idx=song.notes.length;renderLane();},t+100));}
@@ -1872,8 +1890,18 @@ function onPlayed(m){if(!song||demoOn||gmode!=='learn'||idx>=song.notes.length)r
   if(m===song.notes[idx].m){good++;idx++;renderLane();}
   else{miss++;const el=keyEls[m];if(el){el.classList.add('bad');setTimeout(()=>el.classList.remove('bad'),260);}renderLane();}}
 function setGMode(v){gmode=v;$('#pb-learn').setAttribute('aria-pressed',v==='learn');$('#pb-demo').setAttribute('aria-pressed',v==='demo');startSong();}
-songSel.addEventListener('change',()=>{song=songSel.value===''?null:SONGS[+songSel.value];startSong();songSel.blur();});
-const midiInput=$('#pb-midi-file'),midiStatus=$('#pb-midi-status');let importVersion=0;
+songSel.addEventListener('change',()=>{stopDemo();song=songSel.value===''?null:SONGS[+songSel.value];
+  if(song&&song.builtin&&!song.timeline)try{const loaded=LIBRARY.load(song.id);if(!loaded||!Array.isArray(loaded.notes)||!loaded.notes.length||!Array.isArray(loaded.timeline)||!Number.isFinite(loaded.duration))throw new Error('Bản MIDI chưa có dữ liệu hợp lệ.');Object.assign(song,loaded);delete song.loadError;}
+  catch(e){song.loadError='Không mở được bản có sẵn: '+(e.message||'hãy tải lại trang.');}
+  startSong();songSel.blur();});
+const midiInput=$('#pb-midi-file'),midiStatus=$('#pb-midi-status'),midiCredit=$('#pb-midi-credit');let importVersion=0;
+function sourceLink(text,value){try{const url=new URL(value);if(!/^https?:$/.test(url.protocol))return null;const a=document.createElement('a');a.textContent=text;a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';return a;}catch(_){return null;}}
+function showSongInfo(){midiCredit.replaceChildren();midiCredit.hidden=!(song&&song.builtin);
+  if(song&&song.builtin){midiStatus.textContent=song.loadError||'Bản MIDI có sẵn · chọn “Nghe mẫu” để nghe, hoặc “Tập theo” để chơi từng nốt.';
+    if(song.credit)midiCredit.append(String(song.credit));const source=sourceLink('Nguồn bản nhạc',song.source),license=sourceLink(song.license||'Giấy phép',song.licenseUrl);if(source)midiCredit.append(' · ',source);if(license)midiCredit.append(' · ',license);else if(song.license)midiCredit.append(' · '+String(song.license));}
+  else if(song&&song.requiresMidi)midiStatus.textContent='Bài này cần MIDI của bạn · chọn “Nhập MIDI” để thêm. Tệp chỉ đọc trên máy; nốt được chia sẻ khi phát.';
+  else if(song&&song.timeline)midiStatus.textContent='MIDI đã nhập trong phiên này · chọn “Nghe mẫu” để phát.';
+  else midiStatus.textContent=libraryReady?'Các bản cổ điển có sẵn trong danh sách · chọn một bài rồi bấm “Nghe mẫu”, không cần tải tệp.':'Chưa tải được thư viện cổ điển. Bạn vẫn có thể chơi bài mẫu hoặc nhập MIDI.';}
 $('#pb-midi-import').addEventListener('click',()=>{if(MIDI)midiInput.click();else midiStatus.textContent='Chưa tải được bộ đọc MIDI. Hãy tải lại trang.';});
 midiInput.addEventListener('change',async()=>{const file=midiInput.files&&midiInput.files[0];if(!file)return;const version=++importVersion,target=song&&song.requiresMidi?song:null;stopDemo();
   try{if(!/\.midi?$/i.test(file.name))throw new Error('Chọn tệp .mid hoặc .midi.');if(file.size>MIDI.LIMITS.bytes)throw new Error('Tệp MIDI tối đa 2 MB.');
@@ -1885,7 +1913,7 @@ midiInput.addEventListener('change',async()=>{const file=midiInput.files&&midiIn
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopDemo();renderLane();}});
 $('#pb-learn').addEventListener('click',()=>setGMode('learn'));$('#pb-demo').addEventListener('click',()=>setGMode('demo'));
 $('#pb-restart').addEventListener('click',startSong);
-buildKeys();renderLane();
+buildKeys();renderLane();showSongInfo();
 
 /* sitting down and standing up */
 const benchW=()=>PIANO.localToWorld(V(0,0,.78)),pb=$('#pianobar'),sitBtn=$('#sitbtn'),hud=root.querySelector('.hud');
@@ -1977,7 +2005,7 @@ function arrive(fl,idx,pose){const l=LIFTS[idx%LIFTS.length];l.floor=fl;l.y=LBAS
   camera.rotation.order='YXZ';camera.rotation.set(-pitch,-yaw,0);
   canvas.classList.add('walk');dpad.hidden=false;setActive(null);$('#m-orbit').setAttribute('aria-pressed',false);$('#m-walk').setAttribute('aria-pressed',true);setHint();}
 const lights=[];scene.traverse(o=>{if(o.isLight)lights.push(o);});
-Object.assign(ME,{api:{camera,controls,scene,viewPose,flyTo,keys,PIANO,sit,pianoRemote,pianoRemoteGain,pianoRemoteReset,/*[piano-net]*/MZ,ROOF,plantColliders:cols7,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get level(){return level;},get rider(){return rider;},inLift:()=>mode==='walk'&&LIFTS.some(l=>inCab(l,camera.position.x,camera.position.z)&&(l.phase==='moving'||l.phase==='xfer'?rider===l:l.floor===level)),blockedAt:(x,z,lv)=>{const o=level;level=lv;try{return blocked(x,z,x,z);}finally{level=o;}},groundY,ext:on=>{if(on){if(mode==="piano")standUp();mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw,lv)=>{tween=null;rider=null;mode="walk";level=lv;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode!=="orbit")setMode("orbit");enterWalk(p,yw,6);},stopWalk:()=>{if(mode!=="orbit")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode!=="orbit")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:OWN,group:scene,lights,
+Object.assign(ME,{api:{camera,controls,scene,viewPose,flyTo,keys,cameraInside,PIANO,sit,pianoRemote,pianoRemoteGain,pianoRemoteReset,/*[piano-net]*/MZ,ROOF,plantColliders:cols7,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get level(){return level;},get rider(){return rider;},inLift:()=>mode==='walk'&&LIFTS.some(l=>inCab(l,camera.position.x,camera.position.z)&&(l.phase==='moving'||l.phase==='xfer'?rider===l:l.floor===level)),blockedAt:(x,z,lv)=>{const o=level;level=lv;try{return blocked(x,z,x,z);}finally{level=o;}},groundY,ext:on=>{if(on){if(mode==="piano")standUp();mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw,lv)=>{tween=null;rider=null;mode="walk";level=lv;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode!=="orbit")setMode("orbit");enterWalk(p,yw,6);},stopWalk:()=>{if(mode!=="orbit")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode!=="orbit")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:OWN,group:scene,lights,
   activate(arr){root.hidden=false;renderer.shadowMap.needsUpdate=true;last=performance.now();
     if(arr)arrive(arr.floor,arr.idx,arr.pose);else{controls.enabled=mode==='orbit';if(!started)intro();}started=true;},
   deactivate(){if(mode==='piano')standUp();root.hidden=true;controls.enabled=false;for(const k in keys)keys[k]=0;ceilingGroup.visible=true;roofG.visible=true;

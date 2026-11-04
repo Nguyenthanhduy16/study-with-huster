@@ -943,12 +943,28 @@
     const ux = Math.sin(az) * Math.cos(el), uy = Math.sin(el), uz = Math.cos(az) * Math.cos(el);
     let dist = want;
     if (endOnly) { dist = 0.35; for (let r = want; r >= 0.4; r -= 0.2) if (ok(tx + ux * r, ty + uy * r, tz + uz * r)) { dist = r; break; } }
-    else for (let r = 0.4; r <= want; r += 0.25) if (!ok(tx + ux * r, ty + uy * r, tz + uz * r)) { dist = Math.max(0.35, r - 0.35); break; }
+    else for (let r = 0.4; r < want + 0.25; r += 0.25) {
+      const step = Math.min(r, want); // include the requested endpoint even between sample steps
+      if (!ok(tx + ux * step, ty + uy * step, tz + uz * step)) { dist = Math.max(0.35, step - 0.35); break; }
+      if (step === want) break;
+    }
     cam.cur = dist;
     const cx = tx + ux * cam.cur, cy = ty + uy * cam.cur, cz = tz + uz * cam.cur;
     if (!cam.ready || !smooth) { camera.position.set(cx, cy, cz); cam.ready = true; }
     else { const k = Math.min(1, dt * (opt.reduce ? 12 : 8)); camera.position.x += (cx - camera.position.x) * k; camera.position.y += (cy - camera.position.y) * k; camera.position.z += (cz - camera.position.z) * k; }
     camera.lookAt(tx, ty, tz);
+  }
+  // Sweep the actual near-plane footprint, including corners at walls/ceilings.
+  // A/B provide a floor footprint without furniture; legacy scenes fall back to camFree.
+  function roomCameraFree(space, camera, base, ceil, az, el) {
+    const near = camera.near, halfH = near * Math.tan(camera.fov * Math.PI / 360), halfW = halfH * camera.aspect;
+    const sx = Math.sin(az), cx = Math.cos(az), se = Math.sin(el), ce = Math.cos(el);
+    const offsets = [[0, 0, 0]];
+    for (const x of [-halfW, halfW]) for (const y of [-halfH, halfH])
+      offsets.push([-sx * ce * near + cx * x - sx * se * y, -se * near + ce * y, -cx * ce * near - sx * x - cx * se * y]);
+    const api = space.module.api;
+    const inside = typeof api.cameraInside === 'function' ? (x, z) => api.cameraInside(x, z, base) : (x, z) => space.camFree(x, z, base);
+    return (x, y, z) => offsets.every(([dx, dy, dz]) => y + dy > base + 0.12 && y + dy < ceil && inside(x + dx, z + dz));
   }
 
   /* ------------------------------------------------------------------
@@ -1086,12 +1102,24 @@
       : pi && Math.abs(me.y - pi.y) < 1.5 && Math.hypot(me.x - pi.x, me.z - pi.z) < 3.2 ? 'piano' : null;
     if (nt !== nearThing) { nearThing = nt; ev.emit('near-thing', nt); }
     if (syncCameraView(camera)) return;
-    // ngôi thứ ba: camera sau lưng góc nhìn của người dùng, khoảng cách CỐ ĐỊNH (không tự phóng to/thu nhỏ); chỉ chặn không cho vượt trần
+    // Keep the selected boom in open space; shorten it at walls/ceilings or fixtures.
     saved = { cam: camera, p: camera.position.clone(), q: camera.quaternion.clone() };
     const fl = space.floorOf(me.y + 0.1), base = me.y, ceil = Math.max(base, fl) + space.ceil(fl) - 0.2;
     const el = U.clamp(0.32 + api.pitch * 0.55, 0.02, 1.0);
     const want = cam.dist.walk;
-    placeCam(camera, dt, me.x, me.y + 1.5, me.z, Math.PI - api.yaw + Math.PI, Math.min(el, Math.asin(U.clamp((ceil - (me.y + 1.5)) / want, -1, 1))), want, () => true, false);
+    const az = Math.PI - api.yaw + Math.PI, elevation = Math.min(el, Math.asin(U.clamp((ceil - (me.y + 1.5)) / want, -1, 1)));
+    const cameraFree = roomCameraFree(space, camera, base, ceil, az, elevation);
+    placeCam(camera, dt, me.x, me.y + 1.5, me.z, az, elevation, want, cameraFree, false);
+    if (api.constrainCamera) api.constrainCamera(camera, me.x, me.y + 1.5, me.z);
+    // A doorway/corner may leave no safe third-person boom, even at its minimum.
+    // Render the original walking eye until there is room again; preserve view/zoom preferences.
+    if (!cameraFree(camera.position.x, camera.position.y, camera.position.z)) {
+      camera.position.copy(saved.p); camera.quaternion.copy(saved.q); saved = null;
+      camera.fov = 70; camera.updateProjectionMatrix(); me.avatar.root.visible = false;
+      return;
+    }
+    const actualDistance = camera.position.distanceTo(tmp.set(me.x, me.y + 1.5, me.z));
+    if (actualDistance < 0.45) me.avatar.root.visible = false; // do not replace a wall obstruction with the avatar's head
   }
   let autoDrive = false;
   const TURN = 2.6;      // rad/s ở độ nhạy 1 khi giữ ←/→
@@ -1169,7 +1197,7 @@
     }
     if (myLabel) {
       myLabel.classList.remove('pinned');
-      if (me.avatar && me.mode !== 'idle' && me.mode !== 'piano' && !(me.mode === 'walk' && effectiveView() === 'first')) { me.avatar.root.getWorldPosition(tmp2); place(myLabel, me.avatar.root, topOf(me.avatar, me.mode === 'seat'), tmp2.distanceTo(camera.position)); }
+      if (me.avatar && me.avatar.root.visible && me.mode !== 'idle' && me.mode !== 'piano' && !(me.mode === 'walk' && effectiveView() === 'first')) { me.avatar.root.getWorldPosition(tmp2); place(myLabel, me.avatar.root, topOf(me.avatar, me.mode === 'seat'), tmp2.distanceTo(camera.position)); }
       else if (me.mode !== 'idle' && myLabel.classList.contains('talk')) {
         // không thấy nhân vật của mình (nhìn bằng mắt / đang chơi đàn): bong bóng của mình ghim giữa màn hình
         myLabel.classList.add('pinned'); myLabel.style.display = ''; myLabel.style.opacity = '1'; myLabel.style.zIndex = '4000';

@@ -141,3 +141,62 @@ test('click-walk entering the cabin during World update locks before third-perso
   f.frame(); assert.equal(f.control.view(), 'first'); assert.equal(f.control.saved(), null);
   assert.equal(f.A.camera.position.x, 20.5); assert.equal(f.World.me.avatar.root.visible, false);
 });
+
+test('actual walk frame clamps a wall-corner camera using the current floor footprint', () => {
+  const f = fixture(); f.A.camera.position.set(18.8, 15.1, 12); f.A.state.base = 13.5;
+  f.A.api.yaw = -Math.PI / 4;
+  f.A.space.floorOf = () => 13.5;
+  f.A.api.cameraInside = (x, z, foot) => { assert.equal(foot, 13.5); return x < 19.42 && x > -19.42 && z < 12.92 && z > -12.92; };
+  f.frame();
+  assert(f.A.camera.position.x < 19.42 && f.A.camera.position.z < 12.92, 'camera remains inside instead of exposing the lower floor');
+  const { THREE } = f.context; f.A.camera.updateMatrixWorld(true);
+  for (const x of [-1, 1]) for (const y of [-1, 1]) {
+    const corner = new THREE.Vector3(x, y, -1).unproject(f.A.camera);
+    assert(corner.x < 19.42 && corner.z < 12.92 && corner.y > 13.5);
+  }
+  assert.equal(f.World.opt.view, 'third');
+});
+
+test('actual walk frame invokes rooftop geometry clearance and restores the avatar after a close obstruction', () => {
+  const f = fixture(); let calls = 0;
+  f.A.api.constrainCamera = (camera, x, y, z) => { calls++; assert.equal(x, 18); assert.equal(y, 1.5); assert.equal(z, -2.9); camera.position.set(x, y + .1, z - Math.sqrt(.08)); camera.lookAt(x, y, z); return .3; };
+  f.frame(); assert.equal(calls, 1); assert.equal(f.World.me.avatar.root.visible, false);
+  f.control.restore(); delete f.A.api.constrainCamera; f.frame();
+  assert.equal(f.World.me.avatar.root.visible, true, 'avatar visibility returns when no close geometry obstructs camera');
+});
+
+
+test('both library cameras hide the own head when a wall permits only a short boom, then restore it', () => {
+  for (const id of ['A', 'B']) {
+    const f = fixture(), scene = f[id]; f.use(scene);
+    const focus = scene.camera.position.clone(); focus.y -= .1;
+    scene.api.cameraInside = (x, z) => Math.hypot(x - focus.x, z - focus.z) < .38;
+    f.frame(scene);
+    assert(f.control.saved(), 'valid short boom is used');
+    assert(scene.camera.position.distanceTo(focus) < .45);
+    assert.equal(f.World.me.avatar.root.visible, false, id + ': own hair cannot cover close camera');
+    f.control.restore(); delete scene.api.cameraInside; f.frame(scene);
+    assert.equal(f.World.me.avatar.root.visible, true);
+  }
+});
+
+test('door strips before cabin detection and impossible wall corners use the walking eye without changing preferences', () => {
+  for (const id of ['A', 'B']) {
+    const f = fixture(), scene = f[id]; f.use(scene);
+    const edge = id === 'A' ? 19.5 : 16.5;
+    scene.camera.position.set(edge + .1, 1.6, scene.cabin.z);
+    scene.api.cameraInside = (x, z) => x < edge - .08;
+    assert.equal(f.control.locked(), false, 'door strip is not inside the cabin yet');
+    const eye = scene.camera.position.clone(), distance = f.control.distance();
+    f.frame(scene);
+    assert.equal(scene.camera.position.distanceTo(eye), 0, 'eye is preserved instead of rendering outside the floor');
+    assert.equal(f.control.saved(), null); assert.equal(scene.camera.fov, 70);
+    assert.equal(f.World.me.avatar.root.visible, false); assert.equal(f.World.opt.view, 'third');
+    assert.equal(f.control.distance(), distance);
+    scene.enter(); f.frame(scene); assert.equal(f.control.locked(), true);
+    assert.equal(f.control.saved(), null, 'cabin keeps existing first-person lock');
+    scene.leave(); f.frame(scene);
+    assert.equal(scene.camera.fov, 62); assert.equal(f.World.me.avatar.root.visible, true);
+    assert(f.control.saved(), 'third person returns after doorway exit');
+  }
+});
