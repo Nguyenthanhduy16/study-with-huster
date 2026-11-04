@@ -14,8 +14,8 @@
         mật khẩu quản trị. Mật khẩu quản trị chỉ nằm (dạng băm) trong cơ sở dữ liệu và được kiểm tra trên máy chủ.
    Ví dụ:  window.SUPABASE_URL = 'https://abcdxyz.supabase.co';
            window.SUPABASE_ANON_KEY = 'eyJhbGciOi...'; */
-window.SUPABASE_URL = '';
-window.SUPABASE_ANON_KEY = '';
+window.SUPABASE_URL = 'https://gxiryzkmntbgbfrigwdc.supabase.co';
+window.SUPABASE_ANON_KEY = 'sb_publishable_sGGAPT1XzACXxsVbtfyW2Q_CYpC5KSP';   // khoá publishable (công khai)
 
 /* 2) THÔNG TIN CHUNG */
 window.APP = {
