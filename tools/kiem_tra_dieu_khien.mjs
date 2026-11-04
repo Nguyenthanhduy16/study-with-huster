@@ -8,8 +8,10 @@ class Surface {
   events = new Map(); style = {};
   addEventListener(type, fn) { const list = this.events.get(type) || []; list.push(fn); this.events.set(type, list); }
   send(type, value = {}) {
-    const event = { type, target: this, code: '', key: '', pointerId: 1, pointerType: 'mouse', button: 0, clientX: 300, clientY: 200, preventDefault() {}, ...value };
+    const event = { type, target: this, code: '', key: '', pointerId: 1, pointerType: 'mouse', button: 0, clientX: 300, clientY: 200,
+      preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; }, ...value };
     for (const fn of this.events.get(type) || []) fn(event);
+    return event;
   }
   setPointerCapture() {} releasePointerCapture() {}
   focus() { this.focused = true; }
@@ -17,10 +19,13 @@ class Surface {
 }
 const windowEvents = new Surface(), document = new Surface(), canvas = new Surface(), joystick = new Surface();
 const knob = { style: {} }; joystick.querySelector = () => knob;
+// nhãn tên của người khác (nằm đè lên khung 3D): bắt đầu kéo trên nhãn vẫn phải xoay camera
+const labelsEl = new Surface(), tag = { classList: { contains: () => false }, isConnected: true, clicks: 0, click() { this.clicks++; } };
+tag.closest = sel => (sel === '.po-tag' ? tag : null);
 document.head = { appendChild() {} }; document.getElementById = () => joystick;
 const api = { yaw: 0, pitch: 0, keys: {} }, room = { kind: 'room', module: { api } };
 const sandbox = {
-  document, canvas, performance, Math, Map, console,
+  document, canvas, labelsEl, performance, Math, Map, console,
   addEventListener: windowEvents.addEventListener.bind(windowEvents),
   U: { clamp: (v, min, max) => Math.max(min, Math.min(max, v)), h: () => ({}) },
   me: { mode: 'walk' }, keys: { f: 0, b: 0, l: 0, r: 0, tl: 0, tr: 0, run: 0 },
@@ -74,4 +79,35 @@ const beforeFrozen = api.yaw; pointer('pointerdown', 300, 200); pointer('pointer
 run('frozen = false; me.mode = "campus"');
 pointer('pointerdown', 300, 200, { button: 2 }); pointer('pointermove', 400, 200, { button: 2 });
 assert(sandbox.cam.az < 0, 'right drag turns campus camera'); pointer('pointerup', 400, 200, { button: 2 }); assert.equal(sandbox.clicks, 0);
-console.log('ĐẠT: đồng thời WASD + kéo chuột; hai ngón thu phóng; cần điều khiển + vuốt; không click nhầm; blur/chat/modal xoá đầu vào.');
+run('me.mode = "walk"');
+const yawTag = api.yaw; key('keydown', 'KeyW');
+labelsEl.send('pointerdown', { target: tag, clientX: 300, clientY: 200 }); pointer('pointermove', 360, 200);
+assert(api.yaw > yawTag, 'kéo bắt đầu trên nhãn tên của người khác vẫn xoay camera khi đang giữ W');
+pointer('pointerup', 360, 200); assert.equal(tag.clicks, 0, 'kéo trên nhãn không mở hồ sơ'); assert.equal(api.keys.f, 1);
+const nativeLabelClick = (target = tag, extra = {}) => {
+  const event = labelsEl.send('click', { target, isTrusted: true, detail: 1, ...extra });
+  if (!event.stopped) target.click();
+  return event;
+};
+assert(nativeLabelClick().stopped, 'trusted compatibility click after label drag is suppressed');
+assert.equal(tag.clicks, 0);
+labelsEl.send('pointerdown', { target: tag, clientX: 300, clientY: 200 }); pointer('pointerup', 301, 200);
+assert.equal(tag.clicks, 1, 'bấm nhanh trên nhãn vẫn mở hồ sơ'); assert.equal(sandbox.clicks, 0, 'bấm nhãn không thành bấm-để-đi');
+assert(nativeLabelClick().stopped, 'native click after programmatic label tap cannot open twice');
+assert.equal(tag.clicks, 1);
+labelsEl.send('pointerdown', { target: tag, pointerId: 12, clientX: 300, clientY: 200 });
+pointer('pointercancel', 300, 200, { pointerId: 12 });
+const canceledYaw = api.yaw;
+pointer('pointermove', 430, 200, { pointerId: 12 });
+assert.equal(api.yaw, canceledYaw, 'canceled label pointer is no longer tracked');
+assert(nativeLabelClick().stopped, 'cancel cannot open a profile through compatibility click');
+labelsEl.send('pointerdown', { target: tag, pointerId: 13, clientX: 300, clientY: 200 });
+pointer('lostpointercapture', 300, 200, { pointerId: 13 });
+pointer('pointerup', 300, 200, { pointerId: 13 });
+assert.equal(tag.clicks, 1, 'lost pointer capture cannot synthesize a profile tap');
+assert(nativeLabelClick().stopped);
+assert.equal(nativeLabelClick(tag, { detail: 0 }).stopped, undefined, 'keyboard-generated label clicks remain accessible');
+const otherTag = { ...tag, clicks: 0 }; otherTag.closest = () => otherTag;
+assert.equal(nativeLabelClick(otherTag).stopped, undefined, 'a different label is not suppressed by the previous gesture');
+key('keyup', 'KeyW'); assert.equal(api.keys.f, 0);
+console.log('ĐẠT: WASD + kéo chuột/nhãn; cần điều khiển + vuốt; pinch; cancel/lost capture; chống mở hồ sơ hai lần; blur/chat/modal xoá đầu vào.');

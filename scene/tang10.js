@@ -458,7 +458,8 @@ const bulbs=[];
   for(const x of [-8.3,-4,.3]){place('bench',x,0,-6.55,0);addRect(x,-6.55,.95,.25);seats+=2;}
   mk(box(5.2,.06,.8),M.teak,-4,.42,-5.05);for(const x of [-6.3,-1.7])mk(box(.5,.4,.66),M.concrete,x,.2,-5.05);addRect(-4,-5.05,2.6,.42);
   place('bookOpen',-5.2,.45,-5.0,.2);place('bookClosed',-3.4,.45,-5.1,-.3);place('bookClosed',-3.38,.485,-5.08,.1);place('mug',-2.6,.45,-4.9);place('lantern',-4.1,.45,-5.15);
-  for(const x of [x0+.35,x1-.35])plant(x,0,z1+.45,1);}
+  /* chậu cây góc giàn: chậu phía tây lùi ra ngoài đầu ghế dài x=-9,5 (đặt ở x0+.35 thì chậu nằm ngay trước chỗ ngồi bên trái, nhân vật ngồi xuyên vào cây) */
+  for(const x of [x0-.55,x1-.35])plant(x,0,z1+.45,1);}
 
 /* outward-facing benches along the south railing, with a grass bed in front */
 for(const x of [6.2,10.2]){place('bench',x,0,-6.4,PI);addRect(x,-6.4,.95,.25);seats+=2;}

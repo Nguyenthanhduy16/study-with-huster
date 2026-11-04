@@ -386,14 +386,34 @@
     showMarker(pts[pts.length - 1].x, me.y, pts[pts.length - 1].z);
     return true;
   }
+  /* bị vướng giữa đường: tìm lại đường một lần từ chỗ đang đứng; vẫn vướng thì báo cho người chơi (không dịch chuyển) */
+  function routeStuck() {
+    const space = sp(), g0 = route.goal;
+    if (!route.replanned && space && g0) {
+      const g = space.grid(space.kind === 'campus' ? 0 : space.floorOf(me.y + 0.1)), pts = g && g.path(me.x, me.z, g0.x, g0.z);
+      const end = pts && (pts[pts.length - 1] || { x: me.x, z: me.z });
+      // Grid.path có thể thay đích bị chặn bằng ô gần đó. Chỉ tiếp tục khi vẫn
+      // tới sát đích cũ; nếu không, callback ngồi ghế sẽ kéo người xuyên vật cản.
+      if (end && Math.hypot(end.x - g0.x, end.z - g0.z) <= 0.45) {
+        if (!pts.length) { const done = route.done; route = null; if (done) done(); return null; }
+        route.pts = pts; route.replanned = true; route.stuck = 0; return null;
+      }
+    }
+    route = null;
+    ev.emit('toast', 'Bị vướng đường nên chưa tới được chỗ đó. Hãy đi gần hơn rồi thử lại.');
+    return null;
+  }
   /* trả về hướng cần đi (đơn vị) hoặc null khi đã tới */
   function followRoute(dt) {
     if (!route) return null;
+    if (!route.goal && route.pts.length) route.goal = route.pts[route.pts.length - 1];
     let t = route.pts[0];
-    while (t && Math.hypot(t.x - me.x, t.z - me.z) < (route.pts.length === 1 ? route.near : 0.45)) { route.pts.shift(); t = route.pts[0]; }
+    // Điểm giữa đường chỉ coi là tới khi thật sát (0,2 m): bỏ điểm sớm ở góc bàn/hàng ghế
+    // làm đoạn kế tiếp cắt qua góc vật cản và nhân vật kẹt lại ở đó.
+    while (t && Math.hypot(t.x - me.x, t.z - me.z) < (route.pts.length === 1 ? route.near : 0.2)) { route.pts.shift(); t = route.pts[0]; }
     if (!t) { const d = route.done; route = null; d && d(); return null; }
     const moved = Math.hypot(me.x - route.lx, me.z - route.lz); route.lx = me.x; route.lz = me.z;
-    if (moved < 0.2 * dt) { if ((route.stuck += dt) > 1.6) { route = null; return null; } } else route.stuck = 0;
+    if (moved < 0.2 * dt) { if ((route.stuck += dt) > 1.6) return routeStuck(); } else route.stuck = 0;
     const dx = t.x - me.x, dz = t.z - me.z, l = Math.hypot(dx, dz);
     return { x: dx / l, z: dz / l };
   }
@@ -642,15 +662,32 @@
     const orbiting = () => me.mode === 'campus' || me.mode === 'seat';
     const canLook = () => !observe && !frozen && !going && !camHold && (orbiting() || me.mode === 'walk');
     canvas.addEventListener('contextmenu', e => e.preventDefault());
-    canvas.addEventListener('pointerdown', e => {
+    const down = (e, tag) => {
       if (!canLook() || (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2)) return;
       canvas.focus?.({ preventScroll: true });
       try { canvas.setPointerCapture(e.pointerId); } catch (_) { }
-      pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, btn: e.button });
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, btn: e.button, tag });
       if (pts.size > 1) multi = true;
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: curDist() }; }
       e.preventDefault();
+    };
+    canvas.addEventListener('pointerdown', e => down(e, null));
+    /* nhãn tên / bong bóng của người khác và NPC nằm đè lên khung 3D (bấm vào để xem hồ sơ). Bắt đầu kéo trên nhãn vẫn phải
+       xoay được camera (nhất là khi đang giữ W/A/S/D giữa đám đông): kéo → xoay; bấm nhanh không kéo → mở như bấm vào nhãn. */
+    let tagLook = null;
+    const finishTagLook = tag => { if (tag) tagLook = { tag, until: performance.now() + 500 }; };
+    labelsEl.addEventListener('pointerdown', e => {
+      const tag = e.target.closest && e.target.closest('.po-tag');
+      if (tag && !tag.classList.contains('me')) down(e, tag);
     });
+    labelsEl.addEventListener('click', e => {
+      const tag = e.target.closest && e.target.closest('.po-tag');
+      // The programmatic click below opens the profile once. A drag/cancel must
+      // also consume the browser's compatibility click; keyboard clicks still work.
+      if (e.isTrusted && e.detail !== 0 && tagLook && tag === tagLook.tag && performance.now() < tagLook.until) {
+        e.preventDefault(); e.stopImmediatePropagation();
+      }
+    }, true);
     canvas.addEventListener('pointermove', e => {
       const p = pts.get(e.pointerId);
       if (!p) { if (!pts.size && e.pointerType === 'mouse') hover(e); return; }
@@ -674,13 +711,16 @@
     });
     const up = e => {
       const p = pts.get(e.pointerId); if (!p) return;
+      finishTagLook(p.tag);
       pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
       try { canvas.releasePointerCapture(e.pointerId); } catch (_) { }
-      if (e.type === 'pointerup' && canLook() && !multi && !p.moved && p.btn === 0 && performance.now() - p.t < 600) click(e);
+      if (e.type === 'pointerup' && canLook() && !multi && !p.moved && p.btn === 0 && performance.now() - p.t < 600) {
+        if (p.tag) { if (p.tag.isConnected) p.tag.click(); } else click(e);
+      }
       if (!pts.size) multi = false;
     };
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
-    canvas.addEventListener('lostpointercapture', e => { if (pts.has(e.pointerId)) { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) multi = false; } });
+    canvas.addEventListener('lostpointercapture', e => { if (pts.has(e.pointerId)) { finishTagLook(pts.get(e.pointerId).tag); pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) multi = false; } });
     canvas.addEventListener('wheel', e => {
       if (me.mode === 'campus' || me.mode === 'seat' || (me.mode === 'walk' && opt.view !== 'first')) { setDist(curDist() * (1 + Math.sign(e.deltaY) * 0.1)); e.preventDefault(); }
     }, { passive: false });
@@ -699,7 +739,7 @@
       addEventListener('blur', resetJoy);
       document.addEventListener('visibilitychange', () => { if (document.hidden) resetJoy(); });
     }
-    const resetLook = () => { for (const id of pts.keys()) { try { canvas.releasePointerCapture(id); } catch (_) { } } pts.clear(); pinch = null; multi = false; };
+    const resetLook = () => { for (const [id, p] of pts) { finishTagLook(p.tag); try { canvas.releasePointerCapture(id); } catch (_) { } } pts.clear(); pinch = null; multi = false; };
     resetInput = () => { resetJoy(); resetLook(); clearKeys(); };
     addEventListener('blur', resetLook);
     document.addEventListener('visibilitychange', () => { if (document.hidden) resetLook(); });
@@ -906,11 +946,11 @@
     } else if (me.mode === 'campus') moveCampus(dt, camera);
     else if (me.mode === 'seat') seatCam(dt, camera);
     if (me.mode === 'walk' || me.mode === 'piano') roomFrame(dt, camera);
-    nearSeatFrame(dt, camera);
-
     if (me.avatar) me.avatar.update(dt, me.speed);
     for (const f of hooks.frame) f(dt, now, camera);
     if (camHold) { camera.position.copy(camHold.p); camera.lookAt(camHold.t); }
+    camera.updateMatrixWorld();
+    nearSeatFrame(dt, camera);
     others3D(dt, camera);
     Npc.frame(dt, camera);
     labels(camera);
@@ -1001,7 +1041,13 @@
       api.keys.f = api.keys.b = api.keys.l = api.keys.r = api.keys.run = 0;
       const sp = 3 * (window.__WALK_K || 0.75) * dt, fl0 = space.floorOf(eye.y - 1.5);
       const tx = eye.x + r.x * sp, tz = eye.z + r.z * sp;
-      if (space.free(tx, tz, fl0) || space.camFree(tx, tz, eye.y - 1.6)) { eye.x = tx; eye.z = tz; } else route.stuck += dt;
+      // Trượt theo từng trục như trên sân: đường A* làm mượt có thể cắt sát góc bàn/ghế,
+      // đi chéo bị chặn thì vẫn trượt dọc mép thay vì đứng im rồi bỏ đường giữa chừng.
+      const okAt = (x, z) => space.free(x, z, fl0) || space.camFree(x, z, eye.y - 1.6);
+      if (okAt(tx, tz)) { eye.x = tx; eye.z = tz; }
+      else if (Math.abs(r.x) > 0.01 && okAt(tx, eye.z)) eye.x = tx;
+      else if (Math.abs(r.z) > 0.01 && okAt(eye.x, tz)) eye.z = tz;
+      else if (route) route.stuck += dt;
       if (space.module === S.spaces.B?.module || space.module === S.spaces.D?.module) { /* độ cao mắt do mô hình tự tính */ }
     }
     // phím + cần điều khiển → bộ đi bộ của mô hình (đi theo hướng camera, A/D đi ngang); ←/→ xoay góc nhìn
@@ -1054,14 +1100,43 @@
     if (me.avatar && me.avatar.setDetail) me.avatar.setDetail(true);
     others.list = list;
   }
+  /* bong bóng chat nằm trên nhãn tên: màn hình thấp (điện thoại xoay ngang, cửa sổ nhỏ) hoặc camera nhìn từ dưới lên thì
+     bong bóng trồi lên tận thanh trên cùng và bị các thẻ HUD che mất. Dời cả nhãn xuống vừa đủ để bong bóng hiện dưới thẻ HUD
+     nằm phía trên nó (đè lên đầu nhân vật một chút còn hơn không đọc được). Kích thước nhãn chỉ đo lại khi nội dung đổi. */
+  let hudRects = [], hudT = -Infinity, hudSize = '';
+  function hudTop(now) {
+    const size = labelsEl.clientWidth + ':' + labelsEl.clientHeight;
+    if (size === hudSize && now - hudT < 1000) return hudRects;
+    hudSize = size;
+    hudT = now;
+    hudRects = [...document.querySelectorAll('.po-top .po-card, .po-top-r > *')].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
+    return hudRects;
+  }
+  function keepBubbleVisible(el, px, py) {
+    const box = el.querySelector('.po-bubbles');
+    const W = labelsEl.clientWidth, Hh = labelsEl.clientHeight;
+    const key = W + ':' + Hh + ':' + (document.fonts ? document.fonts.status : '') + ':' +
+      (box ? box.textContent : '') + ':' + el.lastElementChild.textContent + ':' + el.classList.contains('pinned');
+    if (el._szKey !== key) { el._szKey = key; el._sz = { w: el.offsetWidth, h: el.offsetHeight }; }
+    const { w, h } = el._sz;
+    px = U.clamp(px, Math.min(W / 2, w / 2 + 4), Math.max(W / 2, W - w / 2 - 4));
+    let safe = 4;
+    for (const r of hudTop(performance.now())) if (r.left < px + w / 2 && r.right > px - w / 2 && r.bottom > safe) safe = r.bottom + 6;
+    return { x: px, y: Math.min(Hh - 4, Math.max(py, safe + h)) };
+  }
   function labels(camera) {
     const W = labelsEl.clientWidth, Hh = labelsEl.clientHeight, maxD = me.space === 'campus' ? 45 : 20;
+    // camera vừa được đặt lại trong khung hình này (placeCam/lookAt) nhưng ma trận chỉ được tính khi vẽ:
+    // tính ngay ở đây, nếu không nhãn tên + bong bóng chiếu theo camera của khung trước → trễ một khung, rung khi vừa đi vừa xoay
+    camera.updateMatrixWorld();
     const place = (el, obj, y, d, hide) => {
       if (hide || !obj.visible || d > maxD) { el.style.display = 'none'; return; }
       obj.getWorldPosition(tmp); tmp.y += y; tmp.project(camera);
       if (tmp.z > 1 || tmp.x < -1.2 || tmp.x > 1.2 || tmp.y < -1.2 || tmp.y > 1.2) { el.style.display = 'none'; return; }
       el.style.display = '';
-      el.style.transform = `translate(${((tmp.x + 1) / 2 * W).toFixed(1)}px,${((1 - tmp.y) / 2 * Hh).toFixed(1)}px) translate(-50%,-100%)`;
+      let px = (tmp.x + 1) / 2 * W, py = (1 - tmp.y) / 2 * Hh;
+      if (el.classList.contains('talk')) { const at = keepBubbleVisible(el, px, py); px = at.x; py = at.y; }
+      el.style.transform = `translate(${px.toFixed(1)}px,${py.toFixed(1)}px) translate(-50%,-100%)`;
       el.style.opacity = d > maxD * 0.7 && !el.classList.contains('talk') ? '0.55' : '1';
       // người gần đè lên người xa; ai đang nói thì bong bóng nổi lên trên mọi nhãn tên
       el.style.zIndex = String((el.classList.contains('talk') ? 3000 : 1000) - Math.round(d * 10));
@@ -1080,7 +1155,8 @@
       else if (me.mode !== 'idle' && myLabel.classList.contains('talk')) {
         // không thấy nhân vật của mình (nhìn bằng mắt / đang chơi đàn): bong bóng của mình ghim giữa màn hình
         myLabel.classList.add('pinned'); myLabel.style.display = ''; myLabel.style.opacity = '1'; myLabel.style.zIndex = '4000';
-        myLabel.style.transform = `translate(${(W / 2).toFixed(1)}px,${(Hh * 0.6).toFixed(1)}px) translate(-50%,-100%)`;
+        const at = keepBubbleVisible(myLabel, W / 2, Hh * 0.6);
+        myLabel.style.transform = `translate(${at.x.toFixed(1)}px,${at.y.toFixed(1)}px) translate(-50%,-100%)`;
       }
       else myLabel.style.display = 'none';
     }

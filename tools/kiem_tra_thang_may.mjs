@@ -13,18 +13,22 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+let chromium;
+try { ({ chromium } = require('playwright')); }
+catch (_) { console.error('Cần Playwright: npm install --no-save playwright && npx playwright install chromium'); process.exit(2); }
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = Object.fromEntries(process.argv.slice(2).map(a => { const [k, ...v] = a.replace(/^--/, '').split('='); return [k, v.length ? v.join('=') : true]; }));
 const PORT = +(args.port || 3130), BASE = `http://localhost:${PORT}`;
 let failed = 0;
 const ok = (c, m) => { console.log((c ? '  ĐẠT  ' : '  LỖI  ') + m); if (!c) failed++; };
 
-const srv = spawn(process.execPath, [path.join(HERE, 'fake-supabase-server.mjs'), '--port=' + PORT, '--offline'], { stdio: ['ignore', 'pipe', 'inherit'] });
-await new Promise((res, rej) => { srv.stdout.once('data', res); srv.once('exit', c => rej(new Error('máy chủ dừng: ' + c))); });
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+let srv = null, browser = null;
 const T = 300000;
 try {
+  // Start the browser first so a missing Chromium binary cannot leave a test server behind.
+  browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  srv = spawn(process.execPath, [path.join(HERE, 'fake-supabase-server.mjs'), '--port=' + PORT, '--offline'], { stdio: ['ignore', 'pipe', 'inherit'] });
+  await new Promise((res, rej) => { srv.stdout.once('data', res); srv.once('error', rej); srv.once('exit', c => rej(new Error('máy chủ dừng: ' + c))); });
   const ctx = await browser.newContext({ viewport: { width: 800, height: 500 }, deviceScaleFactor: 1 });
   await ctx.addInitScript(() => {
     localStorage.setItem('pota:welcomed', '1'); localStorage.setItem('pota:quality', '"low"');
@@ -85,7 +89,10 @@ try {
   r = await p.evaluate(() => ({ x: World.me.x, z: World.me.z, rider: !!HUST3D.B.api.rider }));
   ok(r.rider && Math.abs(r.z) < 0.7, `từ sân thượng xuống tầng 6: đứng trong cabin (x=${r.x.toFixed(2)}, z=${r.z.toFixed(2)})`);
   ok(!errs.length, 'không có lỗi JavaScript' + (errs.length ? ': ' + errs.join(' | ') : ''));
-} catch (e) { ok(false, 'lỗi khi chạy: ' + e.message.split('\n')[0]); }
-finally { await browser.close(); srv.kill(); }
+} catch (e) {
+  ok(false, 'lỗi khi chạy: ' + e.message.split('\n')[0]);
+  if (/Executable doesn't exist|browserType.launch/.test(e.message)) console.error('Cài trình duyệt kiểm thử bằng: npx playwright install chromium');
+}
+finally { try { if (browser) await browser.close(); } finally { if (srv) srv.kill(); } }
 console.log(failed ? `\n${failed} mục LỖI` : '\nTẤT CẢ ĐẠT: thang máy');
 process.exit(failed ? 1 : 0);

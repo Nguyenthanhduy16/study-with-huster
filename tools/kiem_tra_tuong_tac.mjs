@@ -54,6 +54,37 @@ check('Arrow/Enter select activity; stop clears it', () => { key('ArrowRight', {
 check('Pointer cancel never selects a gesture', () => { const count = calls.filter(x => x[0] === 'emote').length; button.dispatch('pointerdown', { button: 0, pointerId: 2, clientX: 900, clientY: 700, timeStamp: 200 }); button.dispatch('pointercancel', { pointerId: 2 }); assert.equal(context.Wheel.open, false); assert.equal(calls.filter(x => x[0] === 'emote').length, count); });
 check('Background blur closes wheel and releases movement', () => { key('KeyQ'); emit('blur'); assert.equal(context.Wheel.open, false); assert.deepEqual(calls.at(-1), ['freeze', false]); });
 check('Typing Q does not open a wheel', () => { key('KeyQ', { target: { tagName: 'INPUT' } }); assert.equal(context.Wheel.open, false); });
+check('Giữ Q khi chuột sát mép: rê tới ô nào chọn đúng ô đó (vòng bị đẩy vào trong)', () => {
+  activities.set('self', null);
+  emit('pointermove', { clientX: 1010, clientY: 300 });            // chuột sát mép phải → tâm vòng bị đẩy sang trái
+  key('KeyQ'); assert.equal(context.Wheel.open, true);
+  const ring = document.querySelector('.po-wheel-ring'), R = parseFloat(ring.style.width) / 2;
+  const cx = parseFloat(ring.style.left) + R, cy = parseFloat(ring.style.top) + R, a = -Math.PI / 2 + Math.PI / 4;   // ô 2 = đọc sách
+  emit('pointermove', { clientX: cx + Math.cos(a) * R * 0.68, clientY: cy + Math.sin(a) * R * 0.68 });
+  emit('keyup', { code: 'KeyQ', timeStamp: 1000 });
+  assert.equal(context.Wheel.open, false); assert.equal(activities.get('self'), 'doc');
+  key('Digit0');
+});
+check('Radial ring and hint fit small landscape screens; every visible sector stays selectable', () => {
+  for (const [width, height] of [[320, 240], [568, 260], [390, 760]]) {
+    context.innerWidth = width; context.innerHeight = height;
+    for (let i = 0; i < context.Wheel.items.length; i++) {
+      activities.set('self', null);
+      emit('pointermove', { clientX: width - 2, clientY: height - 2 }); key('KeyQ');
+      const ring = document.querySelector('.po-wheel-ring'), hint = document.querySelector('.po-wheel-hint');
+      const diameter = parseFloat(ring.style.width), R = diameter / 2;
+      const left = parseFloat(ring.style.left), top = parseFloat(ring.style.top), cx = left + R, cy = top + R;
+      assert(left >= 0 && top >= 0 && left + diameter <= width && top + diameter <= height, `${width}x${height}: ring clipped`);
+      assert(parseFloat(hint.style.top) + 24 <= height, 'hint has space below the ring');
+      assert.equal(parseFloat(hint.style.left), width / 2, 'hint stays centered rather than being clipped near pointer');
+      const a = -Math.PI / 2 + i * Math.PI / 4;
+      emit('pointermove', { clientX: cx + Math.cos(a) * R * .68, clientY: cy + Math.sin(a) * R * .68 });
+      emit('keyup', { code: 'KeyQ', timeStamp: 1000 });
+      assert.equal(calls.at(-1)[1], context.Wheel.items[i].k, 'release selects the displayed sector');
+    }
+  }
+  context.innerWidth = 1024; context.innerHeight = 768; activities.set('self', null);
+});
 
 const label = h('div.po-tag', null, h('div.po-bubbles'), h('div.po-name')); document.body.append(label);
 const others = new Map([['peer', { label, av: { setAct() {} } }]]), me = { uid: 'self', mode: 'campus', avatar: { setAct() {} } };

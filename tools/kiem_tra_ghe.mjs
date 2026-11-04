@@ -23,7 +23,7 @@ context.addEventListener = () => {};
 vm.runInContext(source('scene/vendor/three.min.js'), context);
 vm.runInContext(source('js/grid.js'), context);
 vm.runInContext(source('scene/adapter.js').replace('window.SceneAPI = SceneAPI;',
-  'window.SceneAPI = SceneAPI; window.__librarySeat = librarySeat; window.__roofSeat = roofSeat;'), context);
+  'window.SceneAPI = SceneAPI; window.__librarySeat = librarySeat; window.__roofSeat = roofSeat; window.__seatGeometry = { dropDuplicates, islandSeat, movePlants };'), context);
 vm.runInContext(source('js/world.js').replace('window.World = {', `
   window.__seatTest = {
     sitAt, pickSeat, seatSpots, followRoute, findNearSeat,
@@ -151,5 +151,94 @@ await check('Sân dùng bán kính va chạm nhân vật, không nhầm floor=0 
   test.reset(space); World.me.space = 'campus'; World.me.zone = 'campus'; World.me.mode = 'campus';
   assert.ok(test.seatSpots(space, space.seats[0]).length);
   assert.ok(radii.every(r => r === 0.22));
+});
+await check('Điểm rẽ giữa đường chỉ bỏ qua khi đã sát (không cắt góc bàn/hàng ghế)', () => {
+  const space = makeSpace(); test.reset(space);
+  World.goSit(0); const r = test.route();
+  r.pts = [{ x: 0.35, z: 0 }, { x: 0.35, z: 3 }];
+  const d = test.followRoute(1 / 60);
+  assert.ok(d && d.x > 0.99, 'vẫn đi tới điểm rẽ cách 0,35 m');
+  World.me.x = 0.2; test.followRoute(1 / 60);
+  assert.equal(test.route().pts.length, 1, 'tới sát 0,15 m mới sang đoạn kế');
+});
+await check('Kẹt giữa đường: tìm lại đường một lần, vẫn kẹt thì báo và không dịch chuyển', () => {
+  const space = makeSpace(); test.reset(space);
+  World.goSit(0); const r = test.route(); r.pts = [{ x: 0, z: 5 }]; events.length = 0;
+  for (let k = 0; k < 120; k++) test.followRoute(1 / 60);       // đứng yên 2 giây
+  assert.ok(test.route() && test.route().replanned, 'tìm lại đường từ chỗ đang đứng');
+  for (let k = 0; k < 120; k++) test.followRoute(1 / 60);
+  assert.equal(test.route(), null);
+  assert.ok(events.some(e => e[0] === 'toast' && /vướng/.test(e[1])), 'có thông báo cho người chơi');
+  assert.equal(World.me.x, 0); assert.equal(World.me.z, 0); assert.equal(World.me.seat, -1);
+});
+await check('Tìm lại đường không ngồi xuyên vật cản khi Grid đổi đích sang ô xa ghế', () => {
+  const space = makeSpace(); test.reset(space);
+  World.goSit(0); events.length = 0;
+  space.grid = () => ({ path: () => [{ x: -3, z: -3 }] });
+  for (let k = 0; k < 120; k++) test.followRoute(1 / 60);
+  assert.equal(test.route(), null);
+  assert.equal(World.me.seat, -1); assert.equal(World.me.x, 0); assert.equal(World.me.z, 0);
+  assert.ok(events.some(e => e[0] === 'toast' && /vướng/.test(e[1])));
+});
+await check('Ẩn đúng các bộ phận món ghế thừa, giữ ghế khác cùng số instance và cùng vị trí', () => {
+  const group = new THREE.Group(), material = new THREE.MeshBasicMaterial();
+  const list = [{ n: 'chairL', x: 0, y: 0, z: 0 }, { n: 'chairK', x: 0.1, y: 0, z: 0 }];
+  const part = (name, x, y) => {
+    const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.4, 0.04, 0.4), material, 1);
+    mesh.userData.propName = name; mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(x, y, 0)); group.add(mesh); return mesh;
+  };
+  const keep = part('chairL', 0, 0.46), hide = [part('chairK', 0.1, 0.46), part('chairK', 0.1, 0.73)];
+  const unrelated = part('plant', 0.1, 0.46), matrix = new THREE.Matrix4();
+  const kept = context.__seatGeometry.dropDuplicates({ group }, list);
+  assert.equal(kept.length, 1); assert.equal(kept[0], list[0]);
+  keep.getMatrixAt(0, matrix); assert.notEqual(matrix.determinant(), 0);
+  unrelated.getMatrixAt(0, matrix); assert.notEqual(matrix.determinant(), 0);
+  for (const mesh of hide) { mesh.getMatrixAt(0, matrix); assert.equal(matrix.determinant(), 0); assert.ok(mesh.instanceMatrix.version > 0); }
+  // Stacked floors and the three seats of a sofa must remain independent.
+  const variants = [{ n: 'chairL', x: 0, y: 0, z: 0 }, { n: 'chairL', x: 0, y: 4.5, z: 0 }, { n: 'sofa', x: 0.1, y: 0, z: 0 }];
+  assert.equal(context.__seatGeometry.dropDuplicates({ group: new THREE.Group() }, variants).length, 3);
+});
+await check('Tám vị trí đảo thuyền có mặt đệm thật đỡ hông và bốn điểm quanh hông', () => {
+  const shape = new THREE.Shape(); shape.moveTo(-2.6, 0); shape.quadraticCurveTo(0, 1.2, 2.6, 0); shape.quadraticCurveTo(0, -1.2, -2.6, 0);
+  const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape, 64), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  mesh.rotation.set(-Math.PI / 2, 0, 0); mesh.position.y = 0.53;
+  const boat = new THREE.Group(); boat.add(mesh); boat.position.set(0.5, 0, 2.6); boat.rotation.y = 0.5; boat.updateMatrixWorld(true);
+  const ray = new THREE.Raycaster(), positions = [];
+  for (const lx of [-1.8, -0.6, 0.6, 1.8]) for (const lz of [-0.45, 0.45]) {
+    const raw = { n: 'island', x: 0.5 + lx * Math.cos(0.5) + lz * Math.sin(0.5), y: 0, z: 2.6 - lx * Math.sin(0.5) + lz * Math.cos(0.5), ry: lz > 0 ? 0.5 : 0.5 + Math.PI };
+    const fixed = context.__seatGeometry.islandSeat(raw, 0.5, 2.6), root = seatFor(fixed, 'bench', () => 0);
+    positions.push(fixed);
+    const hipX = root.x - Math.sin(root.ry) * 0.1, hipZ = root.z - Math.cos(root.ry) * 0.1;
+    for (const [a, b] of [[0, 0], [-0.12, 0], [0.12, 0], [0, -0.1], [0, 0.1]]) {
+      ray.set(new THREE.Vector3(hipX + Math.cos(root.ry) * a + Math.sin(root.ry) * b, 1, hipZ - Math.sin(root.ry) * a + Math.cos(root.ry) * b), new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObject(boat, true)[0];
+      assert.ok(hit, `có mặt đệm dưới hông ${lx},${lz} tại điểm ${a},${b}`);
+      close(hit.point.y, 0.53, 'chiều cao mặt đệm');
+    }
+  }
+  for (let i = 0; i < positions.length; i++) for (let j = i + 1; j < positions.length; j++) {
+    assert.ok(Math.hypot(positions[i].x - positions[j].x, positions[i].z - positions[j].z) > 0.59, 'không gộp chỗ ngồi hai người');
+  }
+});
+await check('Dời đúng chậu cây tầng 7 ra khỏi ghế, không dời cây tầng dưới hoặc phía đối diện', () => {
+  const group = new THREE.Group(), mz = 4.5;
+  const plant = (angle, y = mz, scale = 1.9, north = true) => {
+    const p = new THREE.Group(); p.position.set(Math.sin(angle) * 15.4, y, (north ? -7.5 : 7.5) + Math.cos(angle) * 15.4); p.scale.setScalar(scale); group.add(p); return p;
+  };
+  const moved = [plant(2.9), plant(-2.9)], unchanged = [plant(2.9, 0), plant(2.9, mz, 1), plant(0, mz, 1.9, false)];
+  const before = unchanged.map(p => p.position.clone());
+  const colliders = [...moved, ...unchanged].map(p => [p.position.x, p.position.z, 0.5]);
+  const clearPoint = moved[0].position.clone(), radial = new THREE.Vector3(clearPoint.x, 0, clearPoint.z + 7.5).normalize();
+  clearPoint.addScaledVector(radial, -0.2);
+  const blocked = p => colliders.some(c => Math.hypot(p.x - c[0], p.z - c[1]) < c[2] + 0.22);
+  // Tách collider của cây tầng dưới trùng x/z: phép thử va chạm ở tầng 7 chỉ dùng đúng danh sách tầng 7.
+  colliders.splice(2, 2);  // cây tầng dưới và cây scale=1 chỉ để kiểm tra hình không bị dời
+  assert.ok(blocked(clearPoint), 'chỗ sát lưng ghế ban đầu bị cây chặn');
+  context.__seatGeometry.movePlants({ group, api: { plantColliders: colliders } }, mz);
+  for (const p of moved) { close(Math.hypot(p.position.x, p.position.z + 7.5), 15.9, 'xa tâm dãy bàn'); close(p.scale.x, 1.5, 'thu nhỏ cây'); assert.equal(p.position.y, mz); }
+  assert.ok(!blocked(clearPoint), 'không còn vật cản ảo tại vị trí cũ cạnh ghế');
+  assert.ok(blocked(moved[0].position), 'vị trí chậu cây mới có va chạm');
+  close(colliders[0][2], 0.5 * 1.5 / 1.9, 'va chạm thu nhỏ cùng cây');
+  unchanged.forEach((p, i) => assert.equal(p.position.distanceTo(before[i]), 0));
 });
 console.log(`\n${passed} nhóm kiểm thử ghế ĐẠT (không thay thế kiểm tra hình ảnh WebGL).`);
