@@ -85,7 +85,7 @@
     <div class="po-actions" id="po-actions"></div>
   </footer>
   <div id="po-joy" class="po-joy" hidden><i></i></div>
-  <button id="po-wheel-btn" class="po-wheel-btn" type="button" hidden title="Hành động nhanh: vẫy tay, đọc sách, điện thoại, laptop… (giữ phím Q)" aria-label="Mở vòng hành động nhanh (giữ phím Q)"><span aria-hidden="true">✋</span><kbd>Q</kbd></button>
+  <button id="po-wheel-btn" class="po-wheel-btn" type="button" aria-haspopup="dialog" aria-controls="po-wheel" aria-expanded="false" hidden title="Hành động nhanh: vẫy tay, đọc sách, điện thoại, laptop… (giữ phím Q)" aria-label="Mở vòng hành động nhanh (giữ phím Q)"><span aria-hidden="true">✋</span><kbd>Q</kbd></button>
   <div id="po-mini" class="po-mini po-card" hidden>
     <canvas id="po-mini-cv" width="200" height="160" title="Bản đồ nhỏ — bấm để đi tới"></canvas>
     <button class="po-mini-x" id="po-mini-x" title="Ẩn bản đồ">✕</button>
@@ -100,6 +100,7 @@
 <div id="po-login" class="po-login" hidden></div>
 
 <!-- ============ THƯ VIỆN ============ -->
+<script src="js/startup.js"></script>
 <script src="scene/hust3d-dom.js"></script>
 <script src="scene/tang10-dom.js"></script>
 <script src="scene/vendor/three.min.js"></script>

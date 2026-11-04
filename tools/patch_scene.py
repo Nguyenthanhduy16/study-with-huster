@@ -73,6 +73,23 @@ js = sub_once(js, 'ctx.world.background=scene.background;renderer.render(ctx.wor
 js = sub_once(js, 'const s=touch?.006:.0045;', 'const s=(touch?.006:.0045)*(window.__LOOK_K||1);', 'độ nhạy xoay', count=3)
 js = sub_once(js, 'const sp=(keys.run?6:3)*dt', 'const sp=(keys.run?6:3)*dt*(window.__WALK_K||1)', 'tốc độ đi', count=2)
 
+# ---------- đầu vào khi nhúng: World là nơi duy nhất đọc WASD và kéo góc nhìn ----------
+# Giữ phím số thang máy ở mô hình; ô chat và tổ hợp phím trình duyệt không điều khiển nhân vật.
+js = sub_once(js, "if(mode!=='walk')return;if(KMAP[e.code])",
+              "if(mode!=='walk')return;"
+              "if(window.__POTA&&(KMAP[e.code]||e.key==='Shift'||e.ctrlKey||e.metaKey||e.altKey||"
+              "/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName||'')||e.target?.isContentEditable))return;"
+              "if(KMAP[e.code])", 'quyền đọc phím đi bộ', count=3)
+js = sub_once(js, "if(mode!=='walk')return;look=", "if(mode!=='walk'||window.__POTA)return;look=", 'quyền kéo camera', count=3)
+js = sub_once(js, "if(!look||mode!=='walk')return;", "if(!look||mode!=='walk'||window.__POTA)return;", 'quyền xoay camera', count=3)
+js = sub_once(js, "mx=mx/len*sp;mz=mz/len*sp", "mx=mx/Math.max(1,len)*sp;mz=mz/Math.max(1,len)*sp", 'tốc độ cần điều khiển', count=3)
+js = sub_once(js, "if(keys.f&&!keys.b){const want=", "if(keys.f&&!keys.b&&!window.__POTA){const want=", 'không tự xoay ở cầu thang')
+# E phải qua World để kiểm tra ghế đang có người; đang nhập chat không chơi đàn.
+js = sub_once(js, "if(mode==='walk'&&e.code==='KeyE'&&!sitBtn.hidden)", "if(!window.__POTA&&mode==='walk'&&e.code==='KeyE'&&!sitBtn.hidden)", 'quyền ngồi đàn')
+js = sub_once(js, "if(e.target&&e.target.tagName==='SELECT'&&!KEYMAP[e.code]&&e.code!=='Escape')return;",
+              "if(/^(INPUT|TEXTAREA)$/.test(e.target?.tagName||'')||e.target?.isContentEditable)return;\n  "
+              "if(e.target&&e.target.tagName==='SELECT'&&!KEYMAP[e.code]&&e.code!=='Escape')return;", 'gõ chat khi ngồi đàn')
+
 # phím Esc của mô hình (thoát đi bộ) — web tự xử lý nên tắt khi chạy trong Phòng ôn thi ảo
 js = sub_once(js, "if(e.key==='Escape'&&mode==='walk'){setMode('orbit');return;}",
               "if(e.key==='Escape'&&mode==='walk'&&!window.__POTA){setMode('orbit');return;}", 'phím Esc', count=3)

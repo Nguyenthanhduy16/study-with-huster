@@ -49,6 +49,12 @@ js = sub(js, "document.querySelectorAll('[data-view]')", "root.querySelectorAll(
 # tốc độ đi & độ nhạy xoay theo cài đặt chống chóng mặt của web
 js = sub(js, 'const sp=(keys.run?5.5:2.8)*dt', 'const sp=(keys.run?5.5:2.8)*dt*(window.__WALK_K||1)', 'tốc độ đi')
 js = sub(js, "const s=(touch?.006:.0045)*(mode==='scope'?camera.fov/FOV0:1);", "const s=(touch?.006:.0045)*(mode==='scope'?camera.fov/FOV0:1)*(window.__LOOK_K||1);", 'độ nhạy xoay')
+# World sở hữu WASD và kéo camera trong chế độ đi bộ; kính thiên văn/ngắm sao vẫn tự điều khiển.
+js = sub(js, "if(mode!=='walk')return;if(KMAP[e.code])", "if(mode!=='walk'||window.__POTA)return;if(KMAP[e.code])", 'quyền đọc phím đi bộ')
+js = sub(js, "canvas.addEventListener('pointerdown',e=>{down=",
+         "canvas.addEventListener('pointerdown',e=>{if(window.__POTA&&mode!=='scope'&&mode!=='gaze')return;down=", 'quyền kéo camera')
+js = sub(js, "if(!look||mode==='orbit')return;", "if(!look||mode==='orbit'||(window.__POTA&&mode==='walk'))return;", 'quyền xoay camera')
+js = sub(js, "mx=mx/len*sp;mz=mz/len*sp", "mx=mx/Math.max(1,len)*sp;mz=mz/Math.max(1,len)*sp", 'tốc độ cần điều khiển')
 # Esc khi đang đi bộ: web tự xử lý; rời kính / thôi nằm ngắm sao: trả quyền cho web
 js = sub(js, "if(e.key==='Escape'&&mode!=='orbit'){leaveLook();return;}", "if(e.key==='Escape'&&mode!=='orbit'&&!(window.__POTA&&mode==='walk')){leaveLook();return;}", 'phím Esc')
 js = sub(js, "function leaveLook(){if(mode==='orbit')return;",
@@ -76,7 +82,8 @@ function seatList(){const out=[];
   for(const s of SEATS){const c=Math.cos(s.ry),sn=Math.sin(s.ry);
     if(s.n==='bench')for(const lx of [-.45,.45])out.push({x:s.x+c*lx,y:0,z:s.z-sn*lx,ry:s.ry,kind:'bench'});
     else if(s.n==='lounger')out.push({x:s.x,y:0,z:s.z+.35,ry:s.ry,kind:'lounger'});
-    else out.push({x:s.x,y:-.1,z:s.z,ry:s.ry+PI,kind:'beanbag'});}
+    /* gối lười: tựa lưng ở phía −z của gối → nhìn về +z (trước đây bị quay ngược, ngồi lún vào trong gối); hông ở giữa gối */
+    else out.push({x:s.x+sn*.1,y:.06,z:s.z+c*.1,ry:s.ry,kind:'beanbag'});}
   /* ghế cong quanh đài ngắm sao: nhìn vào giữa đài */
   {const {x,z,r,h}=SD,rb=r-.45;for(let i=0;i<6;i++){const th=.45+(i+.5)*(PI-.9)/6;out.push({x:x+rb*Math.sin(th),y:h,z:z+rb*Math.cos(th),ry:th+PI,kind:'bench'});}}
   return out;}
@@ -101,12 +108,13 @@ return ME;
 js = ('/* Sân thượng tầng 10 — tự sinh từ tools/nguon/tang10.html bởi tools/patch_tang10.py, đừng sửa tay */\n'
       'window.moduleD=function(ctx,root){"use strict";const ME={};\n' + js + API + '};\n')
 
-(out / 'tang10.js').write_text(js, encoding='utf8')
 # id "labels" trùng với lớp nhãn tên của web → đổi tên (nếu không, tên trên đầu nhân vật biến mất)
 if 'id="labels"' not in dom: errors.append('Móc "nhãn sao": không thấy id="labels"')
 dom = dom.replace('id="labels"', 'id="d-labels"')
 if errors:
     print('KHÔNG THỂ VÁ SÂN THƯỢNG:'); [print('  ✗', e) for e in errors]; sys.exit(1)
+out.mkdir(parents=True, exist_ok=True)
+(out / 'tang10.js').write_text(js, encoding='utf8')
 dom = '<div class="mod" id="modD" hidden>' + dom.strip() + '</div>'
 (out / 'tang10-dom.js').write_text('/* Khung HTML sân thượng tầng 10 (tự sinh) */\n'
     'document.getElementById("scene-dom").insertAdjacentHTML("beforeend",' + json.dumps(dom, ensure_ascii=False) + ');\n', encoding='utf8')

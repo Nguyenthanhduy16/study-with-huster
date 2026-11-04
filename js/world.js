@@ -123,9 +123,12 @@
       setMode('walk');
     } else if (opts.at) {                                  // tới gần một người / một chỗ
       me.seat = -1; placeNear(space, opts.at);
+    } else if (prevZone && opts.seat == null) {
+      // Cửa/thang máy đưa người chơi tới lối vào, không tự chọn ghế ở tầng khác.
+      placeNear(space, space.lift || { x: 0, y: 0, z: 12 });
     } else {
       const seat = opts.seat != null ? opts.seat : pickSeat(space, prevZone === zone ? me.seat : U.store.get('seat:' + zone, -1));
-      sitAt(seat, true);
+      if (!sitAt(seat, true)) placeNear(space, space.lift || { x: 0, y: 0, z: 12 });
     }
     ev.emit('zone-changed', zone);
     Npc.sync(); for (const f of hooks.zone) f(zone);
@@ -144,14 +147,15 @@
   function occupiedSeats() {
     const s = new Map();
     for (const p of presence) if (p.uid !== me.uid && p.zone === me.zone && p.seat >= 0) s.set(p.seat, p);
-    for (const n of Npc.list()) if (n.seat >= 0) s.set(n.seat, { npc: n.def.id });   // ghế nhân viên đang ngồi
+    // Dành chỗ cho NPC kể cả trước lần sync đầu tiên (lúc vừa vào khu).
+    for (const n of Npc.reservedSeats()) s.set(n.seat, { npc: n.id });
     return s;
   }
   /* ngồi vào ghế trống gần nhất trên cùng tầng */
   function sitNearest() {
     const space = sp(); if (!space) return false;
     const occ = occupiedSeats(); let best = -1, bd = 1e9;
-    space.seats.forEach((s, i) => { if (occ.has(i) || s.kind === 'piano') return; const d = Math.hypot(s.x - me.x, s.z - me.z) + Math.abs(s.y - me.y) * 20; if (d < bd) { bd = d; best = i; } });
+    space.seats.forEach((s, i) => { if (occ.has(i) || s.kind === 'piano' || space.floorOf(s.y + 0.1) !== space.floorOf(me.y + 0.1)) return; const d = Math.hypot(s.x - me.x, s.z - me.z); if (d < bd) { bd = d; best = i; } });
     return best >= 0 && goSit(best);
   }
 
@@ -179,16 +183,16 @@
     else { space.walkNow(p.x, fl, p.z, Math.PI - face); me.x = p.x; me.z = p.z; me.y = fl; me.yaw = face; setMode('walk'); }
     ev.emit('seat-changed', -1); sendRest();
   }
-  /* tới gần điểm at trong khu zone: cùng tầng thì đi bộ tới, khác tầng/khu thì chuyển cảnh rồi đứng cạnh */
+  /* tới gần bạn bằng đường đi bộ; tầng/khu khác phải đi qua cửa và thang máy */
   async function goNear(zone, at) {
-    if (observe || !ZONES[zone]) return;
-    if (zone !== me.zone) { await go(zone, { at, text: 'Đang tới ' + ZONES[zone].name + '…' }); return; }
+    if (observe || !ZONES[zone] || !at) return false;
+    if (zone !== me.zone) { ev.emit('toast', 'Bạn ấy ở ' + ZONES[zone].name + '. Hãy đi qua cửa hoặc thang máy để tới đó.'); return false; }
     const space = sp();
     if (me.mode === 'seat' || me.mode === 'piano') standUp();
     const fl = space.kind === 'campus' ? 0 : space.floorOf(at.y + 0.1);
     const p = spotNear(space, fl, at.x, at.z);
-    if (p && Math.abs(fl - space.floorOf(me.y + 0.1)) < 0.5 && Math.hypot(p.x - me.x, p.z - me.z) < 70 && walkTo(p.x, p.z, null, 0.35)) return;
-    await S.fade(() => placeNear(space, at));
+    if (Math.abs(fl - space.floorOf(me.y + 0.1)) > 0.5) { ev.emit('toast', 'Bạn ấy ở tầng khác. Hãy dùng cầu thang hoặc thang máy.'); return false; }
+    return !!p && walkTo(p.x, p.z, null, 0.35);
   }
   /* vị trí hiện tại của một người (đang ngồi thì lấy chỗ ghế) */
   function whereIs(uid) {
@@ -211,11 +215,11 @@
     if (prefer >= 0 && prefer < n && !occ.has(prefer) && space.seats[prefer].kind !== 'piano') return prefer;
     let free = []; for (let i = 0; i < n; i++) if (!occ.has(i) && space.seats[i].kind !== 'piano' && space.seats[i].kind !== 'bench') free.push(i);
     if (!free.length) for (let i = 0; i < n; i++) if (!occ.has(i)) free.push(i);
-    if (!free.length) return 0;
+    if (!free.length) return -1;
     const in401 = free.filter(i => space.seats[i].room === '401');
     if (in401.length > 4) free = in401;                   // mặc định: phòng tự học 401
     if (!occ.size) return free[Math.floor(Math.random() * free.length)];
-    const taken = [...occ.keys()].map(i => space.seats[i]);
+    const taken = [...occ.keys()].map(i => space.seats[i]).filter(Boolean);
     const score = i => { const s = space.seats[i]; let d = 1e9; for (const t of taken) d = Math.min(d, Math.hypot(s.x - t.x, s.z - t.z) + Math.abs(s.y - t.y) * 4); return Math.abs(d - 2.2) + Math.random() * 1.5; };
     free.sort((a, b) => score(a) - score(b));
     return free[0];
@@ -227,7 +231,9 @@
   }
   /* ngồi xuống ghế idx của khu hiện tại */
   function sitAt(idx, instant) {
-    const space = sp(), s = space && space.seats[idx]; if (!s) return;
+    const space = sp(), s = space && space.seats[idx]; if (!s) return false;
+    // Ghế có thể vừa được người khác chọn trong lúc mình đang đi tới.
+    if (occupiedSeats().has(idx)) { ev.emit('toast', 'Ghế này vừa có bạn ngồi. Hãy chọn ghế trống khác.'); return false; }
     route = null;
     if (space.kind === 'room') space.stopWalk();
     me.seat = idx; me.seatTs = Date.now();
@@ -241,20 +247,28 @@
     }
     sendRest(); updatePlace();
     ev.emit('seat-changed', idx);
+    return true;
+  }
+  // Cả điểm tiếp cận và điểm đứng dậy đều phải nằm trên lối đi thật.
+  // Thử nhiều hướng: ghế quanh bàn thường chỉ tới được từ sau lưng/hai bên.
+  function seatSpots(space, s) {
+    const fl = s.floor != null ? s.floor : space.floorOf(s.y + 0.1), out = [];
+    const fx = Math.sin(s.ry), fz = Math.cos(s.ry);
+    for (const r of [0.65, 0.9, 1.2, 1.5, 1.8]) for (const [a, b] of [[-1, 0], [0, 1], [0, -1], [1, 0], [-0.707, 0.707], [-0.707, -0.707], [0.707, 0.707], [0.707, -0.707]]) {
+      const x = s.x + r * (fx * a + fz * b), z = s.z + r * (fz * a - fx * b);
+      const free = space.kind === 'campus' ? space.free(x, z, 0.22) && Math.abs(space.floorAt(x, z) - s.y) < 0.65 : space.free(x, z, fl);
+      if (free) out.push({ x, z, dx: x - s.x, dz: z - s.z, floor: fl });
+    }
+    return out;
   }
   /* đứng dậy: tìm chỗ trống cạnh ghế (sau lưng, hai bên, phía trước) */
   function standUp() {
-    const space = sp(); if (!space || (me.mode !== 'seat' && me.mode !== 'piano')) return;
-    if (me.mode === 'piano' && me.special !== 'piano') { space.leave(); return; }   // rời kính / thôi nằm ngắm sao
+    const space = sp(); if (!space || (me.mode !== 'seat' && me.mode !== 'piano')) return false;
+    if (me.mode === 'piano' && me.special !== 'piano') { space.leave(); return false; }   // rời kính / thôi nằm ngắm sao
     const s = space.seats[me.seat] || { x: me.x, y: me.y, z: me.z, ry: me.yaw };
-    const fx = Math.sin(s.ry), fz = Math.cos(s.ry), fl = space.floorOf(s.y + 0.1);
-    let spot = null;
-    for (const [a, b] of [[-0.75, 0], [0, 0.75], [0, -0.75], [0.8, 0], [-1.2, 0], [0, 1.2], [0, -1.2]]) {
-      const x = s.x + fx * a + fz * b, z = s.z + fz * a - fx * b;
-      if (space.free(x, z, fl)) { spot = { x, z, dx: x - s.x, dz: z - s.z }; break; }
-    }
-    if (!spot) spot = { x: s.x - fx * 0.75, z: s.z - fz * 0.75, dx: -fx, dz: -fz };
-    me.seat = -1; me.avatar.setSit(false);
+    const fl = s.floor != null ? s.floor : space.floorOf(s.y + 0.1), spot = seatSpots(space, s)[0];
+    if (!spot) { ev.emit('toast', 'Chưa tìm được lối đứng cạnh ghế.'); return false; }
+    route = null; me.seat = -1; me.special = null; me.avatar.setSit(false);
     const yawFace = Math.atan2(spot.dx, spot.dz);          // quay lưng khỏi ghế
     if (space.kind === 'campus') {
       me.x = spot.x; me.z = spot.z; me.y = space.floorAt(spot.x, spot.z); me.yaw = yawFace;
@@ -265,29 +279,35 @@
       me.x = spot.x; me.z = spot.z; me.y = fl; me.yaw = yawFace;
       setMode('walk');
     }
-    ev.emit('seat-changed', -1);
+    me.vx = me.vz = me.speed = 0;
+    sendRest(); updatePlace(); ev.emit('seat-changed', -1);
+    return true;
   }
   /* bấm vào một ghế: đứng dậy (nếu đang ngồi), đi tới rồi ngồi */
   function goSit(idx) {
     const space = sp(), s = space && space.seats[idx]; if (!s) return false;
     if (occupiedSeats().has(idx)) { ev.emit('toast', 'Ghế này có bạn ngồi rồi.'); return false; }
     if (idx === me.seat) return false;
-    if (me.mode === 'seat' || me.mode === 'piano') standUp();
+    if ((me.mode === 'seat' || me.mode === 'piano') && !standUp()) return false;
     const fl = space.floorOf(s.y + 0.1);
-    if (Math.abs(fl - space.floorOf(me.y + 0.1)) > 0.5 || Math.hypot(s.x - me.x, s.z - me.z) > 60) { sitAt(idx); return true; }
-    // điểm tiếp cận: chỗ trống cạnh ghế
-    const fx = Math.sin(s.ry), fz = Math.cos(s.ry);
-    let ap = null;
-    for (const [a, b] of [[-0.6, 0], [0, 0.6], [0, -0.6], [0.6, 0], [-0.9, 0]]) {
-      const x = s.x + fx * a + fz * b, z = s.z + fz * a - fx * b;
-      if (space.free(x, z, fl)) { ap = { x, z }; break; }
+    if (Math.abs(fl - space.floorOf(me.y + 0.1)) > 0.5) { ev.emit('toast', 'Ghế ở tầng khác. Hãy đi cầu thang hoặc thang máy tới tầng đó.'); return false; }
+    const g = space.grid(fl), zone = me.zone;
+    for (const ap of seatSpots(space, s)) {
+      const pts = g && g.path(me.x, me.z, ap.x, ap.z);
+      if (!pts) continue;
+      const end = pts[pts.length - 1] || { x: me.x, z: me.z };
+      if (Math.hypot(end.x - ap.x, end.z - ap.z) > 0.45) continue;
+      const done = () => { if (me.zone === zone && sp() === space) sitAt(idx); };
+      if (!pts.length || Math.hypot(me.x - ap.x, me.z - ap.z) < 0.35) done();
+      else { route = { pts, done, near: 0.25, stuck: 0, lx: me.x, lz: me.z }; showMarker(ap.x, me.y, ap.z); }
+      return true;
     }
-    if (!ap || !walkTo(ap.x, ap.z, () => sitAt(idx), 0.35)) sitAt(idx);
-    return true;
+    ev.emit('toast', 'Không tìm được lối tới ghế. Hãy đi gần hơn hoặc chọn ghế khác.');
+    return false;
   }
   function changeSeat(idx) {
     const space = sp(); if (!space) return false;
-    if (idx == null) { idx = pickSeat(space, -1); sitAt(idx); return true; }
+    if (idx == null) return sitNearest();
     return goSit(idx);
   }
 
@@ -360,6 +380,7 @@
     if (me.mode !== 'campus' && me.mode !== 'walk') return false;
     const g = space.grid(space.floorOf(me.y + 0.1));
     const pts = g && g.path(me.x, me.z, x, z);
+    if (pts && !pts.length && Math.hypot(x - me.x, z - me.z) <= near + 0.1) { route = null; if (done) done(); return true; }
     if (!pts || !pts.length) { ev.emit('toast', 'Không tìm được lối tới chỗ đó.'); return false; }
     route = { pts, done, near, stuck: 0, lx: me.x, lz: me.z };
     showMarker(pts[pts.length - 1].x, me.y, pts[pts.length - 1].z);
@@ -388,9 +409,9 @@
     presence = list;
     syncOthers();
     // trùng ghế: ai nhận ghế trước thì giữ, người sau tự đổi
-    if (me.mode === 'seat') {
+    if (me.seat >= 0 && (me.mode === 'seat' || me.mode === 'piano')) {
       const clash = list.find(p => p.uid !== me.uid && p.zone === me.zone && p.seat === me.seat && ((p.sts || 0) < me.seatTs || ((p.sts || 0) === me.seatTs && p.uid < me.uid)));
-      if (clash) { sitAt(pickSeat(sp(), -1)); ev.emit('toast', 'Ghế vừa có bạn khác ngồi trước — bạn được chuyển sang ghế bên cạnh.'); }
+      if (clash) { standUp(); ev.emit('toast', 'Ghế vừa có bạn khác ngồi trước. Hãy chọn ghế trống khác.'); }
     }
     const cnt = {};
     for (const p of list) { const z = ZONES[p.zone]; if (z && z.building) cnt[z.building] = (cnt[z.building] || 0) + 1; }
@@ -472,20 +493,26 @@
   const acts = new Map();
   const actIcon = uid => { const a = acts.get(uid), A2 = AVK && AVK.ACTS; return a && a.k && A2 && A2[a.k] ? A2[a.k].icon : ''; };
   let actGrace = 0, actMode = null;          // actGrace: mốc thời gian (ms) — đổi tư thế ngồi/đứng không tính là "đi" 
+  function pruneActs(list) {
+    const present = new Set(list.map(p => p.uid));
+    for (const uid of acts.keys()) if (uid !== me.uid && !present.has(uid)) acts.delete(uid);
+  }
   function setAct(uid, kind, t) {
-    kind = kind && AVK && AVK.ACTS && AVK.ACTS[kind] ? kind : null;
+    if (!uid || (kind && !(AVK && AVK.ACTS && Object.prototype.hasOwnProperty.call(AVK.ACTS, kind)))) return false;
+    kind = kind || null;
     const cur = acts.get(uid);
     if (uid === me.uid) {
       if (kind && (me.mode === 'idle' || me.mode === 'piano' || observe)) return false;
       if ((cur ? cur.k : null) === kind) return true;
-      t = Date.now(); acts.set(uid, { k: kind, t });
+      t = Math.max(Date.now(), cur ? cur.t + 1 : 0); acts.set(uid, { k: kind, t });
       me.act = kind; actMode = me.mode; actGrace = performance.now() + 400;
       if (me.avatar && me.avatar.setAct) me.avatar.setAct(kind);
       if (kind) { const A2 = AVK.ACTS[kind]; bubble(uid, A2.icon, false, 1500); }
       updateMyLabel(); ev.emit('act', { k: kind, t });
       return true;
     }
-    t = +t || 0;
+    t = +t;
+    if (!Number.isFinite(t) || t < 0) return false;
     if (cur && cur.t > t) return false;                    // tin cũ đến muộn
     if (cur && cur.t === t && cur.k === kind) return true;
     acts.set(uid, { k: kind, t });
@@ -525,7 +552,16 @@
   }
   /* bong bóng trên đầu: tin chat (ms bỏ trống → 5–7,5 giây tuỳ độ dài) hoặc biểu tượng cử chỉ (ms ngắn).
      Tối đa 2 bong bóng chồng nhau, cái cũ thu nhỏ & mờ đi; hết giờ thì mờ dần rồi biến mất. */
-  function bubble(uid, text, mention, ms) {
+  function clearBubbles(messageId) {
+    if (!labelsEl) return;
+    for (const b of labelsEl.querySelectorAll('.po-bubbles .po-bubble')) {
+      if (messageId != null && b.dataset.messageId !== String(messageId)) continue;
+      const box = b.parentElement, label = box.parentElement;
+      clearTimeout(b._fadeTimer); clearTimeout(b._removeTimer); b.remove();
+      if (!box.children.length) label.classList.remove('talk');
+    }
+  }
+  function bubble(uid, text, mention, ms, messageId) {
     if (!bubblesOn && uid !== me.uid) return;
     if (!ms) turnHeads(uid);
     const el = uid === me.uid ? (updateMyLabel(), myLabel) : (others.get(uid) || {}).label;
@@ -533,14 +569,14 @@
     const box = el.querySelector('.po-bubbles'); if (!box) return;
     const icon = !!ms && String(text).length <= 4;
     const life = ms || U.clamp(4000 + String(text).length * 45, 5000, 7500);
-    const b = U.h('div.po-bubble' + (mention ? '.mention' : '') + (icon ? '.icon' : ''), null, U.h('span', { text: String(text) }));
+    const b = U.h('div.po-bubble' + (mention ? '.mention' : '') + (icon ? '.icon' : ''), messageId == null ? null : { 'data-message-id': String(messageId) }, U.h('span', { text: String(text) }));
     if (icon) for (const x of [...box.children]) if (x.classList.contains('icon')) x.remove();   // cử chỉ mới thay cử chỉ cũ
     for (const x of box.children) x.classList.add('old');
     box.append(b);
     while (box.children.length > 2) box.firstElementChild.remove();
     el.classList.add('talk');
     const gone = () => { b.remove(); if (!box.children.length) el.classList.remove('talk'); };
-    setTimeout(() => { b.classList.add('out'); setTimeout(gone, 450); }, life);
+    b._fadeTimer = setTimeout(() => { b.classList.add('out'); b._removeTimer = setTimeout(gone, 450); }, life);
   }
 
   /* ------------------------------------------------------------------
@@ -558,6 +594,7 @@
   };
   const moving = () => me.mode === 'campus' || me.mode === 'walk';
   function clearKeys() { for (const k in keys) keys[k] = 0; driveRoom(); }
+  let resetInput = clearKeys;
   /* hướng muốn đi theo phím + cần điều khiển: ix sang phải, iy tới trước (−1…1) */
   function moveInput() {
     if (frozen) return { ix: 0, iy: 0 };
@@ -573,11 +610,12 @@
     K.run = me.mode === 'walk' && (keys.run || Math.hypot(joy.x, joy.y) > 0.95) ? 1 : 0;
   }
   function bindInput() {
+    canvas.tabIndex = 0;  // click/vuốt vào cảnh trả bàn phím từ ô chat về điều khiển nhân vật
     /* nhãn tên của chính mình nằm ngay giữa màn hình (trên đầu nhân vật): không chặn thao tác kéo để xoay camera */
     document.head.appendChild(U.h('style', { text: '#labels .po-tag.me{pointer-events:none}' }));
-    // phím của web chạy SAU phím của mô hình (đăng ký sau) → ghi đè được keys của mô hình trong cùng sự kiện
+    // Web sở hữu đầu vào khi nhúng; bộ đi bộ chỉ nhận trạng thái đã lọc qua driveRoom().
     addEventListener('keydown', e => {
-      if (typing(e)) { driveRoom(); return; }                // đang gõ chat: mô hình vừa nhận phím → huỷ
+      if (typing(e) || e.ctrlKey || e.metaKey || e.altKey || frozen || observe || going) { clearKeys(); return; }
       if ((e.code === 'KeyE' || e.code === 'KeyF') && !e.ctrlKey && !e.metaKey && !e.altKey) { if (!e.repeat) useKey(e); }
       const k = KMAP[e.code];
       if (k && me.mode === 'seat' && k === 'f') standUp();    // ngồi: W / ↑ là đứng dậy (giữ phím thì đi tiếp)
@@ -596,28 +634,41 @@
     });
     addEventListener('blur', clearKeys);
     document.addEventListener('visibilitychange', () => { if (document.hidden) clearKeys(); });
+    document.addEventListener('focusin', e => { if (typing(e)) clearKeys(); });
 
     /* chuột / chạm trên khung 3D: kéo (chuột trái hoặc phải, một ngón) để xoay camera, hai ngón để phóng to/thu nhỏ,
        chạm/bấm nhanh không kéo (chuột trái) mới là "bấm để tới". Bắt con trỏ để kéo qua nhãn tên, bảng HUD vẫn xoay tiếp. */
     let pinch = null, multi = false; const pts = new Map();
     const orbiting = () => me.mode === 'campus' || me.mode === 'seat';
+    const canLook = () => !observe && !frozen && !going && !camHold && (orbiting() || me.mode === 'walk');
     canvas.addEventListener('contextmenu', e => e.preventDefault());
     canvas.addEventListener('pointerdown', e => {
+      if (!canLook() || (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2)) return;
+      canvas.focus?.({ preventScroll: true });
       try { canvas.setPointerCapture(e.pointerId); } catch (_) { }
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, btn: e.button });
       if (pts.size > 1) multi = true;
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: curDist() }; }
+      e.preventDefault();
     });
     canvas.addEventListener('pointermove', e => {
       const p = pts.get(e.pointerId);
       if (!p) { if (!pts.size && e.pointerType === 'mouse') hover(e); return; }
-      if (pinch && pts.size === 2) {
+      if (!canLook()) { p.x = e.clientX; p.y = e.clientY; p.moved = true; return; }
+      if (pinch && pts.size === 2 && (me.mode !== 'walk' || opt.view !== 'first')) {
         p.x = e.clientX; p.y = e.clientY; const [a, b] = [...pts.values()];
         setDist(pinch.dist * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)));
-      } else if (orbiting()) {
-        const k = (U.isTouch ? 0.009 : 0.0065) * opt.look * (opt.reduce ? 0.75 : 1);
-        cam.az -= (e.clientX - p.x) * k; cam.el = U.clamp(cam.el + (e.clientY - p.y) * k * 0.7, 0.08, 1.15);
-      }                                                       // đi trong thư viện: bộ đi bộ của mô hình tự xoay góc nhìn (api.yaw/pitch)
+      } else if (pts.size === 1) {
+        const touch = e.pointerType === 'touch';
+        const k = (touch ? 0.009 : 0.0065) * opt.look * (opt.reduce ? 0.75 : 1);
+        if (orbiting()) {
+          cam.az -= (e.clientX - p.x) * k; cam.el = U.clamp(cam.el + (e.clientY - p.y) * k * 0.7, 0.08, 1.15);
+        } else {
+          const api = sp().module.api, s = (touch ? 0.006 : 0.0045) * opt.look * (opt.reduce ? 0.75 : 1);
+          api.yaw += (e.clientX - p.x) * s;
+          api.pitch = U.clamp(api.pitch + (e.clientY - p.y) * s, -1.2, 1.2);
+        }
+      }
       p.x = e.clientX; p.y = e.clientY;
       if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 7) p.moved = true;
     });
@@ -625,7 +676,7 @@
       const p = pts.get(e.pointerId); if (!p) return;
       pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
       try { canvas.releasePointerCapture(e.pointerId); } catch (_) { }
-      if (e.type === 'pointerup' && !multi && !p.moved && p.btn === 0 && performance.now() - p.t < 600) click(e);
+      if (e.type === 'pointerup' && canLook() && !multi && !p.moved && p.btn === 0 && performance.now() - p.t < 600) click(e);
       if (!pts.size) multi = false;
     };
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
@@ -636,14 +687,22 @@
 
     // cần điều khiển ảo (điện thoại): đi theo hướng camera như phím W/A/S/D; ngón kia vẫn kéo trên màn hình để xoay
     const j = document.getElementById('po-joy');
+    let resetJoy = () => { joy.x = joy.y = 0; joy.on = false; };
     if (j) {
       const knob = j.querySelector('i'); let jid = null, c = null;
-      j.addEventListener('pointerdown', e => { if (jid != null) return; jid = e.pointerId; try { j.setPointerCapture(jid); } catch (_) { } const r = j.getBoundingClientRect(); c = { x: r.left + r.width / 2, y: r.top + r.height / 2, R: r.width / 2 }; joy.on = true; jm(e); e.preventDefault(); });
+      j.addEventListener('pointerdown', e => { if (jid != null || frozen || observe || going) return; canvas.focus?.({ preventScroll: true }); jid = e.pointerId; try { j.setPointerCapture(jid); } catch (_) { } const r = j.getBoundingClientRect(); c = { x: r.left + r.width / 2, y: r.top + r.height / 2, R: r.width / 2 }; joy.on = true; jm(e); e.preventDefault(); });
       const jm = e => { if (e.pointerId !== jid) return; let dx = e.clientX - c.x, dy = e.clientY - c.y; const l = Math.hypot(dx, dy); if (l > c.R) { dx *= c.R / l; dy *= c.R / l; } joy.x = dx / c.R; joy.y = dy / c.R; knob.style.transform = `translate(${dx}px,${dy}px)`; if (Math.hypot(joy.x, joy.y) > 0.25) route = null; if (me.mode === 'seat' && joy.y < -0.5) standUp(); };
       j.addEventListener('pointermove', jm);
-      const je = e => { if (e.pointerId !== jid) return; jid = null; joy.x = joy.y = 0; joy.on = false; knob.style.transform = ''; driveRoom(); };
+      const je = e => { if (e.pointerId !== jid) return; const id = jid; jid = null; joy.x = joy.y = 0; joy.on = false; knob.style.transform = ''; try { j.releasePointerCapture(id); } catch (_) { } driveRoom(); };
       j.addEventListener('pointerup', je); j.addEventListener('pointercancel', je); j.addEventListener('lostpointercapture', je);
+      resetJoy = () => { if (jid != null) je({ pointerId: jid }); };
+      addEventListener('blur', resetJoy);
+      document.addEventListener('visibilitychange', () => { if (document.hidden) resetJoy(); });
     }
+    const resetLook = () => { for (const id of pts.keys()) { try { canvas.releasePointerCapture(id); } catch (_) { } } pts.clear(); pinch = null; multi = false; };
+    resetInput = () => { resetJoy(); resetLook(); clearKeys(); };
+    addEventListener('blur', resetLook);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) resetLook(); });
   }
   function curKind() { return me.mode === 'campus' ? 'campus' : me.mode === 'seat' ? 'seat' : 'walk'; }
   function curDist() { return cam.dist[curKind()]; }
@@ -872,7 +931,7 @@
     const { ix, iy } = moveInput();
     let mx = fx * iy - fz * ix, mz = fz * iy + fx * ix, len = Math.hypot(mx, mz);
     let auto = false;
-    if (len < 0.05) { const d = followRoute(dt); if (d) { mx = d.x; mz = d.z; len = 1; auto = true; } }
+    if (len < 0.05) { const d = followRoute(dt); if (me.mode !== 'campus' || sp() !== space) return; if (d) { mx = d.x; mz = d.z; len = 1; auto = true; } }
     else route = null;
     const run = keys.run || Math.hypot(joy.x, joy.y) > 0.95;
     const speed = (run ? 6 : 3.2) * opt.speed;
@@ -912,6 +971,10 @@
     const space = sp(), api = space.module.api, md = api.getMode();
     if (me.mode === 'walk' && md === 'piano') {           // bấm E cạnh đàn (phím tắt của mô hình)
       const i = space.seats.findIndex(s => s.kind === 'piano');
+      if (i < 0 || occupiedSeats().has(i)) {
+        space.stopWalk(); space.walkNow(me.x, space.floorOf(me.y + 0.1), me.z, Math.PI - me.yaw);
+        ev.emit('toast', 'Ghế đàn đã có bạn sử dụng.'); return;
+      }
       me.seat = i; me.seatTs = Date.now(); me.special = 'piano'; setMode('piano'); placeSeated(me.avatar, space.seats[i]); ev.emit('seat-changed', i); sendRest(); return;
     }
     if (me.mode === 'piano') {
@@ -933,6 +996,7 @@
     // tự đi theo đường đã tìm: dời "mắt" của bộ đi bộ thẳng theo đường, KHÔNG xoay góc nhìn (chỉ người dùng mới xoay camera)
     const eye = camera.position, d = Math.max(dt, 1e-3);
     const r = followRoute(dt);
+    if (me.mode !== 'walk' || sp() !== space) return;
     if (r) {
       api.keys.f = api.keys.b = api.keys.l = api.keys.r = api.keys.run = 0;
       const sp = 3 * (window.__WALK_K || 0.75) * dt, fl0 = space.floorOf(eye.y - 1.5);
@@ -1221,7 +1285,16 @@
       return out;
     }
     const emote = (id, k) => { const n = live.find(x => x.def.id === id); if (n) n.av.playEmote(k); };
-    return { sync, clear, frame, pick, say, emote, list: () => live, directory, open };
+    function reservedSeats() {
+      const space = sp(); if (!space || !open()) return [];
+      const out = [];
+      for (const def of DEFS) {
+        if (def.zone !== me.zone || (def.play && !playMode)) continue;
+        const p = pose(def, space); if (p && p.seat >= 0) out.push({ id: def.id, seat: p.seat });
+      }
+      return out;
+    }
+    return { sync, clear, frame, pick, say, emote, list: () => live, directory, open, reservedSeats };
   })();
 
   /* ------------------------------------------------------------------
@@ -1253,7 +1326,13 @@
     },
     setStyle(style) { me.style = style; if (me.avatar) me.avatar.setStyle(style); },
     setStatus(st) { me.status = st; updateMyLabel(); },
-    setBubbles(on) { bubblesOn = on; },
+    setBubbles(on) {
+      bubblesOn = on;
+      if (!on) for (const o of others.values()) {
+        const box = o.label.querySelector('.po-bubbles'); if (box) box.replaceChildren();
+        o.label.classList.remove('talk');
+      }
+    },
     setOpt(o) { Object.assign(opt, o); U.store.set('view', opt); applyOpt(); if (me.mode === 'walk' && me.avatar) me.avatar.root.visible = opt.view !== 'first'; },
     others, info, presence: () => presence,
     peopleHere() { return presence.filter(p => p.zone === me.zone && p.uid !== me.uid); },
@@ -1263,14 +1342,14 @@
     nearSeat: () => (nearSeat >= 0 ? nearSeat : null),
     sitPiano() { const space = sp(), i = space ? space.seats.findIndex(x => x.kind === 'piano') : -1; if (i >= 0) goSit(i); },
     sitNearest, goNear, whereIs, isNear, emote,
-    setAct, actOf: uid => (acts.get(uid) || {}).k || null,      // [act]
+    setAct, pruneActs, clearBubbles, actOf: uid => (acts.get(uid) || {}).k || null,      // [act]
     /* chế độ Dạo chơi: hiện NPC mini-game, rác trên sân… */
     setPlay(on) { playMode = !!on; Npc.sync(); for (const f of hooks.zone) f(me.zone); },
     get play() { return playMode; },
     setCup(kind) { if (me.avatar && me.avatar.setHeld) me.avatar.setHeld(kind); },
     /* dùng cho js/games.js */
     hooks, sp, placeNear, avOf, setNear(t) { if (t !== nearThing) { nearThing = t; ev.emit('near-thing', t); } },
-    holdCam(p, t) { camHold = p ? { p, t } : null; }, freeze(on) { frozen = !!on; if (on) route = null; },
+    holdCam(p, t) { camHold = p ? { p, t } : null; }, freeze(on) { frozen = !!on; if (on) { route = null; resetInput(); } },
     get camera() { return viewCam(); },                    // camera như đang hiện trên màn hình
     goToPerson(uid) { const w = whereIs(uid); if (w) goNear(w.zone, w); return !!w; },
     npcs: () => Npc.directory(), npcSay: (def, t) => Npc.say(def, t), npcEmote: (id, k) => Npc.emote(id, k),

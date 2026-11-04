@@ -269,7 +269,7 @@
     let hiddenAt = 0;
     function wake() {
       try { if (!sb.realtime.conn) sb.realtime.connect(); } catch (_) { }
-      if (presCh && chOk.pres === true) doTrack(true);
+      if (presCh && chOk.pres === true) scheduleTrack();
       recompute();
     }
     addEventListener('online', wake);
@@ -284,7 +284,9 @@
        Mỗi lần track() Supabase gửi cho MỌI người trong kênh ⇒ chỉ gửi khi nội dung thật sự đổi,
        gộp lại tối đa 1 lần / presenceGapMs (giãn thêm khi đông), và không gửi vị trí nghỉ khi chỉ có mình trong khu. */
     let presList = [], lastTracked = '', lastTrackAt = 0, trackTimer = null;
-    const presGap = () => (APP.presenceGapMs || 8000) * (presList.length > 150 ? 3 : presList.length > 60 ? 2 : 1);
+    const liveMeta = new Map();
+    // Presence has its own per-client limit (5 calls/30s). Fast seat/activity changes use Broadcast.
+    const presGap = () => Math.max(8000, APP.presenceGapMs || 8000) * (presList.length > 150 ? 3 : presList.length > 60 ? 2 : 1);
     async function doTrack(force) {
       if (!presCh || chOk.pres !== true) return;          // chưa vào kênh: SUBSCRIBED sẽ tự gửi
       const k = JSON.stringify(presMeta);
@@ -301,9 +303,30 @@
     const fin = v => typeof v === 'number' && isFinite(v);
     function cleanMeta(m, uid) {
       const o = Object.assign({}, m, { uid });
+      const live = liveMeta.get(uid);
+      if (live && live.at > (m.ts || 0) && Date.now() - live.received < 30000) Object.assign(o, live.meta);
+      else if (live) liveMeta.delete(uid);
       delete o.presence_ref;
       if (o.p && !(Array.isArray(o.p) && o.p.length >= 3 && o.p.slice(0, 4).every(fin))) delete o.p;
       return o;
+    }
+    function sendMeta() {
+      const m = {};
+      for (const k of ['zone', 'seat', 'sts', 'act', 'st', 'p']) if (k in presMeta) m[k] = presMeta[k];
+      zoneSend('meta', { u: me.id, t: Date.now(), m });
+    }
+    function receiveMeta(p) {
+      if (!p || typeof p.u !== 'string' || p.u === me.id || !fin(p.t) || !p.m || p.m.zone !== curZone) return;
+      const m = { zone: curZone };
+      if (Number.isInteger(p.m.seat) && p.m.seat >= -1 && p.m.seat < 10000) m.seat = p.m.seat;
+      if (fin(p.m.sts)) m.sts = p.m.sts;
+      if (typeof p.m.st === 'string' && p.m.st.length < 30) m.st = p.m.st;
+      if (p.m.act === null || (p.m.act && [null, '', 'doc', 'dien-thoai', 'laptop'].includes(p.m.act.k) && fin(p.m.act.t))) m.act = p.m.act;
+      if (Array.isArray(p.m.p) && p.m.p.length === 4 && p.m.p.every(fin)) m.p = p.m.p;
+      const old = liveMeta.get(p.u);
+      if (old && old.at > p.t) return;
+      liveMeta.set(p.u, { at: p.t, received: Date.now(), meta: m });
+      heard(p.u); emitPresence();
     }
     const emitPresence = U.throttle(() => {
       if (!presCh) return;
@@ -339,7 +362,7 @@
       /* chỉ gửi khi kênh đã vào xong — nếu không supabase-js chuyển sang gửi từng gói qua HTTP */
       if (!zoneCh || chOk.zone !== true || zoneCh.state !== 'joined') return false;
       cnt(rt.sent, event);
-      zoneCh.send({ type: 'broadcast', event, payload }).catch(() => { });
+      Promise.resolve(zoneCh.send({ type: 'broadcast', event, payload })).catch(() => { });
       return true;
     }
     function aged(p) {
@@ -456,6 +479,7 @@
         },
         update(meta) {
           presMeta = Object.assign({}, presMeta, meta);
+          if (['seat', 'sts', 'act', 'zone', 'st'].some(k => k in meta)) sendMeta();
           /* chỉ đổi vị trí nghỉ mà không ai cùng khu ⇒ để dành, gửi khi có người tới */
           if (Object.keys(meta).length === 1 && 'p' in meta && zonePeers() === 0) return;
           if (JSON.stringify(presMeta) !== lastTracked) scheduleTrack();
@@ -468,27 +492,32 @@
         if (curZone === z) return;
         net.leaveZone(); curZone = z;
         recentPeers.clear(); lastPos = null;
-        zoneCh = sb.channel('zone-' + z, { config: { broadcast: { self: false, ack: false } } });
-        zoneCh.on('broadcast', { event: 'pos' }, ({ payload }) => { cnt(rt.recv, 'pos'); if (okPos(payload)) { heard(payload.u); ev.emit('pos', payload); } })
-          .on('broadcast', { event: 'emo' }, ({ payload }) => { cnt(rt.recv, 'emo'); if (payload && typeof payload.u === 'string' && typeof payload.k === 'string' && payload.k.length < 40) { heard(payload.u); ev.emit('emote', payload); } })
+        const channel = zoneCh = sb.channel('zone-' + z, { config: { broadcast: { self: false, ack: false } } });
+        const active = () => zoneCh === channel && curZone === z;
+        channel.on('broadcast', { event: 'pos' }, ({ payload }) => { if (!active()) return; cnt(rt.recv, 'pos'); if (okPos(payload)) { heard(payload.u); ev.emit('pos', payload); } })
+          .on('broadcast', { event: 'meta' }, ({ payload }) => { if (!active()) return; cnt(rt.recv, 'meta'); receiveMeta(payload); })
+          .on('broadcast', { event: 'emo' }, ({ payload }) => { if (!active()) return; cnt(rt.recv, 'emo'); if (payload && typeof payload.u === 'string' && typeof payload.k === 'string' && payload.k.length < 40) { heard(payload.u); ev.emit('emote', payload); } })
           /* 'hi': một bạn vừa vào khu ⇒ ai đang đi thì gửi ngay vị trí (khỏi chờ), ai có vị trí nghỉ chưa gửi thì gửi */
           .on('broadcast', { event: 'hi' }, ({ payload }) => {
-            cnt(rt.recv, 'hi'); if (!payload || typeof payload.u !== 'string') return;
+            if (!active()) return; cnt(rt.recv, 'hi'); if (!payload || typeof payload.u !== 'string') return;
             heard(payload.u);
+            sendMeta();
             const dirty = JSON.stringify(presMeta) !== lastTracked;
-            if (lastPos && (lastPos.s ? Date.now() - lastPosAt < 3000 : dirty)) setTimeout(() => { if (lastPos) { zoneSend('pos', aged(lastPos)); lastSentPos = Date.now(); } }, 150 + Math.random() * 600);
+            if (lastPos && (lastPos.s ? Date.now() - lastPosAt < 3000 : dirty)) setTimeout(() => { if (active() && lastPos) { zoneSend('pos', aged(lastPos)); lastSentPos = Date.now(); } }, 150 + Math.random() * 600);
             if (dirty) scheduleTrack();
           })
-          .on('broadcast', { event: 'pno' }, ({ payload }) => ev.emit('piano', payload))   // [piano-net] nốt đàn của bạn khác
-          .subscribe(watch('zone', () => zoneSend('hi', { u: me.id })));
-        msgCh = sb.channel('msg-' + z)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'zone=eq.' + z }, p => { cnt(rt.recv, 'msg'); ev.emit('message', p.new); })
+          .on('broadcast', { event: 'pno' }, ({ payload }) => { if (active() && z === 'lib_b' && payload && typeof payload.u === 'string' && payload.u !== me.id && Array.isArray(payload.e) && payload.e.length <= 64 && fin(payload.t)) { cnt(rt.recv, 'pno'); ev.emit('piano', payload); } })
+          .subscribe(watch('zone', () => { zoneSend('hi', { u: me.id }); sendMeta(); }));
+        const messages = msgCh = sb.channel('msg-' + z);
+        messages.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'zone=eq.' + z }, p => { if (msgCh !== messages || curZone !== z) return; cnt(rt.recv, 'msg'); ev.emit('message', p.new); })
           .subscribe(watch('msg'));
       },
       leaveZone() {
         clearTimeout(posTimer); posTimer = null;
+        // removeChannel resolves asynchronously: ignore CLOSED/error callbacks from the old generation.
+        for (const name of ['zone', 'msg']) { chGen[name] = (chGen[name] || 0) + 1; delete chOk[name]; }
         if (zoneCh) sb.removeChannel(zoneCh).catch(() => { }); if (msgCh) sb.removeChannel(msgCh).catch(() => { });
-        zoneCh = msgCh = null; curZone = null;
+        zoneCh = msgCh = null; curZone = null; liveMeta.clear(); recompute();
       },
       sendPos(p) {
         if (!p || !fin(p.x) || !fin(p.z)) return;
@@ -504,7 +533,7 @@
       sendEmote(k) { if (zonePeers()) zoneSend('emo', { u: me.id, k }); },
       /* [piano-net] gói nốt đàn (js/piano-net.js gom ≤ 25 gói/giây). Chỉ gửi khi kênh đã vào xong — nếu không
          supabase-js sẽ chuyển sang gửi qua HTTP từng gói. */
-      sendPiano(b) { if (zoneCh && zoneCh.state === 'joined' && !(sb.realtime && sb.realtime.isConnected && !sb.realtime.isConnected())) zoneCh.send({ type: 'broadcast', event: 'pno', payload: Object.assign({}, b, { u: me.id }) }); },
+      sendPiano(b) { if (curZone === 'lib_b' && b && Array.isArray(b.e) && b.e.length <= 64 && fin(b.t) && !(sb.realtime && sb.realtime.isConnected && !sb.realtime.isConnected())) return zoneSend('pno', Object.assign({}, b, { u: me.id })); return false; },
       status: () => status
     };
     return net;

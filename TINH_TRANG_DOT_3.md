@@ -1,54 +1,48 @@
-# Tình trạng Đợt 3 — bản chụp giữa chừng (04/11/2026)
+# Tình trạng Đợt 3 — tiếp tục từ commit 534167e (04/11/2026)
 
-Bản zip này là **ảnh chụp mã nguồn tại thời điểm đóng gói**. Một số việc đã xong và đã kiểm tra; một số việc đang được làm dở (code đã có một phần nhưng **chưa kiểm tra xong**). Tất cả file JavaScript đều đã kiểm tra cú pháp (`node --check`) — không có lỗi cú pháp, nhưng phần đang làm dở có thể chưa chạy đúng hết.
+Đây là tình trạng mã nguồn sau phiên tiếp tục. Các sửa đổi đã ghép vào cùng checkout; kiểm thử tự động không thay thế kiểm tra hình ảnh WebGL và Supabase thật.
 
-Xem toàn bộ thay đổi so với bản gốc: mở thư mục bằng git (`git diff`) nếu có thư mục `.git`, hoặc so với zip gốc.
+## Đã thực hiện
 
-## ✅ Đã xong
+| Yêu cầu | Mã nguồn và kết quả |
+|---|---|
+| Phòng thay đồ mới | Bản mới đã có trong repo: avatar/src/, các bundle, ảnh logo, 88 món và phong-thay-do.html. Đã kiểm tra liên kết tài nguyên, giữ tích hợp và dữ liệu trang phục cũ. Không có hai tệp đính kèm mới để so sánh ngoài nguồn repo. |
+| Di chuyển và camera | World sở hữu đầu vào khi nhúng cảnh. WASD + kéo chuột trái/phải; cần điều khiển + ngón vuốt riêng; hai ngón thu phóng. Reset khi gõ chat/mất focus/mở radial; tốc độ theo độ nghiêng cần điều khiển. |
+| Ngồi ghế | Căn vị trí hông/cao độ/hướng theo loại ghế. Đi tới điểm tiếp cận hợp lệ mới ngồi và kiểm tra ghế lại lúc đến. Không teleport khi sai tầng/không có đường. Xử lý phòng đầy, đứng dậy an toàn, giữ ghế NPC trước khi dựng NPC và tranh ghế đàn. |
+| Không dùng nút dịch chuyển | Thanh dưới chỉ giữ thao tác theo ngữ cảnh. Tới khu khác qua cửa/cầu thang/thang máy. Tìm bạn khác tầng/khu chỉ hướng dẫn; lỗi tìm đường không dùng dịch chuyển dự phòng. |
+| Radial menu | Giữ Q/giữ nút ✋; chạm nhanh mở cố định; 1–8 chọn, 0 dừng, Esc đóng, Tab/mũi tên/Enter. Vẫy tay, đọc sách, điện thoại, laptop và cử chỉ cũ. Tạm dừng di chuyển khi chọn và đóng an toàn khi hủy chạm/mất focus. |
+| Chat trên đầu | Bong bóng theo nhãn nhân vật, tự xuống dòng/ẩn, tối đa hai bong bóng. Nội dung là văn bản, chống hiện trùng; QTV ẩn tin thì bong bóng cùng ID cũng biến mất. Tin gần chỉ hiển thị ở gần và cùng tầng. |
+| Mạng/piano | Meta ghế/hoạt động gửi nhanh bằng broadcast; Presence tối thiểu 8 giây. Bỏ qua callback kênh cũ. Piano kiểm tra gói, chống trùng, dọn hàng đợi khi đổi khu và nhả nốt treo. |
+| Khởi động/triển khai | Lỗi JavaScript/WebGL/tải cảnh có thông báo và tải lại. Cập nhật hướng dẫn hosting/Supabase và checklist hai thiết bị. config.js vẫn để trống URL/key. |
+| Tái tạo lớp cảnh | Hai script patch cảnh giữ các sửa đầu vào; tái tạo sân thượng vào thư mục tạm khớp chính xác bản hiện tại. Nguồn hust-3d gốc không có trong repo nên module chính chỉ xác minh các hook đầu vào, chưa tái tạo toàn bộ. |
 
-### 1. Thay Phòng thay đồ bằng bản mới (avatar-studio)
-- Mã mới chép vào `avatar/src/` (giữ các bản vá chạy với Three.js r128, đoạn nhúng `EMBED`), đã đóng gói lại `avatar/avatar-kit.js` và `avatar/phong-thay-do.js`.
-- Tủ đồ: 74 → 88 món (bộ sưu tập HUST/Phương Thảo, bomber, đồng phục GDTC, dây đeo đỏ cố định màu, thẻ SV ngang/dọc).
-- Ảnh logo: `avatar/assets/textures/hust-logo.png`, `hust-logo-round.png` — hiện đúng trên áo, dây đeo, thẻ, cả trong phòng thay đồ và nhân vật trong cảnh.
-- `phong-thay-do.html`: giao diện theo `css/studio.css` mới (đỏ HUST, chế độ tối).
-- Lưu cũ không bị hỏng: món đồ không còn trong tủ thì tự về mặc định; huy hiệu "Tổ Ong" cũ tự đổi sang HUST.
-- Đã thử trên Chromium (đồ hoạ giả lập): phòng thay đồ không lỗi; đăng nhập → thay đồ → "Mặc vào phòng" → vào thư viện, nhân vật đúng trang phục.
-- Hướng dẫn cập nhật: `docs/HOP_DONG_CANH.md` mục "Phòng thay đồ".
+## Kiểm tra đã chạy
 
-## 🔧 Đang làm (code đã có một phần, chưa kiểm tra xong)
+Lệnh chung: `npm run check && npm test`.
 
-### 2. Kéo chuột xoay camera trong lúc di chuyển (WASD) — `js/world.js`, `scene/adapter.js`, `scene/hust3d.js`, `scene/tang10.js`
-Mục tiêu: giữ W/A/S/D và kéo chuột (trái hoặc phải) vẫn xoay được góc nhìn mượt, hướng đi theo camera, cả ngoài sân, trong thư viện và sân thượng; trên điện thoại cần điều khiển + vuốt màn hình dùng cùng lúc.
+- Kiểm tra cú pháp JavaScript, đường dẫn tài nguyên HTML/CSS và header GLB.
+- `tools/kiem_tra_dieu_khien.mjs`: handler thật trong VM; WASD + kéo chuột, nhiều con trỏ, pinch, cần điều khiển, chat/focus, phím tắt và freeze.
+- `tools/kiem_tra_ghe.mjs`: 12 nhóm hồi quy ghế/đường đi/ghế đầy/NPC/tranh ghế/đứng dậy/đàn/không teleport. Dùng logic thật với bố cục kiểm thử; chưa xác nhận mọi ghế trong cảnh render.
+- `tools/kiem_tra_tuong_tac.mjs`: 12 kiểm tra radial, phím/chạm/hủy, hoạt động đến muộn, bong bóng và xử lý lỗi WebGL.
+- `tools/test-network.mjs`: khoảng cách Presence, meta ghế/hoạt động, callback kênh cũ, piano/gói lỗi/nốt treo.
+- `tools/offline-features.test.mjs`: hồ sơ, giờ học/nghỉ, câu hỏi/đáp án/điểm sao, ví, chat/chống spam, hỏi đáp/góp ý và giới hạn phần thưởng mini-game.
+- `tools/multiplayer-integration.test.mjs`: ba máy khách mạng độc lập chạy js/net.js và Supabase giả lập qua HTTP/SSE: đăng nhập, online, vị trí, ghế, hoạt động, cử chỉ, chat/chống spam, kiểm duyệt, nhắn riêng đúng người, phân khu, piano, ngắt/nối lại và rời phòng. Không có broadcast rơi xuống REST vì chưa vào kênh.
+- Chrome trong phiên này: preview chạy được nhưng không tạo được WebGL context. Đã xác nhận giao diện thông báo lỗi WebGL, hướng dẫn và nút tải lại.
+- Hai script Python kiểm tra cú pháp; sân thượng tái tạo khớp và hook sai dừng trước khi ghi đè.
 
-### 3. Ngồi đúng chỗ ở mọi ghế trống — cùng các file trên + `js/avatar2.js`
-Mục tiêu: nhân vật ngồi đúng mặt ghế, đúng hướng, ở mọi loại ghế và mọi khu; bấm vào ghế để đi tới ngồi; phím **E** để ngồi khi đứng gần ghế trống (kèm gợi ý "Nhấn E để ngồi").
+`tools/kiem_tra_nhieu_nguoi.mjs` là bài thử Chromium cũ của repo, không chạy lại trong phiên này. Bài ba máy khách hiện tại kiểm tra lớp mạng, không chạy ba trình duyệt và không kiểm tra renderer.
 
-### 4. Bỏ nút dịch chuyển ở thanh dưới + Radial Menu — `js/app.js`, `index.html`, `css/app.css`, `js/avatar2.js`
-- Bỏ các nút "Ngồi ghế gần nhất", "Các tầng", "Ra sân": muốn đi đâu phải tự di chuyển (thang máy, cầu thang, cửa chính).
-- Radial Menu (giữ phím hoặc nút tròn trên màn hình): 👋 Vẫy tay, 📖 Đọc sách, 📱 Bấm điện thoại, 💻 Dùng laptop (+ các cử chỉ cũ, "Dừng"); người khác cũng thấy.
+## Còn cần trước khi mở cho người dùng thật
 
-### 5. Bong bóng chat hiện trên đầu nhân vật — `js/world.js` (bubble/labels), `css/app.css`
-Tin ở kênh Cả khu và Gần tôi hiện trên đầu đúng người gửi, đi theo nhân vật, tự xuống dòng, tự ẩn.
+1. Điền URL và khoá public Supabase; bật anonymous sign-in, chạy schema/seed và cấu hình Realtime theo docs/HUONG_DAN_CAI_DAT.md.
+2. Kiểm tra hai thiết bị với Supabase thật, nhất là JWT/RLS cho nhắn riêng, quyền quản trị, chống spam và nối lại. Phiên này chưa chạy Supabase thật hoặc PostgreSQL.
+3. Trên máy có WebGL: đi bộ/kéo camera ở A/B/sân/sân thượng; thử mọi loại ghế, E, tranh ghế, ghế đàn, thang máy/cầu thang/cửa; radial/chat ở desktop và điện thoại. Kiểm tra trực quan cao độ ghế và FPS.
+4. Đo tải tăng dần trên dịch vụ thật. Chưa có sức chứa đồng thời được xác nhận; broadcast nhân theo số người nhận.
+5. Đưa tệp tĩnh lên hosting sau cấu hình và kiểm tra. Phiên này chưa triển khai production.
 
-### 6. Nhiều người truy cập và tương tác — `js/net.js`, `config.js`, `supabase/schema.sql`, tệp triển khai
-- Rà soát lớp mạng Supabase (hiện diện, vị trí, chat, cử chỉ, kết nối lại, giới hạn gói Free).
-- Đã thêm: `netlify.toml`, `vercel.json`, `.nojekyll` (GitHub Pages), máy chủ Supabase giả lập để thử nhiều người: `tools/fake-supabase.js`, `tools/fake-supabase-server.mjs`, `tools/kiem_tra_nhieu_nguoi.mjs`, `tools/supabase-gia-lap.sql`, `tools/kiem_tra_sql.sql`.
-- Còn lại: hoàn tất bài thử 2–3 trình duyệt, cập nhật `docs/HUONG_DAN_CAI_DAT.md` (các bước tạo Supabase, triển khai, sức chứa).
+## Lệnh phát triển
 
-### 7. Tiếng đàn piano nghe chung ở tầng 6–7 — `js/piano-net.js` (mới), `scene/hust3d.js`, `js/net.js`, `js/audio.js`, `js/app.js`
-- Ai chơi đàn thì người khác ở tầng 6–7 cùng nghe (nốt gom ~50 ms/lần, tối đa ~25 tin/giây), phím đàn nhấn theo.
-- Âm lượng nhỏ dần khi ra xa đàn, nhỏ hơn khi ở tầng 7.
-- Tắt riêng được bằng mục "🎹 Tiếng đàn của bạn khác" trong hộp Âm thanh.
-
-## 🔄 Phiên làm tiếp (04/11/2026)
-
-- ✅ Dựng lại lịch sử git: commit "Ban goc" (chỉ chứa các file bị sửa ở Đợt 3) → "Ban chup dot 3 giua chung" → các sửa tiếp theo.
-- ✅ Sửa máy chủ Supabase giả lập (`tools/fake-supabase-server.mjs`): trước đây nó thay nhầm dòng *ví dụ* trong chú thích của `config.js` nên web luôn chạy ngoại tuyến khi thử nhiều người.
-- ✅ `node tools/kiem_tra_nhieu_nguoi.mjs` (3 Chromium + Supabase giả lập): **ĐẠT TẤT CẢ** — đăng nhập 3 người, đếm online, thấy nhân vật của nhau, vị trí truyền sang máy khác, chat, chống spam, QTV ẩn tin ⇒ biến mất ở máy khác, cử chỉ, đổi khu, mất kết nối rồi tự nối lại, đóng tab, không gói nào phải gửi qua HTTP.
-- 🔧 Đang làm song song (4 nhánh riêng, sẽ gộp vào `main`): A — kéo chuột xoay camera khi đang đi (mục 2); B — ngồi đúng mọi ghế (mục 3); C — bỏ nút dịch chuyển + Radial Menu + bong bóng chat (mục 4, 5); D — rà lớp mạng, piano qua mạng, tệp triển khai, hướng dẫn cài đặt (mục 6, 7).
-- ⏳ Chưa làm: gộp 4 nhánh, kiểm tra chung sau khi gộp, cập nhật README (mục Đợt 3, dòng "không dùng logo HUST").
-
-## ⚠️ Cần bạn lưu ý
-- **Quyền dùng logo HUST và tên mẫu áo Phương Thảo:** bản Phòng thay đồ mới dùng ảnh logo thật; cần xác nhận được phép trước khi mở công khai. Dòng 136 của `README.md` (ghi "trường giả Tổ Ong, không dùng logo HUST") nay không còn đúng — sẽ sửa khi hoàn tất.
-- **Chưa chạy trên Supabase thật** và chưa đo tốc độ khung hình trên máy thật (môi trường làm việc chỉ có đồ hoạ giả lập). Trang phục mới nặng hơn trang phục cũ.
-- Bản chụp này có thể chứa thay đổi đang làm dở; nên dùng để xem/thử, chưa nên đưa lên web công khai.
+- `npm start`: máy chủ ngoại tuyến, cổng 3000.
+- `npm run dev`: Supabase giả lập, cổng 3000; dùng ?nguoi=1, ?nguoi=2, ?nguoi=3 cho các phiên riêng. Không dùng làm backend production.
+- `npm run check`: kiểm tra nguồn/tài nguyên.
+- `npm test`: các hồi quy Node nêu trên, không cần WebGL hoặc gói npm bên ngoài.

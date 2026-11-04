@@ -26,6 +26,7 @@
      ================================================================= */
   async function boot() {
     const msg = $('#po-splash-msg');
+    if (PotaStartup.failed) return;
     let init;
     try {
       msg.textContent = net.mode === 'online' ? 'Đang kết nối máy chủ…' : 'Đang chuẩn bị (chế độ ngoại tuyến)…';
@@ -38,11 +39,13 @@
       return;
     }
     A.settings = init.settings || DEFAULT_SETTINGS; A.banned = init.banned || [];
+    if (PotaStartup.failed) return;
     msg.textContent = 'Đang dựng khuôn viên trường…';
-    await SceneAPI.ready;
+    await PotaStartup.waitForScene(SceneAPI.ready);
     World.init(SceneAPI); Games.init(SceneAPI);
     bindWorld(); bindNet(); bindHud();
     applyEnv(); fetchWeather(); setInterval(applyEnv, 60e3); setInterval(fetchWeather, 15 * 60e3);
+    PotaStartup.complete();
     $('#po-splash').classList.add('out'); setTimeout(() => $('#po-splash').remove(), 700);
     if (!S().room_open) { roomClosed(); return; }
     const prof = await net.myProfile().catch(() => null);
@@ -548,14 +551,14 @@
     ];
     const N = ITEMS.length, STEP = Math.PI * 2 / N;
     const W = { open: false };
-    let root = null, ring = null, hub = null, hubT = null, hint = null, paths = [], btns = [], st = null, mouse = null;
+    let root = null, ring = null, hub = null, hubT = null, hint = null, paths = [], btns = [], st = null, mouse = null, returnFocus = null;
     const info = it => (it.type === 'act' ? AV2.ACTS : AV2.EMOTES)[it.k] || { icon: '?', label: it.k };
     const can = () => { const m = World.me.mode; return window.AV2 && (m === 'campus' || m === 'walk' || m === 'seat'); };
     const busyUi = () => !$('#po-modal').hidden || !$('#po-login').hidden || document.body.classList.contains('po-piano');
     function build() {
       const NS = 'http://www.w3.org/2000/svg';
       root = h('div#po-wheel.po-wheel', { hidden: true, role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Vòng hành động nhanh' });
-      ring = h('div.po-wheel-ring');
+      ring = h('div.po-wheel-ring', { role: 'group', 'aria-label': 'Chọn hành động' });
       const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '-100 -100 200 200'); svg.setAttribute('aria-hidden', 'true');
       const R = 98, r = 38, gap = 0.035;
       ITEMS.forEach((it, i) => {
@@ -573,7 +576,8 @@
       });
       hub = h('button.po-wheel-hub', { type: 'button', onclick: e => { e.stopPropagation(); hubAction(); } }, h('span.ic'), hubT = h('em'));
       ring.append(svg, ...btns, hub);
-      hint = h('div.po-wheel-hint');
+      hint = h('div#po-wheel-hint.po-wheel-hint', { role: 'status' });
+      root.setAttribute('aria-describedby', 'po-wheel-hint');
       root.append(ring, hint);
       root.addEventListener('click', e => {
         if (!st || st.mode !== 'toggle') return;
@@ -612,14 +616,19 @@
       const vw = innerWidth, vh = innerHeight, R = Math.max(110, Math.min(165, Math.min(vw, vh) / 2 - 22));
       let cx = vw / 2, cy = vh / 2;
       if (src === 'key' && mouse) { cx = U.clamp(mouse.x, R + 12, vw - R - 12); cy = U.clamp(mouse.y, R + 12, vh - R - 40); }
-      st = { mode, src, pid, sel: -2, t: ts || performance.now(), cx, cy, R, ax: x != null ? x : cx, ay: y != null ? y : cy, moved: false };
+      returnFocus = document.activeElement;
+      st = { mode, src, pid, sel: -2, t: ts == null ? performance.now() : ts, cx, cy, R, ax: x != null ? x : (mouse ? mouse.x : cx), ay: y != null ? y : (mouse ? mouse.y : cy), moved: false };
+      // Pause travel before choosing an activity; closing the wheel never resumes an old route.
+      World.freeze(true);
+      const toggle = $('#po-wheel-btn'); if (toggle) toggle.setAttribute('aria-expanded', 'true');
       ring.style.width = ring.style.height = (R * 2) + 'px';
       ring.style.left = (cx - R) + 'px'; ring.style.top = (cy - R) + 'px';
       hint.style.top = (cy + R + 10) + 'px'; hint.style.left = cx + 'px';
       setSel(-1);
       hintText();
       root.hidden = false; W.open = true; document.body.classList.add('po-wheel-on');
-      requestAnimationFrame(() => root.classList.add('in'));
+      requestAnimationFrame(() => { if (W.open) root.classList.add('in'); });
+      if (mode === 'toggle') hub.focus({ preventScroll: true });
       return true;
     }
     function hintText() {
@@ -630,6 +639,10 @@
     function close() {
       if (!W.open) return;
       W.open = false; st = null; root.classList.remove('in'); root.hidden = true; document.body.classList.remove('po-wheel-on');
+      World.freeze(false);
+      const toggle = $('#po-wheel-btn'); if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      if (root.contains(document.activeElement) && returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+      returnFocus = null;
     }
     function hubAction() { if (World.actOf(net.me.id)) stopAct(); close(); }
     function stopAct() { if (World.actOf(net.me.id)) { World.setAct(net.me.id, null); toast('⏹ Đã dừng.', '', 1800); } }
@@ -649,9 +662,9 @@
     /* thả: có ô đang sáng → chọn; bấm nhanh (theo thời điểm của sự kiện, không phụ thuộc khung hình chậm) → vòng đứng yên */
     function release(ts) {
       if (!st || st.mode !== 'hold') return;
-      const quick = (ts || performance.now()) - st.t < 320 && !st.moved;
+      const quick = (ts == null ? performance.now() : ts) - st.t < 320 && !st.moved;
       if (st.sel >= 0) choose(st.sel);
-      else if (quick) { st.mode = 'toggle'; hintText(); setSel(-1); }
+      else if (quick) { st.mode = 'toggle'; hintText(); setSel(-1); hub.focus({ preventScroll: true }); }
       else close();
     }
     /* ---- phím ---- */
@@ -670,14 +683,28 @@
       if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); return; }
       const n = /^Digit([0-9])$/.exec(e.code) || /^Numpad([0-9])$/.exec(e.code);
       if (n) { e.preventDefault(); e.stopImmediatePropagation(); const d = +n[1]; if (d === 0) { stopAct(); close(); } else if (d <= N) choose(d - 1); return; }
-      if (e.key === 'Enter' && st && st.sel >= 0) { e.preventDefault(); choose(st.sel); }
+      if (e.key === 'Tab') {
+        e.preventDefault(); e.stopImmediatePropagation();
+        const controls = [...btns, hub], at = controls.indexOf(document.activeElement);
+        const next = (at + (e.shiftKey ? -1 : 1) + controls.length) % controls.length;
+        setSel(next < N ? next : -1); controls[next].focus({ preventScroll: true });
+        return;
+      }
+      if (/^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        const step = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1;
+        const next = st.sel < 0 ? (step > 0 ? 0 : N - 1) : (st.sel + step + N) % N;
+        setSel(next); btns[next].focus({ preventScroll: true }); return;
+      }
+      if (e.key === 'Enter' && st && st.sel >= 0) { e.preventDefault(); e.stopImmediatePropagation(); choose(st.sel); }
     }, true);
     addEventListener('keyup', e => { if (e.code === 'KeyQ' && W.open && st && st.src === 'key') { e.stopImmediatePropagation(); release(e.timeStamp); } }, true);
     addEventListener('keydown', e => {                       // phím 0 = dừng hoạt động (khi vòng đang đóng)
       if (W.open || typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.code === 'Digit0' || e.code === 'Numpad0') && World.actOf && World.actOf(net.me.id) && World.me.mode !== 'piano') { stopAct(); }
     });
-    addEventListener('blur', () => { if (st && st.mode === 'hold') close(); });
+    addEventListener('blur', () => close());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) close(); });
     addEventListener('resize', () => close());
     /* ---- nút tròn (chuột + chạm) ---- */
     function bindButton(b) {
@@ -691,6 +718,7 @@
       const up = e => { if (st && st.src === 'pointer' && e.pointerId === st.pid) release(e.timeStamp); };
       b.addEventListener('pointerup', up);
       b.addEventListener('pointercancel', e => { if (st && st.src === 'pointer' && e.pointerId === st.pid) close(); });
+      b.addEventListener('lostpointercapture', e => { if (st && st.mode === 'hold' && st.src === 'pointer' && e.pointerId === st.pid) close(); });
       b.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !W.open) { e.preventDefault(); open('toggle', 'kbd'); setTimeout(() => btns[0] && btns[0].focus(), 0); } });
     }
     W.close = close; W.bindButton = bindButton; W.items = ITEMS;
@@ -742,6 +770,7 @@
     E.on('presence', list => {
       A.presence = list;
       World.setPresence(list);
+      World.pruneActs(list);
       wantNames(list.map(p => p.uid));
       for (const p of list) if (p.sr != null && p.uid !== net.me.id) World.setInfo(p.uid, { stars: p.sr });
       if (World.setAct) for (const p of list) if (p.uid !== net.me.id && p.act && typeof p.act === 'object') World.setAct(p.uid, p.act.k, p.act.t);   // [act]
@@ -761,7 +790,11 @@
     // [piano-net] tiếng đàn của bạn khác ở tầng 6–7: gom/gửi nốt mình chơi + phát nốt người khác (js/piano-net.js)
     if (window.PianoNet && !A.pianoNet) A.pianoNet = PianoNet.init({ net, World, Sound, getApi: () => SceneAPI.spaces.B.module.api, nameOf: u => (A.names.get(u) || {}).name, toast }) || 1;
     E.on('message', m => onMessage(m));
-    E.on('message-hidden', id => { $$(`.po-msg[data-id="${id}"]`).forEach(e => e.remove()); A.chatCache = (A.chatCache || []).filter(x => x.id !== id); });
+    E.on('message-hidden', id => {
+      $$('.po-msg[data-id]').filter(e => e.dataset.id === String(id)).forEach(e => e.remove());
+      A.chatCache = (A.chatCache || []).filter(x => String(x.id) !== String(id));
+      World.clearBubbles(id);
+    });
     E.on('profile', p => {
       A.names.set(p.id, { name: p.display_name, mssv: p.mssv_masked, hidden: p.hidden });
       World.setInfo(p.id, { name: p.display_name, hidden: p.hidden });
@@ -1119,13 +1152,14 @@
       net.mode === 'online' && m.uid !== net.me.id ? h('button.rep', { title: 'Báo cáo tin nhắn', onclick: async e => { e.stopPropagation(); await net.qaReport('m', m.id); toast('Đã báo cáo. Cảm ơn bạn!'); } }, '⚑') : null);
   }
   function onMessage(m) {
-    if (m.zone !== A.zone) return;
+    if (!m || m.zone !== A.zone || typeof m.text !== 'string') return;
+    if (m.id != null && (A.chatCache || []).some(x => String(x.id) === String(m.id))) return;
     // tin "Gần tôi" của người ở xa: bỏ qua hẳn (không hiện, không bong bóng)
     if (m.near && m.uid !== net.me.id && !World.isNear(m.near, NEAR_R())) return;
     A.chatCache = (A.chatCache || []).concat(m).slice(-80);
     if (!A.names.has(m.uid)) wantNames([m.uid]);
     const mention = m.target === net.me.id;
-    World.bubble(m.uid, (m.target ? '@' + nameOf(m.target) + ' ' : '') + m.text, mention);
+    World.bubble(m.uid, (m.target ? '@' + nameOf(m.target) + ' ' : '') + m.text, mention, null, m.id);
     const list = $('.po-pane[data-pane=chat] .po-chat');
     const showHere = A.tab === 'chat' && !$('#po-side').classList.contains('closed') && A.chan === (m.near ? 'near' : 'zone');
     if (list && showHere) { list.querySelectorAll('.po-empty').forEach(e => e.remove()); list.append(msgEl(m)); list.scrollTop = list.scrollHeight; }
@@ -1646,5 +1680,5 @@
   }
 
   World.setBubbles && setTimeout(() => World.setBubbles(store.get('bubbles', true)), 0);
-  boot();
+  boot().catch(e => { console.error(e); PotaStartup.fail(e); });
 })();

@@ -188,7 +188,7 @@
     }
     placeholder() {
       if (this.ph) return;
-      const g = new THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.22, 1.1, 4, 8) : new THREE.CylinderGeometry(0.22, 0.22, 1.5, 8);
+      const g = typeof THREE.CapsuleGeometry === 'function' ? new THREE.CapsuleGeometry(0.22, 1.1, 4, 8) : new THREE.CylinderGeometry(0.22, 0.22, 1.5, 8);
       this.ph = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0x8a93a8, transparent: true, opacity: 0.55 }));
       this.ph.position.y = 0.85; this.inner.add(this.ph);
     }
