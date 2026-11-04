@@ -2,7 +2,7 @@
 /* =====================================================================
    KIỂM THỬ NHIỀU NGƯỜI (tự động) — 3 trình duyệt Chromium không giao diện cùng vào một phòng
    qua Supabase GIẢ LẬP (tools/fake-supabase-server.mjs + tools/fake-supabase.js).
-   Chạy:   node tools/kiem_tra_nhieu_nguoi.mjs [--port=8741] [--out=thu-muc-anh] [--headed]
+   Chạy:   node tools/kiem_tra_nhieu_nguoi.mjs [--port=8741] [--out=thu-muc-anh] [--headed]   (máy không GPU: 7–10 phút vì WebGL chạy bằng SwiftShader)
    Cần:    Node 18+, gói playwright (npm i -D playwright && npx playwright install chromium)
    Kiểm:   đăng nhập 3 người · đếm người online · thấy nhân vật của nhau cùng khu · di chuyển truyền sang máy khác ·
            tin nhắn · cử chỉ · đổi khu (người ở khu khác không hiện) · mất kết nối rồi tự nối lại ·
@@ -24,15 +24,33 @@ const OUT = args.out ? path.resolve(args.out) : null;
 if (OUT) fs.mkdirSync(OUT, { recursive: true });
 
 const results = []; let failed = 0;
-const ok = (cond, msg) => { results.push((cond ? '  ĐẠT  ' : '  LỖI  ') + msg); console.log((cond ? '  ĐẠT  ' : '  LỖI  ') + msg); if (!cond) failed++; };
+const ok = (cond, msg) => { const line = (cond ? '  ĐẠT  ' : '  LỖI  ') + msg + `  [${Math.round((Date.now() - T0) / 1000)}s]`; results.push(line); console.log(line); if (!cond) failed++; };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function until(fn, ms = 20000, step = 250) { const t = Date.now(); while (Date.now() - t < ms) { try { const v = await fn(); if (v) return v; } catch (_) { } await sleep(step); } return null; }
 const ctl = body => fetch(BASE + '/fake/ctl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+/* Chụp ảnh chỉ khi có --out. SwiftShader dựng hình bằng CPU nên 3 trang cùng vẽ làm screenshot treo:
+   tạm dừng vòng vẽ (requestAnimationFrame) của các trang KHÁC để nhường CPU, tắt hoạt ảnh/con trỏ,
+   chờ lâu hơn và KHÔNG để lỗi chụp ảnh làm hỏng cả bài kiểm thử. Mạng (setInterval/WebSocket) vẫn chạy bình thường. */
+const pauseRaf = () => { if (window.__rafGoc) return; window.__rafGoc = window.requestAnimationFrame; window.__rafCho = []; window.requestAnimationFrame = cb => { window.__rafCho.push(cb); return 0; }; };
+const resumeRaf = () => { if (!window.__rafGoc) return; window.requestAnimationFrame = window.__rafGoc; delete window.__rafGoc; const q = window.__rafCho || []; window.__rafCho = []; for (const cb of q) requestAnimationFrame(cb); };
+async function shot(p, name) {
+  if (!OUT) return;
+  const others = people.filter(o => o !== p && !o.closed && o.page);
+  await Promise.all(others.map(o => o.page.evaluate(pauseRaf).catch(() => { })));
+  const t = Date.now();
+  try {
+    await p.page.screenshot({ path: path.join(OUT, name), animations: 'disabled', caret: 'hide', timeout: 180000 });
+    console.log('        (đã chụp ' + name + ' trong ' + Math.round((Date.now() - t) / 1000) + ' giây)');
+  } catch (e) { console.log('        (bỏ qua ảnh ' + name + ': ' + String(e && e.message || e).split('\n')[0] + ')'); }
+  finally { await Promise.all(others.map(o => o.page.evaluate(resumeRaf).catch(() => { }))); }
+}
 const rpc = (name, body) => fetch(BASE + '/fake/rpc/' + name, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
 
-const srv = spawn(process.execPath, [path.join(HERE, 'fake-supabase-server.mjs'), '--port=' + PORT], { stdio: ['ignore', 'pipe', 'inherit'] });
+/* --csp: trang được gửi kèm đúng Content-Security-Policy của netlify.toml; vi phạm CSP hiện thành lỗi Console và làm bài thử LỖI */
+const srv = spawn(process.execPath, [path.join(HERE, 'fake-supabase-server.mjs'), '--port=' + PORT, '--csp'], { stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise((res, rej) => { srv.stdout.once('data', res); srv.once('exit', c => rej(new Error('máy chủ giả lập dừng: ' + c))); });
-const browser = await chromium.launch({ headless: !args.headed });
+/* WebGL trong Chromium không GPU: bắt buộc dùng SwiftShader (dựng hình bằng CPU) — thiếu các cờ này thì cảnh 3D không tạo được context. */
+const browser = await chromium.launch({ headless: !args.headed, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const people = [
   { tag: 'A', name: 'Nguyễn Văn An', mssv: '20231111' },
   { tag: 'B', name: 'Trần Thị Bình', mssv: '20232222' },
@@ -70,7 +88,7 @@ try {
   const [A, B, C] = people;
   const seesAvatar = (viewer, target) => viewer.page.evaluate(u => World.others.has(u), target.uid);
   ok(await until(async () => (await seesAvatar(A, B)) && (await seesAvatar(B, A)) && (await seesAvatar(C, A)), 30000), 'nhân vật của người khác hiện ra (cùng sân trước thư viện)');
-  if (OUT) await B.page.screenshot({ path: path.join(OUT, '1-B-thay-A-C.png') });
+  await shot(B, '1-B-thay-A-C.png');
 
   /* ---------- 2. di chuyển ---------- */
   await ctl({ op: 'reset-stats' });
@@ -117,7 +135,7 @@ try {
   ok(await until(async () => !(await seesAvatar(A, C)), 15000), 'nhân vật C không còn đứng trên sân ở máy A');
   ok(await until(async () => !(await C.page.evaluate(u => World.others.has(u), A.uid)), 15000), 'C (trong thư viện) không vẽ A (đang ở sân)');
   ok((await A.page.textContent('#po-online b')) === '3', 'vẫn đếm đủ 3 người online');
-  if (OUT) await C.page.screenshot({ path: path.join(OUT, '2-C-thu-vien.png') });
+  await shot(C, '2-C-thu-vien.png');
 
   /* ---------- 7. mất kết nối rồi tự nối lại ---------- */
   await ctl({ op: 'kill', uid: B.uid, blockMs: 5000 });
@@ -134,7 +152,7 @@ try {
   const st = await ctl({ op: 'stats' });
   console.log('        máy chủ: kết nối', st.clients.length, '· hiện diện', JSON.stringify(st.presence), '· tổng tin đã chuyển', JSON.stringify(st.stats.delivered));
   for (const p of [A, B]) console.log('        ' + p.tag + ' gửi', JSON.stringify(await p.page.evaluate(() => __potaNet.rt.sent)), '· nhận', JSON.stringify(await p.page.evaluate(() => __potaNet.rt.recv)));
-  if (OUT) await A.page.screenshot({ path: path.join(OUT, '3-A-cuoi.png') });
+  await shot(A, '3-A-cuoi.png');
 } catch (e) {
   ok(false, 'lỗi khi chạy kiểm thử: ' + (e && e.stack || e));
 } finally {

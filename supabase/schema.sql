@@ -53,7 +53,7 @@ insert into app_settings (id, data) values (1, $json${
 }$json$::jsonb)
 on conflict (id) do nothing;
 
--- Mật khẩu quản trị (lưu dạng băm). Đổi bằng:  select admin_set_initial_password('mat-khau-moi');
+-- Mật khẩu quản trị (lưu dạng băm). Không có mật khẩu mặc định — đặt bằng:  select admin_set_initial_password('mat-khau-moi');
 create table if not exists admin_secret (
   id int primary key default 1 check (id = 1),
   pw_hash text not null,
@@ -360,6 +360,22 @@ create table if not exists events (
   text text not null,
   created_at timestamptz not null default now()
 );
+
+-- Đợt 3 (triển khai): chỉ mục cho các truy vấn/khoá ngoại chạy thường xuyên khi đông người.
+-- Thiếu chúng thì: tải hộp thư nhắn riêng (cheers theo from_uid/to_uid), Realtime lọc to_uid, tải trả lời hỏi bài,
+-- và xoá một người dùng (on delete cascade) đều phải quét cả bảng.
+create index if not exists cheers_to on cheers (to_uid, created_at desc);
+create index if not exists cheers_from on cheers (from_uid, created_at desc);
+create index if not exists qa_answers_qid on qa_answers (qid, created_at);
+create index if not exists qa_answers_uid on qa_answers (uid);
+create index if not exists qa_questions_list on qa_questions (pinned desc, created_at desc);
+create index if not exists qa_questions_uid on qa_questions (uid);
+create index if not exists messages_uid on messages (uid);
+create index if not exists messages_created on messages (created_at desc);
+create index if not exists answers_uid on answers (uid);
+create index if not exists feedback_uid on feedback (uid);
+create index if not exists profiles_last_hb on profiles (last_hb desc);
+create index if not exists notices_created on notices (created_at desc);
 
 -- =====================================================================
 -- 6. BẢO MẬT HÀNG (RLS): trình duyệt chỉ được ĐỌC những gì công khai
@@ -910,6 +926,9 @@ create or replace function qa_report(p_kind text, p_id bigint) returns jsonb lan
 declare n int;
 begin
   if auth.uid() is null or p_kind not in ('q', 'a', 'm') then return jsonb_build_object('ok', false); end if;
+  -- Đợt 3: chỉ người đã có hồ sơ và không bị khoá mới được báo cáo (tài khoản ẩn danh tạo rất dễ:
+  -- trước đây 3 phiên ẩn danh chưa đăng ký đủ để tự ẩn bất kỳ tin nhắn/câu hỏi nào).
+  if not exists (select 1 from profiles where id = auth.uid() and not blocked) then return jsonb_build_object('ok', false); end if;
   insert into qa_reports (kind, item_id, uid) values (p_kind, p_id, auth.uid()) on conflict do nothing;
   if not found then return jsonb_build_object('ok', true, 'already', true); end if;
   select count(*) into n from qa_reports where kind = p_kind and item_id = p_id;
@@ -1250,7 +1269,11 @@ grant execute on function admin_login(text), admin_change_password(text, text), 
 -- các hàm nội bộ (_xxx) chỉ dùng bên trong; hàm security definer vẫn gọi được chúng.
 
 -- =====================================================================
--- 10. MẬT KHẨU QUẢN TRỊ MẶC ĐỊNH — HÃY ĐỔI NGAY sau khi chạy file này:
+-- 10. MẬT KHẨU QUẢN TRỊ — KHÔNG có mật khẩu mặc định.
+--     Trước đây file này tạo sẵn mật khẩu 'doi-mat-khau-ngay' (ai đọc repo cũng biết) ⇒ người lạ vào được
+--     trang quản trị, xem MSSV đầy đủ và xoá dữ liệu nếu ban tổ chức quên đổi. Nay trang quản trị bị khoá
+--     cho tới khi chạy trong SQL Editor (thay bằng mật khẩu riêng, ≥ 8 ký tự):
 --     select admin_set_initial_password('mat-khau-rieng-cua-ban');
+--     Dự án đã chạy bản cũ: mật khẩu hiện có được giữ nguyên; nếu vẫn là mật khẩu mặc định cũ thì bị vô hiệu hoá.
 -- =====================================================================
-insert into admin_secret (id, pw_hash) values (1, crypt('doi-mat-khau-ngay', gen_salt('bf'))) on conflict (id) do nothing;
+delete from admin_secret where id = 1 and pw_hash = crypt('doi-mat-khau-ngay', pw_hash);

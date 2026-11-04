@@ -30,7 +30,11 @@ Lệnh chung: `npm run check && npm test`.
 - Chrome trong phiên này: preview chạy được nhưng không tạo được WebGL context. Đã xác nhận giao diện thông báo lỗi WebGL, hướng dẫn và nút tải lại.
 - Hai script Python kiểm tra cú pháp; sân thượng tái tạo khớp và hook sai dừng trước khi ghi đè.
 
-`tools/kiem_tra_nhieu_nguoi.mjs` là bài thử Chromium cũ của repo, không chạy lại trong phiên này. Bài ba máy khách hiện tại kiểm tra lớp mạng, không chạy ba trình duyệt và không kiểm tra renderer.
+`tools/kiem_tra_nhieu_nguoi.mjs` (chuẩn bị triển khai): ba Chromium thật với WebGL SwiftShader, Supabase giả lập và CSP y như `netlify.toml` — 24/24 mục ĐẠT (khoảng 9 phút). Ảnh chụp chỉ khi có `--out`; lúc chụp tạm dừng vòng vẽ của hai trang còn lại để không treo.
+
+`tools/kiem_tra_sql.sql` chạy trên PostgreSQL 16 thường (sau `tools/supabase-gia-lap.sql`, schema chạy 2 lần, seed 2 lần): ĐẠT, gồm cả quyền nhắn riêng, hàm nội bộ/quản trị và mật khẩu mặc định. Chưa thay thế kiểm tra trên Supabase thật.
+
+Sửa khi rà soát triển khai: bỏ mật khẩu quản trị mặc định công khai (chạy lại schema sẽ vô hiệu hoá nó); phiên ẩn danh chưa đăng ký không được báo cáo nội dung; thêm chỉ mục cho cheers/qa/messages/answers/feedback/profiles.
 
 ## Còn cần trước khi mở cho người dùng thật
 
