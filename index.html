@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Phòng ôn thi ảo</title>
+<meta name="description" content="Phòng ôn thi ảo: cùng học, cùng ôn thi trong Thư viện Tạ Quang Bửu dựng lại bằng 3D.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2334489a'/%3E%3Cpath d='M14 22l18-8 18 8-18 8z' fill='%23ffd166'/%3E%3Cpath d='M22 27v10c0 4 20 4 20 0V27l-10 5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="scene/hust3d.css">
+<link rel="stylesheet" href="scene/tang10.css">
+<link rel="stylesheet" href="css/app.css">
+<script>
+  /* chất lượng đồ hoạ (Thấp/Vừa/Cao) — đọc trước khi dựng cảnh */
+  try { window.__SCENE_QUALITY = { low: { pr: 1, shadow: false }, mid: { pr: 1.5, shadow: true }, high: { pr: 2, shadow: true } }[JSON.parse(localStorage.getItem('pota:quality') || '"mid"')] || { pr: 1.5, shadow: true }; } catch (_) { window.__SCENE_QUALITY = { pr: 1.5, shadow: true }; }
+</script>
+</head>
+<body>
+<canvas id="c" aria-label="Thư viện Tạ Quang Bửu và sân trước dựng 3D"></canvas>
+<div id="scene-dom"></div>
+<div id="labels" aria-hidden="false"></div>
+
+<!-- ============ MÀN CHỜ ============ -->
+<div id="po-splash" class="po-splash">
+  <div class="po-splash-in">
+    <div class="po-logo" aria-hidden="true"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#34489a"/><path d="M14 24l18-8 18 8-18 8z" fill="#ffd166"/><path d="M22 29v10c0 4 20 4 20 0V29l-10 5z" fill="#fff"/></svg></div>
+    <h1>Phòng ôn thi ảo</h1>
+    <p id="po-splash-msg">Đang dựng thư viện…</p>
+    <div class="po-bar"><i></i></div>
+  </div>
+</div>
+
+<!-- ============ GIAO DIỆN TRONG PHÒNG ============ -->
+<div id="po-hud" class="po-hud" hidden>
+  <header class="po-top">
+    <div class="po-card po-brand">
+      <div class="po-logo sm" aria-hidden="true"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#34489a"/><path d="M14 24l18-8 18 8-18 8z" fill="#ffd166"/><path d="M22 29v10c0 4 20 4 20 0V29l-10 5z" fill="#fff"/></svg></div>
+      <div class="po-brand-t">
+        <div class="po-eyebrow">Phòng ôn thi ảo</div>
+        <div class="po-zone" id="po-zone">Sân trước thư viện</div>
+        <div class="po-place" id="po-place"></div>
+        <div class="po-meta"><span id="po-clock">--:--</span><span id="po-weather"></span><span id="po-net" class="po-net"></span></div>
+      </div>
+    </div>
+    <div class="po-top-r">
+      <div class="po-card po-stats">
+        <button class="po-stat" id="po-online" title="Số bạn đang online"><i class="dot"></i><b>1</b><span>đang học</span></button>
+        <button class="po-stat" id="po-mytime" title="Thời gian hệ thống ghi nhận hôm nay"><span class="ic">⏱️</span><b>0:00</b></button>
+        <button class="po-stat" id="po-mystars" title="Sao hôm nay"><span class="ic">⭐</span><b>0</b></button>
+        <button class="po-stat" id="po-mystreak" title="Chuỗi ngày học"><span class="ic">🔥</span><b>0</b></button>
+      </div>
+      <div class="po-card po-tools">
+        <button class="po-ibtn" id="po-focus" title="Chế độ tập trung (Pomodoro)"><span>🎯</span><em>Tập trung</em></button>
+        <button class="po-ibtn" id="po-play" title="Chuyển giữa Ôn thi và Dạo chơi (mini-game, không tính giờ)"><span>🌳</span><em>Dạo chơi</em></button>
+        <button class="po-ibtn" id="po-pause" title="Tạm nghỉ (không tính giờ)"><span>☕</span><em>Nghỉ</em></button>
+        <button class="po-ibtn" id="po-sound" title="Âm thanh"><span>🔇</span><em>Âm thanh</em></button>
+        <button class="po-ibtn" id="po-panel-btn" title="Bảng bên"><span>☰</span><em>Bảng</em></button>
+      </div>
+    </div>
+  </header>
+
+  <div id="po-notice" class="po-notice" hidden></div>
+  <div id="po-quizchip" class="po-quizchip" hidden></div>
+  <div id="po-quiz" class="po-quiz po-card" hidden></div>
+
+  <aside id="po-side" class="po-side po-card">
+    <nav class="po-tabs" role="tablist">
+      <button role="tab" data-tab="rank" aria-selected="true">🏆<span>Xếp hạng</span></button>
+      <button role="tab" data-tab="chat">💬<span>Trò chuyện</span><i class="po-badge" hidden></i></button>
+      <button role="tab" data-tab="people">👥<span>Mọi người</span></button>
+      <button role="tab" data-tab="qa">❓<span>Hỏi bài</span></button>
+      <button role="tab" data-tab="me">👤<span>Của tôi</span></button>
+      <button class="po-side-x" id="po-side-x" title="Thu gọn">✕</button>
+    </nav>
+    <section class="po-pane" data-pane="rank"></section>
+    <section class="po-pane" data-pane="chat" hidden></section>
+    <section class="po-pane" data-pane="people" hidden></section>
+    <section class="po-pane" data-pane="qa" hidden></section>
+    <section class="po-pane" data-pane="me" hidden></section>
+  </aside>
+
+  <footer class="po-bottom">
+    <div class="po-ticker" id="po-ticker"></div>
+    <div class="po-actions" id="po-actions"></div>
+  </footer>
+  <div id="po-joy" class="po-joy" hidden><i></i></div>
+  <div id="po-mini" class="po-mini po-card" hidden>
+    <canvas id="po-mini-cv" width="200" height="160" title="Bản đồ nhỏ — bấm để đi tới"></canvas>
+    <button class="po-mini-x" id="po-mini-x" title="Ẩn bản đồ">✕</button>
+  </div>
+  <button id="po-mini-btn" class="po-mini-btn po-card" title="Hiện bản đồ nhỏ" hidden>🗺️</button>
+  <div id="po-observe" class="po-observe po-card" hidden>👁️ Chế độ quan sát (ban tổ chức) — kéo để xoay, cuộn để phóng to <button class="po-btn sm" id="po-observe-x">Thoát</button></div>
+  <div id="po-focusring" class="po-focusring" hidden></div>
+</div>
+
+<div id="po-toasts" class="po-toasts" aria-live="polite"></div>
+<div id="po-modal" class="po-modal" hidden></div>
+<div id="po-login" class="po-login" hidden></div>
+
+<!-- ============ THƯ VIỆN ============ -->
+<script src="scene/hust3d-dom.js"></script>
+<script src="scene/tang10-dom.js"></script>
+<script src="scene/vendor/three.min.js"></script>
+<script src="scene/vendor/OrbitControls.js"></script>
+<script src="scene/vendor/GLTFLoader.js"></script>
+<script src="vendor/three-extra/RoundedBoxGeometry.js"></script>
+<script src="scene/vendor/CopyShader.js"></script>
+<script src="scene/vendor/LuminosityHighPassShader.js"></script>
+<script src="scene/vendor/EffectComposer.js"></script>
+<script src="scene/vendor/RenderPass.js"></script>
+<script src="scene/vendor/ShaderPass.js"></script>
+<script src="scene/vendor/UnrealBloomPass.js"></script>
+<script src="config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/questions-bank.js"></script>
+<script>
+  /* thư viện Supabase chỉ tải khi đã điền cấu hình máy chủ trong config.js */
+  if (window.SUPABASE_URL) document.write('<script src="vendor/supabase/supabase.js"><\/script>');
+</script>
+<script src="vendor/katex/katex.min.js"></script>
+<script src="vendor/katex/contrib/auto-render.min.js"></script>
+<script src="js/net.js"></script>
+<script src="js/avatar.js"></script>
+<script src="avatar/avatar-kit.js"></script>
+<script src="js/avatar2.js"></script>
+<script src="js/grid.js"></script>
+<script src="scene/exterior/build-grid.js"></script>
+<script src="js/audio.js"></script>
+<script src="scene/tang10.js"></script>
+<script src="scene/hust3d.js"></script>
+<script src="scene/adapter.js"></script>
+<script src="js/world.js"></script>
+<script src="js/games.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

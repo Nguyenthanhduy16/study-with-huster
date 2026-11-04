@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Phòng thay đồ · Phòng ôn thi ảo</title>
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<style>
+/* Bố cục: sân khấu "vở ô ly" bên trái, tủ đồ dạng bảng bên phải; điện thoại xếp dọc. */
+:root {
+  --paper: #fbfaf5;
+  --panel: #ffffff;
+  --text: #1f1c2b;
+  --muted: #676279;
+  --ink: #4b2e9a;          /* mực tím */
+  --ink-soft: #ece7fb;
+  --grid: #cfdcf2;          /* dòng kẻ ô ly */
+  --grid-strong: #a9bfe6;
+  --margin: #e9a3a3;        /* lề đỏ */
+  --gold: #e3a52a;
+  --border: #e3e0ea;
+  --focus: #2f6fe0;
+  --font-ui: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-hand: "Patrick Hand", "Comic Sans MS", "Segoe Print", cursive;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #171926; --panel: #1f2232; --text: #ebe8f4; --muted: #a39eb6;
+    --ink: #b7a4ff; --ink-soft: #2c2847; --grid: #262b40; --grid-strong: #323a58;
+    --margin: #6e3d48; --gold: #f0bd52; --border: #30344a; --focus: #7aa7ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #171926; --panel: #1f2232; --text: #ebe8f4; --muted: #a39eb6;
+  --ink: #b7a4ff; --ink-soft: #2c2847; --grid: #262b40; --grid-strong: #323a58;
+  --margin: #6e3d48; --gold: #f0bd52; --border: #30344a; --focus: #7aa7ff;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--text); font: 14px/1.5 var(--font-ui); }
+* { box-sizing: border-box; }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+
+/* ---------- thanh trên */
+.topbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--border); background: var(--panel);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; min-width: 0; }
+.brand h1 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.brand span { color: var(--muted); font-size: 13px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 7px 12px; border-radius: 8px; border: 1px solid var(--ink);
+  background: var(--ink); color: var(--panel); font-weight: 600; font-size: 13px; line-height: 1.2;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--border); }
+.btn.ghost:hover { border-color: var(--ink); }
+.btn.small { padding: 5px 10px; font-size: 12.5px; }
+.btn[aria-pressed="true"] { background: var(--ink-soft); color: var(--ink); border-color: var(--ink); }
+
+/* ---------- khung chính */
+.studio { display: grid; grid-template-columns: minmax(0, 1fr) 420px; min-height: 0; }
+
+.stage {
+  position: relative; min-height: 0; overflow: hidden;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(90deg, transparent 47px, var(--margin) 47px, var(--margin) 49px, transparent 49px),
+    linear-gradient(var(--grid-strong) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-strong) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 8px 8px, 32px 32px;
+}
+#stage3d { position: absolute; inset: 0; cursor: grab; touch-action: none; }
+#stage3d:active { cursor: grabbing; }
+
+/* nhãn vở */
+.nhan-vo {
+  position: absolute; top: 16px; left: 64px; width: min(260px, 60%);
+  padding: 10px 14px 8px; background: var(--panel);
+  border: 2px solid var(--ink); border-radius: 14px;
+  box-shadow: 0 0 0 4px var(--panel), 0 0 0 5px var(--ink);
+  font-family: var(--font-hand); font-size: 17px; line-height: 1.35; color: var(--text);
+  transform: rotate(-1.2deg); pointer-events: none;
+}
+.nhan-vo .row { display: flex; gap: 6px; border-bottom: 1px dotted var(--muted); min-width: 0; }
+.nhan-vo .row b { font-weight: 400; color: var(--muted); flex: none; }
+.nhan-vo .row span { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.focus-bar { position: absolute; left: 64px; bottom: 16px; display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--panel); cursor: pointer; font-size: 12.5px; font-weight: 600;
+}
+.chip:hover { border-color: var(--ink); color: var(--ink); }
+.stage.busy::after {
+  content: "Đang may đồ…"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  padding: 8px 14px; border-radius: 999px; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--border); font-weight: 600; font-size: 13px; pointer-events: none;
+}
+.hint-drag { position: absolute; right: 16px; bottom: 18px; color: var(--muted); font-size: 12px; pointer-events: none; }
+.stage-error { position: absolute; inset: auto 16px 64px 64px; background: var(--panel); border: 1px solid var(--margin); padding: 12px; border-radius: 8px; }
+
+/* ---------- tủ đồ */
+.panel { display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--panel); border-left: 1px solid var(--border); }
+.tabs {
+  display: flex; gap: 2px; overflow-x: auto; scrollbar-width: thin;
+  padding: 8px 12px 0; border-bottom: 1px solid var(--border);
+}
+.tab {
+  flex: none; padding: 8px 11px 9px; border: 0; background: none; cursor: pointer;
+  font-weight: 600; font-size: 13px; color: var(--muted);
+  border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.tabpanel { overflow-y: auto; padding: 4px 16px 24px; min-height: 0; }
+
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.stack.tight { gap: 8px; flex: 1; min-width: 0; }
+.sec { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
+.sec + .sec { border-top: 1px solid var(--border); }
+.sec-title { margin: 0; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.item {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 6px 8px; border-radius: var(--r); border: 1px solid var(--border);
+  background: var(--panel); cursor: pointer; text-align: center; min-width: 0;
+}
+.item:hover { border-color: var(--ink); }
+.item[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); background: var(--ink-soft); }
+.thumb {
+  width: 80px; height: 80px; border-radius: 8px; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--c, #ccc) 35%, transparent), transparent 70%);
+}
+.thumb img { width: 80px; height: 80px; opacity: 0; transition: opacity .25s; }
+.thumb.ready img { opacity: 1; }
+.none-mark { font-size: 28px; color: var(--muted); }
+.item-name { font-size: 12.5px; font-weight: 600; line-height: 1.25; text-wrap: balance; }
+.tag {
+  position: absolute; top: 6px; right: 6px; font-size: 10px; font-weight: 700; letter-spacing: .03em;
+  padding: 1px 6px; border-radius: 999px; background: var(--gold); color: #2a1f05;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+input[type="text"], textarea {
+  width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--paper); min-width: 0;
+}
+textarea { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12px; resize: vertical; }
+input[type="range"] { width: 100%; accent-color: var(--ink); }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.sw {
+  width: 28px; height: 28px; border-radius: 50%; cursor: pointer; padding: 0;
+  background: var(--c); border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+}
+.sw[aria-checked="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--ink); }
+.sw-custom {
+  position: relative; display: inline-grid; place-items: center; overflow: hidden;
+  background: conic-gradient(#f66, #fd6, #6d8, #6cf, #96f, #f6c, #f66);
+}
+.sw-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
+
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button {
+  padding: 6px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel);
+  cursor: pointer; font-size: 12.5px; font-weight: 600;
+}
+.seg button[aria-checked="true"] { border-color: var(--ink); background: var(--ink-soft); color: var(--ink); }
+
+.check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.check input { accent-color: var(--ink); width: 16px; height: 16px; }
+
+.upload { display: flex; flex-direction: column; gap: 6px; }
+.upload-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.up-preview { width: 40px; height: 40px; object-fit: contain; border-radius: 6px; border: 1px solid var(--border); background: var(--paper); }
+.up-empty { font-size: 12.5px; color: var(--muted); padding: 0 2px; }
+.btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.hint { margin: 0; font-size: 12.5px; color: var(--muted); }
+.hint code, .note code { font-size: 11.5px; background: var(--ink-soft); padding: 1px 5px; border-radius: 4px; }
+.note { margin: 0; font-size: 13px; max-width: 62ch; }
+
+.emblem-wrap { display: flex; gap: 14px; align-items: flex-start; }
+.emblem-preview { flex: none; width: 112px; }
+.emblem-preview canvas { width: 112px; height: 112px; display: block; }
+.card-preview canvas { width: 100%; height: auto; display: block; border-radius: 10px; box-shadow: 0 1px 0 var(--border), 0 6px 18px rgba(30, 20, 60, .12); }
+
+/* ---------- hộp thoại */
+dialog {
+  border: 1px solid var(--border); border-radius: 14px; padding: 0; width: min(560px, calc(100vw - 32px));
+  background: var(--panel); color: var(--text);
+}
+dialog::backdrop { background: rgba(20, 16, 36, .45); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.modal-head h2 { margin: 0; font-size: 15px; }
+.modal-body { padding: 16px; }
+.shot { width: 100%; border-radius: 10px; background: var(--paper); border: 1px solid var(--border); }
+
+/* ---------- điện thoại / màn hẹp */
+@media (max-width: 860px) {
+  .app { height: auto; min-height: 100%; }
+  .studio { grid-template-columns: 1fr; }
+  .stage { height: 62vh; min-height: 380px; }
+  .panel { border-left: 0; border-top: 1px solid var(--border); }
+  .tabpanel { overflow: visible; }
+  .tabs { position: sticky; top: env(safe-area-inset-top, 0px); background: var(--panel); z-index: 2; }
+  .nhan-vo { left: 56px; top: 12px; font-size: 15px; width: min(220px, 62%); }
+  .focus-bar { left: 56px; bottom: 12px; }
+  .stage.busy::after {
+  content: "Đang may đồ…"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  padding: 8px 14px; border-radius: 999px; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--border); font-weight: 600; font-size: 13px; pointer-events: none;
+}
+.hint-drag { display: none; }
+}
+@media (max-width: 480px) {
+  .nhan-vo { font-size: 13px; width: 168px; left: 54px; padding: 6px 10px 4px; }
+  .nhan-vo .row:last-child { display: none; }
+}
+@media (max-width: 420px) {
+  .brand span { display: none; }
+  .two { grid-template-columns: 1fr; }
+  .emblem-wrap { flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) { .thumb img { transition: none; } }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><h1>Phòng thay đồ</h1><span>Nhân vật 3D sinh viên</span></div>
+    <div class="actions">
+      <button class="btn ghost" id="btn-random" type="button">Phối ngẫu nhiên</button>
+      <button class="btn ghost" id="btn-spin" type="button" aria-pressed="false">Xoay vòng</button>
+      <button class="btn ghost" id="btn-shot" type="button">Chụp ảnh</button>
+      <button class="btn" id="btn-export" type="button">Lưu cấu hình</button>
+    </div>
+  </header>
+
+  <main class="studio">
+    <section class="stage" aria-label="Sân khấu nhân vật">
+      <div id="stage3d"></div>
+      <div class="nhan-vo" aria-hidden="true">
+        <div class="row"><b>Họ tên:</b> <span id="lbl-name"></span></div>
+        <div class="row"><b>Ngành:</b> <span id="lbl-class"></span></div>
+        <div class="row"><b>Trường:</b> <span id="lbl-school"></span></div>
+      </div>
+      <div class="focus-bar" role="group" aria-label="Góc nhìn">
+        <button class="chip" type="button" data-focus="full">Toàn thân</button>
+        <button class="chip" type="button" data-focus="head">Khuôn mặt</button>
+        <button class="chip" type="button" data-focus="card">Thẻ SV</button>
+        <button class="chip" type="button" data-focus="feet">Đôi chân</button>
+      </div>
+      <p class="hint-drag">Kéo để xoay · cuộn để phóng to</p>
+      <p class="stage-error" id="stage-error" hidden>Không khởi động được 3D. Trình duyệt cần hỗ trợ WebGL và trang phải chạy qua máy chủ web (không mở trực tiếp file).</p>
+    </section>
+
+    <aside class="panel" aria-label="Tủ đồ">
+      <nav class="tabs" id="tabs" role="tablist" aria-label="Danh mục"></nav>
+      <div class="tabpanel" id="tabpanel" role="tabpanel"></div>
+    </aside>
+  </main>
+</div>
+
+<dialog id="modal" aria-labelledby="modal-title">
+  <div class="modal-head"><h2 id="modal-title"></h2><button class="btn ghost small" id="modal-close" type="button">Đóng</button></div>
+  <div class="modal-body" id="modal-body"></div>
+</dialog>
+
+
+<!-- three r128 (cùng bản với mô hình 3D) + phần mở rộng; mã phòng thay đồ đã được đóng gói lại cho r128 (tools/build_avatar.mjs) -->
+<script src="scene/vendor/three.min.js"></script>
+<script src="scene/vendor/OrbitControls.js"></script>
+<script src="vendor/three-extra/RoundedBoxGeometry.js"></script>
+<script src="avatar/phong-thay-do.js"></script>
+</body>
+</html>
