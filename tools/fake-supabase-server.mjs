@@ -304,8 +304,8 @@ const server = http.createServer(async (req, res) => {
   /* ---------- web tĩnh ---------- */
   if (p === '/config.js' && !args.offline) {
     const src = fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8')
-      .replace(/window\.SUPABASE_URL\s*=\s*['"][^'"]*['"]\s*;/, "window.SUPABASE_URL = location.origin + '/fake';")
-      .replace(/window\.SUPABASE_ANON_KEY\s*=\s*['"][^'"]*['"]\s*;/, "window.SUPABASE_ANON_KEY = 'fake-anon-key';");
+      .replace(/^window\.SUPABASE_URL\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_URL = location.origin + '/fake';")
+      .replace(/^window\.SUPABASE_ANON_KEY\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_ANON_KEY = 'fake-anon-key';");
     res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-store' }); return res.end(src);
   }
   if (p === '/vendor/supabase/supabase.js' && !args.offline) { res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-store' }); return res.end(fs.readFileSync(SHIM)); }
