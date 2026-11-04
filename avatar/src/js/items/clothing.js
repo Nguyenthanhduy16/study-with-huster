@@ -9,7 +9,7 @@
 // =============================================================
 import * as THREE from 'three';
 import { DIM, trunkRadius, lowpolyMat } from '../rig.js';
-import { smin, ellipsoid, roundCone, torusY, surfaceNets, relax, skinByDistance, segT } from '../sdf.js';
+import { smin, ellipsoid, roundCone, torusY, surfaceNets, relax, skinByDistance, segDist, segT } from '../sdf.js';
 import { composeGarment, composePlain, composeSleeve, composeTopAtlas, toTexture, shade, drawEmblem } from '../textures.js';
 
 const TAU = Math.PI * 2;
@@ -95,6 +95,45 @@ function skinTop(geo, M, options) {
 function hairGeometry(M, style, hatOn) {
   const H = M.head;
   const C = H.cranium.c;
+  if (style === 'moi' || style === 'moi-nape') {
+    const nape = style === 'moi-nape';
+    // Build strand endpoints once, not for every cell sampled by Surface Nets.
+    const locks = nape ? Array.from({ length: 9 }, (_, k) => {
+      const i = k - 4, ax = i * 0.019, length = 0.192 + 0.025 * Math.cos(i * 1.9);
+      return [[C[0] + ax, C[1] - 0.09, C[2] - 0.104],
+        [C[0] + ax + Math.sin(i * 2.1) * 0.011, C[1] - length, C[2] - 0.119 - 0.009 * Math.cos(i)]];
+    }) : Array.from({ length: 11 }, (_, k) => {
+      const i = k - 5, ax = i * 0.014, tip = 0.012 + 0.012 * (0.5 + 0.5 * Math.sin(i * 2.3 + 0.4));
+      return [[C[0] + ax, C[1] + 0.063, C[2] + 0.084],
+        [C[0] + ax + Math.sin(i * 1.7) * 0.004, C[1] + tip, C[2] + 0.117]];
+    });
+    const field = (x, y, z) => {
+      const rx = x - C[0], ry = y - C[1], rz = z - C[2];
+      let d;
+      if (nape) {
+        // Long shaggy back stays behind the ears; the temples remain shaved.
+        d = ellipsoid(x, y, z, [C[0], C[1] - 0.068, C[2] - 0.092], [0.096, 0.121, 0.046]);
+        for (const [a, b] of locks) d = smin(d, roundCone(x, y, z, a, b, 0.019, 0.0035), 0.006);
+        return Math.max(d, rz + 0.038);
+      }
+      // Raised side hairline exposes skin above the ear, unlike a smooth bowl cut.
+      const front = smooth(0.025, 0.09, rz);
+      const side = smooth(0.045, 0.092, Math.abs(rx)) * smooth(-0.085, -0.02, rz);
+      const brokenEdge = Math.sin(rx * 205 + 0.8) * 0.004 + Math.sin(rx * 337) * 0.003;
+      const hairline = -0.018 + 0.057 * side + (0.045 + brokenEdge) * front;
+      const texture = (Math.sin(rx * 175 + rz * 65) * Math.cos(rz * 155) + Math.sin(rx * 91 - rz * 147)) * 0.0025;
+      const thickness = hatOn ? 0.006 : 0.014 + texture * smooth(0.02, 0.08, ry);
+      d = Math.max(M.headSDF(x, y, z, thickness, { features: false }), hairline - ry);
+      // Individual short fringe locks give the brow an uneven, pointed outline.
+      if (!hatOn) for (const [a, b] of locks) d = smin(d, roundCone(x, y, z, a, b, 0.012, 0.0025), 0.003);
+      return d;
+    };
+    const g = surfaceNets(field, [C[0] - 0.16, C[1] - (nape ? 0.25 : 0.06), C[2] - 0.17],
+      [C[0] + 0.16, C[1] + (nape ? 0.08 : 0.17), C[2] + (nape ? -0.025 : 0.16)], 0.0052);
+    relax(g, 1, 0.15); // Keep the chopped fringe/nape instead of smoothing it into a helmet.
+    g.translate(-H.bone[0], -H.bone[1], -H.bone[2]);
+    return g;
+  }
   const tight = style === 'cua' || style === 'buoc' || style === 'bui';
   const longish = style === 'bob' || style === 'dai';
   const field = (x, y, z) => {
@@ -146,10 +185,17 @@ export function buildHair(ctx) {
   const hatOn = !!ctx.hatOn;
   const M = rig.model;
   const geo = cached(`hair|${M.name}|${style}|${hatOn}`, () => hairGeometry(M, style, hatOn));
-  const mat = new THREE.MeshStandardMaterial({ color: item.colors.main, roughness: 0.62, flatShading: true });
+  const mat = new THREE.MeshStandardMaterial({ color: item.colors.main, roughness: style === 'moi' ? 0.88 : 0.62, flatShading: true });
   const hair = new THREE.Mesh(geo, mat);
   const g = new THREE.Group();
   g.add(hair);
+  if (style === 'moi') {
+    hair.name = 'hair-moi-crop';
+    const back = new THREE.Mesh(cached(`hair|${M.name}|moi-nape`, () => hairGeometry(M, 'moi-nape', false)), mat);
+    back.name = 'hair-moi-nape'; g.add(back);
+    // Caps hide the crown/fringe while the visible mullet tail remains at the nape.
+    return { parts: [{ joint: 'head', obj: g }], hideUnderHat: [hair] };
+  }
   if (style === 'buoc') {
     const C = M.head.cranium.c, hb = M.head.bone;
     const tie = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.009, 6, 12), lowpolyMat(item.colors.accent || '#d24b6a'));
@@ -431,6 +477,31 @@ function bottomHemY(G, o) {
   return o.length === 'shorts' ? G.kn[1] + 0.16 : G.an[1] + (o.length === 'capri' ? 0.16 : 0.035);
 }
 
+// Match the body's anatomical leg chains. Distance to *both* legs makes an
+// inner trouser seam follow the opposite knee when the legs step apart.
+function skinBottom(geo, M, options) {
+  const lower = M.segments.filter(s => s.bone === 0 || s.bone >= 8);
+  skinByDistance(geo, lower);
+  // A skirt spans both legs; retain its continuous pelvis/leg blending.
+  if (options.skirt) return geo;
+  const p = geo.attributes.position, ids = geo.attributes.skinIndex, weights = geo.attributes.skinWeight;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const trunk = Math.min(M.trunk(x, y, z), M.glute('L', x, y, z), M.glute('R', x, y, z));
+    const left = Math.min(M.leg('L', x, y, z), M.foot(M.legs.L, x, y, z));
+    const right = Math.min(M.leg('R', x, y, z), M.foot(M.legs.R, x, y, z));
+    if (trunk <= Math.min(left, right)) continue; // shared pelvis, same rule as skinBody
+    const base = left <= right ? 8 : 11;
+    const candidates = lower.filter(s => (s.bone >= base && s.bone <= base + 2) || (s.bone === 0 && y > M.P[1] - 0.16))
+      .map(s => { const d = segDist(x, y, z, s.a, s.b); return { bone: s.bone, w: 1 / Math.pow(d * d + 1e-4, 2) }; })
+      .sort((a, b) => b.w - a.w);
+    const sum = candidates.reduce((n, c) => n + c.w, 0);
+    ids.setXYZW(i, 0, 0, 0, 0); weights.setXYZW(i, 0, 0, 0, 0);
+    candidates.forEach((c, k) => { ids.array[i * 4 + k] = c.bone; weights.array[i * 4 + k] = c.w / sum; });
+  }
+  return geo;
+}
+
 function bottomGeometry(M, o) {
   const P = M.P[1];
   const fitT = { slim: 0.008, regular: 0.013, wide: 0.02 }[o.fit || 'regular'];
@@ -480,7 +551,7 @@ function bottomGeometry(M, o) {
   const g = surfaceNets(field, [-0.36, -0.02, -0.25], [0.36, P + 0.1, 0.25], o.skirt ? 0.0085 : 0.0095);
   relax(g, 1, 0.4);
   // Quần/váy chỉ theo thân và chân, không chịu tác động của tay hay đầu.
-  skinByDistance(g, M.segments.filter((segment) => segment.bone === 0 || segment.bone >= 8));
+  skinBottom(g, M, o);
   return perTriangleUV(g, (x, y, z, cx, cy) => {
     if (o.track && !o.skirt) {
       // Mỗi chân có một nửa atlas riêng; u=0/1 chỉ nằm ở đường may NGOÀI.

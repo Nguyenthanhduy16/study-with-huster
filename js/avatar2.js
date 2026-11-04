@@ -114,6 +114,10 @@
       const hinge = new THREE.Group(); hinge.position.set(0, 0.009, 0.108); hinge.rotation.x = 0.32; g.add(hinge);
       add(box(0.32, 0.21, 0.01), al, 0, 0.105, 0, 0, 0, 0, hinge);
       add(box(0.29, 0.18, 0.002), pmat('#9fd0ff', { emissive: '#4a8fd8', emissiveIntensity: 0.85, roughness: 0.25 }), 0, 0.108, -0.006, 0, 0, 0, hinge);
+      if (K.createLaptopLogo) {
+        const logo = K.createLaptopLogo({ height: 0.046 });
+        logo.position.set(0, 0.108, 0.0058); hinge.add(logo);
+      }
     }
     return g;
   }
@@ -250,6 +254,8 @@
     }
     /* quy tắc giống phòng thay đồ: tóc gọn khi đội mũ, thắt lưng chỉ lộ khi áo sơ vin, tay cầm đồ */
     rules() {
+      const bottom = resolve(this.state, this.state.equipped.bottom);
+      if (K.setBodyCoverage) K.setBodyCoverage(this.rig, bottom ? (bottom.options || {}) : null);
       const hat = this.slots.hat, hair = this.slots.hair;
       if (hair && hair.hideUnderHat) for (const m of hair.hideUnderHat) m.visible = !(hat && hat.hideHairTop);
       this.pose = Object.assign({ elbowR: 0 }, (this.slots.handheld && this.slots.handheld.pose) || {});

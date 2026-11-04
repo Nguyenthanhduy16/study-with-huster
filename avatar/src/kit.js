@@ -9,10 +9,11 @@
 //     (cấu hình cũ "Tổ Ong" → nhận diện mới, chỉ nhận logo có sẵn trong tủ đồ), giữ màu cố định
 //     của món `fixedColors` (dây đeo + vỏ thẻ đỏ).
 // =============================================================
-import { buildRig, attachSkinned, linearize, DIM } from './js/rig.js';
+import { buildRig, attachSkinned, linearize, setBodyCoverage, DIM } from './js/rig.js';
 import { BUILDERS as RAW_BUILDERS } from './js/items/index.js';
 import { loadImage, loadImageSet, cachedImage, drawEmblem as rawDrawEmblem, drawStudentCard as rawDrawStudentCard } from './js/textures.js';
 import CATALOG from './data/catalog.js';
+export { createLaptopLogo } from './js/items/laptop-logo.js';
 
 export const SLOT_ORDER = ['hair', 'top', 'bottom', 'footwear', 'hat', 'bag', 'card', 'eyewear', 'mask', 'audio', 'handheld'];
 export function mountParts(rig, parts) {
@@ -112,4 +113,4 @@ export function normalizeState(s) {
   return out;
 }
 
-export { buildRig, linearize, loadImage, loadImageSet, cachedImage, CATALOG, DIM };
+export { buildRig, linearize, setBodyCoverage, loadImage, loadImageSet, cachedImage, CATALOG, DIM };

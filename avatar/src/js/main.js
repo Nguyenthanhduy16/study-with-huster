@@ -171,7 +171,7 @@ function itemCard(item, equipped, onPick) {
   return h('button', { class: 'item', 'aria-pressed': String(equipped), onclick: onPick },
     fig,
     h('span', { class: 'item-name' }, item.name),
-    item.group === 'truong' ? h('span', { class: 'tag' }, item.collection === 'hust-phuong-thao' ? 'Phương Thảo' : 'HUST') : null,
+    item.group === 'truong' ? h('span', { class: 'tag' }, 'HUST') : null,
   );
 }
 
@@ -199,7 +199,7 @@ function slotPanel(slot) {
   const parts = [];
   if (hasCollection) {
     parts.push(section('Bộ sưu tập HUST',
-      segmented([['all', 'Tất cả'], ['shop', 'Đồng phục Phương Thảo']], filter, (value) => { collectionFilter[slot.id] = value; renderPanel(); }, 'Lọc bộ sưu tập'),
+      segmented([['all', 'Tất cả'], ['shop', 'Đồng phục HUST']], filter, (value) => { collectionFilter[slot.id] = value; renderPanel(); }, 'Lọc bộ sưu tập'),
       h('p', { class: 'hint' }, `${allItems.filter((it) => it.collection === 'hust-phuong-thao').length} mẫu trong bộ sưu tập · chọn từng món để phối đồ.`),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn ghost small', onclick: () => equipUniform('ao-thun-truong') }, 'Bộ GDTC · áo cộc'),
@@ -226,7 +226,7 @@ async function equipUniform(top) {
 function customizer(item) {
   const rows = [];
   const base = CATALOG.items.find((i) => i.id === item.id);
-  if (base.source?.url) rows.push(h('a', { href: base.source.url, target: '_blank', rel: 'noopener noreferrer', class: 'hint' }, 'Xem mẫu tham khảo · May Phương Thảo ↗'));
+  if (base.source?.url) rows.push(h('a', { href: base.source.url, target: '_blank', rel: 'noopener noreferrer', class: 'hint' }, 'Xem mẫu tham khảo ↗'));
   if (base.fixedColors) rows.push(h('p', { class: 'note' }, 'Dây đeo và vỏ thẻ giữ màu đỏ theo mẫu HUST.'));
   if (!base.fixedColors) rows.push(h('div', { class: 'field' }, h('span', { class: 'label' }, item.colors.accent ? 'Màu chính' : 'Màu'),
     swatches(base.palette || [base.colors.main], item.colors.main, async (c) => { await studio.setItemColor(item.id, 'main', c); refreshThumbs(); }, `Màu ${item.name}`)));

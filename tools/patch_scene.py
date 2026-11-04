@@ -152,6 +152,83 @@ js = sub_once(js, 'function place(mod){', 'function place(mod){if(D&&mod===D){C.
 js = sub_once(js, 'function loop(now){const cur=ctx.cur;if(cur===C&&W)cur.frame(now);', 'function loop(now){const cur=ctx.cur;if((cur===C||(D&&cur===D))&&W)cur.frame(now);', 'vòng lặp D')
 js = js.replace('window.HUST3D={A,B,C,ctx,', 'window.HUST3D={A,B,C,D,ctx,')
 
+# Nhận cường độ từng nốt MIDI thay cho cường độ cố định của bàn phím máy tính.
+if 'function keyDown(m,vel=.78)' not in js:
+    js = sub_once(js, 'function keyDown(m){', 'function keyDown(m,vel=.78){vel=Number.isFinite(vel)?Math.max(1/127,Math.min(1,vel)):.78;', 'velocity MIDI')
+    js = sub_once(js, 'held[m]=1;noteOn(m);pressVisual(m,true);onPlayed(m);', 'held[m]=1;noteOn(m,vel);pressVisual(m,true);onPlayed(m);', 'âm lượng nốt MIDI')
+    js = js.replace("pnOut({t:'d',m,v:.78})", "pnOut({t:'d',m,v:vel})")
+
+# ---------- móc 7: thư viện MIDI (chỉ thay hướng dẫn đàn, giữ nguyên các bài mẫu nguồn) ----------
+# Không nhúng giai điệu của những bài trong danh mục yêu cầu tệp MIDI cá nhân.
+MIDI_GUIDE = r'''const NI={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+SONGS.forEach(sg=>sg.notes=sg.n.split(/\s+/).map(t=>{const [nm,d]=t.split(':');const mm=/^([A-G])(#?)(\d)$/.exec(nm);return {m:12*(+mm[3]+1)+NI[mm[1]]+(mm[2]?1:0),d:d?+d:1};}));
+/* [midi-library] Named songs contain metadata only; import your own MIDI to play them. */
+const MIDI=window.PianoMidi;
+if(MIDI)SONGS.push(...MIDI.CATALOG.map(s=>({name:s.name,requiresMidi:true,notes:[]})));
+const songSel=$('#pb-song');
+function refreshSongs(){songSel.replaceChildren(new Option('Chơi tự do',''),...SONGS.map((sg,i)=>new Option(sg.name+(sg.requiresMidi?' · cần MIDI':sg.timeline?' · MIDI đã nhập':''),String(i))));}
+refreshSongs();
+let song=null,gmode='learn',idx=0,good=0,miss=0,demoT=[],demoOn=false;
+const lane=$('#pb-lane'),guide=$('#pb-guide'),stat=$('#pb-stat'),prog=$('#pb-prog'),tip=$('#pb-tip');
+const marker=mk(box(.022,.006,.05),mat('#4d86ff',{emissive:'#3a78ff',emissiveIntensity:1.6}),0,0,0,PIANO,false);marker.visible=false;
+function markNext(){for(const el of Object.values(keyEls))el.classList.remove('next');marker.visible=false;
+  if(!song||idx>=song.notes.length)return;const m=song.notes[idx].m;if(keyEls[m])keyEls[m].classList.add('next');
+  const k=PIANO.userData.keys[m];if(k){marker.position.set(k.x,k.y+(k.b?.025:.02),k.z+(k.b?.01:.04));marker.visible=true;}}
+function renderLane(){const pending=!!(song&&song.requiresMidi);$('#pb-demo').disabled=pending;$('#pb-learn').disabled=pending;$('#pb-restart').disabled=pending;
+  if(!song){guide.hidden=true;tip.hidden=false;markNext();return;}guide.hidden=false;tip.hidden=true;
+  if(pending){lane.textContent='Chưa có bản nhạc cho '+song.name;stat.textContent='Chọn “Nhập MIDI” để gắn tệp .mid của bạn cho bài này. Tên bài không kèm giai điệu có sẵn.';prog.style.width='0%';markNext();return;}
+  const from=Math.max(0,idx-2),to=Math.min(song.notes.length,from+16);let h='';
+  for(let i=from;i<to;i++){const n=song.notes[i],k=keyFor(n.m);h+=`<div class="pb-chip${i<idx?' done':''}${i===idx?' now':''}${n.d>=2?' long':''}"><b>${k||'↔'}</b><small>${SOLF[n.m%12]}${n.d>=2?' —':''}</small></div>`;}
+  lane.innerHTML=h;prog.style.width=(100*idx/song.notes.length)+'%';
+  if(idx>=song.notes.length){stat.textContent=gmode==='demo'?'Đã phát xong bài mẫu. Chọn “Tập theo” để tự chơi.':`Hoàn thành! Bấm đúng ${good}/${good+miss} lần (${Math.round(100*good/Math.max(1,good+miss))}%). Bấm “Chơi lại” để tập tiếp.`;}
+  else if(gmode==='demo')stat.textContent=`${demoOn?'Đang phát mẫu':'Đã dừng · bấm Chơi lại để phát'} · nốt ${idx+1}/${song.notes.length}`;
+  else stat.textContent=`Bấm phím ${keyFor(song.notes[idx].m)||'(đổi quãng tám)'} · nốt ${idx+1}/${song.notes.length}`+(miss?` · bấm sai ${miss}`:'');
+  if(song.timeline)stat.textContent+=' · '+(gmode==='learn'?'Tập nốt cao nhất mỗi thời điểm, không chấm nhịp/hợp âm.':'Phát toàn bộ nốt, hợp âm và khoảng nghỉ trong MIDI.');
+  markNext();}
+const midiPlayer=MIDI&&MIDI.createPlayer({down:(m,v)=>keyDown(m,v),up:m=>keyUp(m),progress:t=>{if(!song||!song.timeline)return;let lo=0,hi=song.notes.length;while(lo<hi){const mid=(lo+hi)>>1;if(song.notes[mid].at<=t)lo=mid+1;else hi=mid;}if(idx!==Math.max(0,lo-1)){idx=Math.max(0,lo-1);renderLane();}},done:()=>{demoOn=false;if(song){idx=song.notes.length;renderLane();}}});
+function stopDemo(){demoT.forEach(clearTimeout);demoT=[];if(midiPlayer)midiPlayer.stop();if(demoOn){demoOn=false;releaseAll();}}
+function startSong(){stopDemo();idx=0;good=0;miss=0;if(song&&shift!==0){shift=0;buildKeys();}renderLane();if(song&&!song.requiresMidi&&gmode==='demo')playDemo();}
+function playDemo(){audio();demoOn=true;renderLane();if(song.timeline&&midiPlayer){midiPlayer.play(song);return;}const beat=60/song.bpm*1000;let t=300;
+  song.notes.forEach((n,i)=>{demoT.push(setTimeout(()=>{idx=i;renderLane();keyDown(n.m);},t));demoT.push(setTimeout(()=>keyUp(n.m),t+n.d*beat*.9));t+=n.d*beat;});
+  demoT.push(setTimeout(()=>{demoOn=false;idx=song.notes.length;renderLane();},t+100));}
+function onPlayed(m){if(!song||demoOn||gmode!=='learn'||idx>=song.notes.length)return;
+  if(m===song.notes[idx].m){good++;idx++;renderLane();}
+  else{miss++;const el=keyEls[m];if(el){el.classList.add('bad');setTimeout(()=>el.classList.remove('bad'),260);}renderLane();}}
+function setGMode(v){gmode=v;$('#pb-learn').setAttribute('aria-pressed',v==='learn');$('#pb-demo').setAttribute('aria-pressed',v==='demo');startSong();}
+songSel.addEventListener('change',()=>{song=songSel.value===''?null:SONGS[+songSel.value];startSong();songSel.blur();});
+const midiInput=$('#pb-midi-file'),midiStatus=$('#pb-midi-status');let importVersion=0;
+$('#pb-midi-import').addEventListener('click',()=>{if(MIDI)midiInput.click();else midiStatus.textContent='Chưa tải được bộ đọc MIDI. Hãy tải lại trang.';});
+midiInput.addEventListener('change',async()=>{const file=midiInput.files&&midiInput.files[0];if(!file)return;const version=++importVersion,target=song&&song.requiresMidi?song:null;stopDemo();
+  try{if(!/\.midi?$/i.test(file.name))throw new Error('Chọn tệp .mid hoặc .midi.');if(file.size>MIDI.LIMITS.bytes)throw new Error('Tệp MIDI tối đa 2 MB.');
+    const parsed=MIDI.parse(await file.arrayBuffer());if(version!==importVersion)return;
+    const entry=target||{name:file.name.replace(/\.midi?$/i,'').slice(0,80)};Object.assign(entry,{requiresMidi:false,notes:parsed.melody,timeline:parsed.timeline,duration:parsed.duration});
+    if(!target)SONGS.push(entry);song=entry;refreshSongs();songSel.value=String(SONGS.indexOf(entry));gmode='learn';$('#pb-learn').setAttribute('aria-pressed','true');$('#pb-demo').setAttribute('aria-pressed','false');startSong();
+    midiStatus.textContent=`Đã nhập ${file.name.slice(0,100)} · ${parsed.notes.length} nốt · ${Math.ceil(parsed.duration/1000)} giây. Tệp chỉ lưu trong phiên này; bấm “Nghe mẫu” để phát.`+(parsed.skipped.percussion||parsed.skipped.outside?' Bỏ qua trống và nốt ngoài A0–C8.':'');
+  }catch(e){if(version===importVersion)midiStatus.textContent=e.message||'Không đọc được MIDI.';}finally{midiInput.value='';}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){stopDemo();renderLane();}});
+$('#pb-learn').addEventListener('click',()=>setGMode('learn'));$('#pb-demo').addEventListener('click',()=>setGMode('demo'));
+$('#pb-restart').addEventListener('click',startSong);
+buildKeys();renderLane();'''
+MIDI_DOM = r'''  <div class="pb-row" data-midi-library>
+    <button class="pb-up" id="pb-midi-import" type="button">Nhập MIDI (.mid)</button>
+    <input id="pb-midi-file" type="file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden>
+    <span class="pb-tip" id="pb-midi-status" role="status" aria-live="polite">Các bài Sơn Tùng M-TP và Xe đạp cần tệp MIDI của bạn. Tệp được đọc trên máy; khi phát, nốt đàn được chia sẻ cùng khu.</span>
+  </div>
+'''
+if '/* [midi-library] Named songs' not in js:
+    guide_start = js.find('const NI={C:0,D:2,E:4,F:5,G:7,A:9,B:11};')
+    guide_end = js.find('buildKeys();renderLane();', guide_start) if guide_start >= 0 else -1
+    if guide_start < 0 or guide_end < 0:
+        errors.append('Móc "thư viện MIDI": không tìm thấy khối song guide')
+    else:
+        js = js[:guide_start] + MIDI_GUIDE + js[guide_end + len('buildKeys();renderLane();'):]
+if 'id="pb-midi-file"' not in dom:
+    dom_anchor = '  <div class="pb-guide" id="pb-guide" hidden>'
+    if dom.count(dom_anchor) != 1:
+        errors.append('Móc "nhập MIDI": không tìm thấy pb-guide duy nhất')
+    else:
+        dom = dom.replace(dom_anchor, MIDI_DOM + dom_anchor)
+
 # Tự chạy khi tải: bọc toàn bộ để không làm rò biến toàn cục (trừ những gì cố ý gán vào window)
 js = '/* Lớp cảnh tự sinh từ hust-3d/index.html bởi tools/patch_scene.py — đừng sửa tay */\n' + SEAT_FN + js
 

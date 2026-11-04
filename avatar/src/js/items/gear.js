@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { DIM, trunkRadius, limb, lowpolyMat } from '../rig.js';
 import { toTexture, nonLaTexture, calculatorFace, shade, slideBandAlpha, slideBandMap, ribbonTexture, maskTexture } from '../textures.js';
+import { createLaptopLogo } from './laptop-logo.js';
 
 const DS = THREE.DoubleSide;
 const GROUND = -0.07; // mặt đất trong hệ toạ độ khớp cổ chân
@@ -597,11 +598,9 @@ export function buildHandheld(ctx) {
     const lap = rbox(0.022, 0.215, 0.305, 0.008, lowpolyMat(main, { roughness: 0.35, metalness: 0.4 }));
     lap.position.set(0.035, -0.135, 0.06);
     g.add(lap);
-    if (item.emblem && emblemCanvas) {
-      const st = decal(emblemCanvas, 0.06, 0.06);
-      st.position.set(0.035 - 0.0115, -0.13, 0.06); st.rotation.y = -Math.PI / 2;
-      g.add(st);
-    }
+    const logo = createLaptopLogo({ height: 0.052 });
+    logo.position.set(0.035 - 0.0118, -0.135, 0.06); logo.rotation.y = -Math.PI / 2;
+    g.add(logo);
   } else if (type === 'vo') {
     const book = rbox(0.018, 0.21, 0.15, 0.004, lowpolyMat(main));
     book.position.set(0.032, -0.12, 0.04);

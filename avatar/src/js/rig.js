@@ -335,6 +335,43 @@ export function linearize(obj) {
 
 export const BODY_GEOMETRY = (buildName) => bodyGeometry(bodyModel(buildName));
 
+// Do not render skin triangles fully covered by trousers. Even matching bone
+// chains can intersect slightly at a bent knee because cloth and skin use
+// different tessellation. Keep exposed ankles/calves and all hand triangles.
+export function setBodyCoverage(rig, bottom) {
+  const mesh = rig && rig.bodyMesh; if (!mesh) return;
+  const source = rig.uncoveredGeometry || (rig.uncoveredGeometry = mesh.geometry);
+  const covered = bottom && !bottom.skirt;
+  const key = covered ? (bottom.length || 'full') : 'none';
+  if (rig.coverageKey === key) return;
+  rig.coverageKey = key;
+  const previous = mesh.geometry;
+  if (!covered) mesh.geometry = source;
+  else {
+    const G = rig.model.legs.L, P = rig.model.P[1];
+    const hem = bottom.length === 'shorts' ? G.kn[1] + 0.16 : G.an[1] + (bottom.length === 'capri' ? 0.16 : 0.035);
+    const { position: p, skinIndex: ids, skinWeight: weights } = source.attributes;
+    const underCloth = i => {
+      if (p.getY(i) < hem + 0.006 || p.getY(i) > P + 0.06) return false;
+      for (let k = 0; k < 4; k++) {
+        const bone = ids.array[i * 4 + k];
+        if (weights.array[i * 4 + k] > 1e-6 && bone >= 1 && bone <= 7) return false;
+      }
+      return true;
+    };
+    const kept = [], count = source.index ? source.index.count : p.count;
+    for (let t = 0; t < count; t += 3) {
+      const a = source.index ? source.index.getX(t) : t;
+      const b = source.index ? source.index.getX(t + 1) : t + 1;
+      const c = source.index ? source.index.getX(t + 2) : t + 2;
+      if (!(underCloth(a) && underCloth(b) && underCloth(c))) kept.push(a, b, c);
+    }
+    mesh.geometry = source.clone(); mesh.geometry.setIndex(kept);
+    mesh.geometry.userData = { ...source.userData, keep: false };
+  }
+  if (previous !== source) previous.dispose();
+}
+
 /**
  * body = { skin, build: 'thon'|'vua'|'dam', height, browColor, eyeColor }
  * Trả về { root, joints, skeleton, model, build, materials }

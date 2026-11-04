@@ -53,7 +53,7 @@
   });
 
   // avatar/src/js/studio.js
-  var THREE6 = __toESM(require_three());
+  var THREE7 = __toESM(require_three());
   var import_OrbitControls = __toESM(require_OrbitControls());
 
   // avatar/src/js/rig.js
@@ -556,6 +556,41 @@
       }
     });
     return obj;
+  }
+  function setBodyCoverage(rig, bottom) {
+    const mesh = rig && rig.bodyMesh;
+    if (!mesh) return;
+    const source = rig.uncoveredGeometry || (rig.uncoveredGeometry = mesh.geometry);
+    const covered = bottom && !bottom.skirt;
+    const key = covered ? bottom.length || "full" : "none";
+    if (rig.coverageKey === key) return;
+    rig.coverageKey = key;
+    const previous = mesh.geometry;
+    if (!covered) mesh.geometry = source;
+    else {
+      const G = rig.model.legs.L, P = rig.model.P[1];
+      const hem = bottom.length === "shorts" ? G.kn[1] + 0.16 : G.an[1] + (bottom.length === "capri" ? 0.16 : 0.035);
+      const { position: p, skinIndex: ids, skinWeight: weights } = source.attributes;
+      const underCloth = (i) => {
+        if (p.getY(i) < hem + 6e-3 || p.getY(i) > P + 0.06) return false;
+        for (let k = 0; k < 4; k++) {
+          const bone = ids.array[i * 4 + k];
+          if (weights.array[i * 4 + k] > 1e-6 && bone >= 1 && bone <= 7) return false;
+        }
+        return true;
+      };
+      const kept = [], count = source.index ? source.index.count : p.count;
+      for (let t = 0; t < count; t += 3) {
+        const a = source.index ? source.index.getX(t) : t;
+        const b = source.index ? source.index.getX(t + 1) : t + 1;
+        const c = source.index ? source.index.getX(t + 2) : t + 2;
+        if (!(underCloth(a) && underCloth(b) && underCloth(c))) kept.push(a, b, c);
+      }
+      mesh.geometry = source.clone();
+      mesh.geometry.setIndex(kept);
+      mesh.geometry.userData = { ...source.userData, keep: false };
+    }
+    if (previous !== source) previous.dispose();
   }
   function buildRig(body = {}) {
     const model = bodyModel(body.build);
@@ -1580,6 +1615,49 @@
   function hairGeometry(M, style, hatOn) {
     const H = M.head;
     const C = H.cranium.c;
+    if (style === "moi" || style === "moi-nape") {
+      const nape = style === "moi-nape";
+      const locks = nape ? Array.from({ length: 9 }, (_, k) => {
+        const i = k - 4, ax = i * 0.019, length = 0.192 + 0.025 * Math.cos(i * 1.9);
+        return [
+          [C[0] + ax, C[1] - 0.09, C[2] - 0.104],
+          [C[0] + ax + Math.sin(i * 2.1) * 0.011, C[1] - length, C[2] - 0.119 - 9e-3 * Math.cos(i)]
+        ];
+      }) : Array.from({ length: 11 }, (_, k) => {
+        const i = k - 5, ax = i * 0.014, tip = 0.012 + 0.012 * (0.5 + 0.5 * Math.sin(i * 2.3 + 0.4));
+        return [
+          [C[0] + ax, C[1] + 0.063, C[2] + 0.084],
+          [C[0] + ax + Math.sin(i * 1.7) * 4e-3, C[1] + tip, C[2] + 0.117]
+        ];
+      });
+      const field2 = (x, y, z) => {
+        const rx = x - C[0], ry = y - C[1], rz = z - C[2];
+        let d;
+        if (nape) {
+          d = ellipsoid(x, y, z, [C[0], C[1] - 0.068, C[2] - 0.092], [0.096, 0.121, 0.046]);
+          for (const [a, b] of locks) d = smin(d, roundCone(x, y, z, a, b, 0.019, 35e-4), 6e-3);
+          return Math.max(d, rz + 0.038);
+        }
+        const front = smooth(0.025, 0.09, rz);
+        const side = smooth(0.045, 0.092, Math.abs(rx)) * smooth(-0.085, -0.02, rz);
+        const brokenEdge = Math.sin(rx * 205 + 0.8) * 4e-3 + Math.sin(rx * 337) * 3e-3;
+        const hairline = -0.018 + 0.057 * side + (0.045 + brokenEdge) * front;
+        const texture = (Math.sin(rx * 175 + rz * 65) * Math.cos(rz * 155) + Math.sin(rx * 91 - rz * 147)) * 25e-4;
+        const thickness = hatOn ? 6e-3 : 0.014 + texture * smooth(0.02, 0.08, ry);
+        d = Math.max(M.headSDF(x, y, z, thickness, { features: false }), hairline - ry);
+        if (!hatOn) for (const [a, b] of locks) d = smin(d, roundCone(x, y, z, a, b, 0.012, 25e-4), 3e-3);
+        return d;
+      };
+      const g2 = surfaceNets(
+        field2,
+        [C[0] - 0.16, C[1] - (nape ? 0.25 : 0.06), C[2] - 0.17],
+        [C[0] + 0.16, C[1] + (nape ? 0.08 : 0.17), C[2] + (nape ? -0.025 : 0.16)],
+        52e-4
+      );
+      relax(g2, 1, 0.15);
+      g2.translate(-H.bone[0], -H.bone[1], -H.bone[2]);
+      return g2;
+    }
     const tight = style === "cua" || style === "buoc" || style === "bui";
     const longish = style === "bob" || style === "dai";
     const field = (x, y, z) => {
@@ -1628,10 +1706,17 @@
     const hatOn = !!ctx.hatOn;
     const M = rig.model;
     const geo = cached(`hair|${M.name}|${style}|${hatOn}`, () => hairGeometry(M, style, hatOn));
-    const mat = new THREE4.MeshStandardMaterial({ color: item.colors.main, roughness: 0.62, flatShading: true });
+    const mat = new THREE4.MeshStandardMaterial({ color: item.colors.main, roughness: style === "moi" ? 0.88 : 0.62, flatShading: true });
     const hair = new THREE4.Mesh(geo, mat);
     const g = new THREE4.Group();
     g.add(hair);
+    if (style === "moi") {
+      hair.name = "hair-moi-crop";
+      const back = new THREE4.Mesh(cached(`hair|${M.name}|moi-nape`, () => hairGeometry(M, "moi-nape", false)), mat);
+      back.name = "hair-moi-nape";
+      g.add(back);
+      return { parts: [{ joint: "head", obj: g }], hideUnderHat: [hair] };
+    }
     if (style === "buoc") {
       const C = M.head.cranium.c, hb = M.head.bone;
       const tie = new THREE4.Mesh(new THREE4.TorusGeometry(0.03, 9e-3, 6, 12), lowpolyMat(item.colors.accent || "#d24b6a"));
@@ -1938,6 +2023,32 @@
   function bottomHemY(G, o) {
     return o.length === "shorts" ? G.kn[1] + 0.16 : G.an[1] + (o.length === "capri" ? 0.16 : 0.035);
   }
+  function skinBottom(geo, M, options) {
+    const lower = M.segments.filter((s) => s.bone === 0 || s.bone >= 8);
+    skinByDistance(geo, lower);
+    if (options.skirt) return geo;
+    const p = geo.attributes.position, ids = geo.attributes.skinIndex, weights = geo.attributes.skinWeight;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const trunk = Math.min(M.trunk(x, y, z), M.glute("L", x, y, z), M.glute("R", x, y, z));
+      const left = Math.min(M.leg("L", x, y, z), M.foot(M.legs.L, x, y, z));
+      const right = Math.min(M.leg("R", x, y, z), M.foot(M.legs.R, x, y, z));
+      if (trunk <= Math.min(left, right)) continue;
+      const base = left <= right ? 8 : 11;
+      const candidates = lower.filter((s) => s.bone >= base && s.bone <= base + 2 || s.bone === 0 && y > M.P[1] - 0.16).map((s) => {
+        const d = segDist(x, y, z, s.a, s.b);
+        return { bone: s.bone, w: 1 / Math.pow(d * d + 1e-4, 2) };
+      }).sort((a, b) => b.w - a.w);
+      const sum = candidates.reduce((n, c) => n + c.w, 0);
+      ids.setXYZW(i, 0, 0, 0, 0);
+      weights.setXYZW(i, 0, 0, 0, 0);
+      candidates.forEach((c, k) => {
+        ids.array[i * 4 + k] = c.bone;
+        weights.array[i * 4 + k] = c.w / sum;
+      });
+    }
+    return geo;
+  }
   function bottomGeometry(M, o) {
     const P = M.P[1];
     const fitT = { slim: 8e-3, regular: 0.013, wide: 0.02 }[o.fit || "regular"];
@@ -1982,7 +2093,7 @@
     };
     const g = surfaceNets(field, [-0.36, -0.02, -0.25], [0.36, P + 0.1, 0.25], o.skirt ? 85e-4 : 95e-4);
     relax(g, 1, 0.4);
-    skinByDistance(g, M.segments.filter((segment) => segment.bone === 0 || segment.bone >= 8));
+    skinBottom(g, M, o);
     return perTriangleUV(g, (x, y, z, cx, cy) => {
       if (o.track && !o.skirt) {
         const G = M.legs[cx >= 0 ? "L" : "R"];
@@ -2148,9 +2259,48 @@
   }
 
   // avatar/src/js/items/gear.js
-  var THREE5 = __toESM(require_three());
+  var THREE6 = __toESM(require_three());
   var import_RoundedBoxGeometry = __toESM(require_RoundedBoxGeometry());
-  var DS = THREE5.DoubleSide;
+
+  // avatar/src/js/items/laptop-logo.js
+  var THREE5 = __toESM(require_three());
+  var geometry = null;
+  var materials = /* @__PURE__ */ new Map();
+  function createLaptopLogo({ height = 0.046, color = "#f4f5f7" } = {}) {
+    if (!geometry) {
+      const fruit = new THREE5.Shape();
+      fruit.moveTo(0, 0.21);
+      fruit.bezierCurveTo(-0.1, 0.29, -0.27, 0.28, -0.33, 0.1);
+      fruit.bezierCurveTo(-0.41, -0.1, -0.22, -0.37, -0.11, -0.34);
+      fruit.bezierCurveTo(-0.03, -0.3, 0.01, -0.3, 0.1, -0.34);
+      fruit.bezierCurveTo(0.2, -0.37, 0.29, -0.21, 0.33, -0.1);
+      fruit.bezierCurveTo(0.15, -0.05, 0.14, 0.1, 0.31, 0.17);
+      fruit.bezierCurveTo(0.24, 0.29, 0.1, 0.28, 0, 0.21);
+      const leaf = new THREE5.Shape();
+      leaf.moveTo(0.01, 0.28);
+      leaf.bezierCurveTo(0, 0.39, 0.11, 0.48, 0.21, 0.47);
+      leaf.bezierCurveTo(0.21, 0.37, 0.12, 0.28, 0.01, 0.28);
+      geometry = new THREE5.ShapeGeometry([fruit, leaf], 18);
+      geometry.computeBoundingBox();
+      const center = geometry.boundingBox.getCenter(new THREE5.Vector3());
+      const size = geometry.boundingBox.getSize(new THREE5.Vector3());
+      geometry.translate(-center.x, -center.y, 0);
+      geometry.scale(1 / size.y, 1 / size.y, 1);
+      geometry.userData.keep = true;
+    }
+    if (!materials.has(color)) {
+      const material = new THREE5.MeshBasicMaterial({ color, side: THREE5.DoubleSide });
+      material.userData.keep = true;
+      materials.set(color, material);
+    }
+    const mark = new THREE5.Mesh(geometry, materials.get(color));
+    mark.name = "laptop-apple-logo";
+    mark.scale.setScalar(height);
+    return mark;
+  }
+
+  // avatar/src/js/items/gear.js
+  var DS = THREE6.DoubleSide;
   var GROUND = -0.07;
   function shadowed(obj) {
     obj.traverse((o) => {
@@ -2159,18 +2309,18 @@
     return obj;
   }
   function rbox(w, h2, d, r, mat, seg = 2) {
-    return new THREE5.Mesh(new import_RoundedBoxGeometry.RoundedBoxGeometry(w, h2, d, seg, r), mat);
+    return new THREE6.Mesh(new import_RoundedBoxGeometry.RoundedBoxGeometry(w, h2, d, seg, r), mat);
   }
   function tube(points, radius, mat, flat = 1) {
-    const curve = new THREE5.CatmullRomCurve3(points.map((p) => new THREE5.Vector3(...p)));
+    const curve = new THREE6.CatmullRomCurve3(points.map((p) => new THREE6.Vector3(...p)));
     curve.curveType = "centripetal";
-    const g = new THREE5.TubeGeometry(curve, 32, radius, 5, false);
+    const g = new THREE6.TubeGeometry(curve, 32, radius, 5, false);
     if (flat !== 1) g.scale(1, 1, 1);
-    return new THREE5.Mesh(g, mat);
+    return new THREE6.Mesh(g, mat);
   }
   function decal(canvasOrTex, w, h2, extra = {}) {
     const tex = canvasOrTex.isTexture ? canvasOrTex : toTexture(canvasOrTex);
-    const m = new THREE5.Mesh(new THREE5.PlaneGeometry(w, h2), new THREE5.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.7, ...extra }));
+    const m = new THREE6.Mesh(new THREE6.PlaneGeometry(w, h2), new THREE6.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.7, ...extra }));
     return m;
   }
   function imageCanvas(img) {
@@ -2185,7 +2335,7 @@
     const o = item.options || {};
     const type = ((_a = item.options) == null ? void 0 : _a.type) || "sneaker";
     const main = item.colors.main, accent = item.colors.accent || shade(main, -0.2);
-    const g = new THREE5.Group();
+    const g = new THREE6.Group();
     if (type === "to-ong") {
       const soleMat = lowpolyMat(shade(main, -0.03), { roughness: 0.55 });
       const sole2 = rbox(0.108, 0.034, 0.27, 0.014, soleMat, 3);
@@ -2212,27 +2362,27 @@
       g.add(footbed);
       const alpha = slideBandAlpha();
       const bandMap = imgs.upper ? toTexture(imageCanvas(imgs.upper)) : toTexture(slideBandMap(main));
-      const bandMat = new THREE5.MeshStandardMaterial({ color: imgs.upper ? "#ffffff" : "#ffffff", map: bandMap, alphaMap: alpha, alphaTest: 0.5, side: DS, roughness: 0.5, flatShading: true });
-      const archG = new THREE5.CylinderGeometry(0.058, 0.058, 0.125, 18, 1, true, -Math.PI / 2, Math.PI);
+      const bandMat = new THREE6.MeshStandardMaterial({ color: imgs.upper ? "#ffffff" : "#ffffff", map: bandMap, alphaMap: alpha, alphaTest: 0.5, side: DS, roughness: 0.5, flatShading: true });
+      const archG = new THREE6.CylinderGeometry(0.058, 0.058, 0.125, 18, 1, true, -Math.PI / 2, Math.PI);
       archG.rotateX(-Math.PI / 2);
       archG.scale(1, 0.84, 1);
-      const arch = new THREE5.Mesh(archG, bandMat);
+      const arch = new THREE6.Mesh(archG, bandMat);
       arch.position.set(0, GROUND + 0.032, 0.072);
       g.add(arch);
       const rimMat = lowpolyMat(main, { roughness: 0.5 });
       for (const z of [95e-4, 0.1345]) {
-        const rim = new THREE5.Mesh(new THREE5.TorusGeometry(0.058, 45e-4, 4, 16, Math.PI), rimMat);
+        const rim = new THREE6.Mesh(new THREE6.TorusGeometry(0.058, 45e-4, 4, 16, Math.PI), rimMat);
         rim.scale.set(1, 0.84, 1);
         rim.position.set(0, GROUND + 0.032, z);
         g.add(rim);
       }
       if (o.strap) {
-        const strap = new THREE5.Mesh(new THREE5.TorusGeometry(0.054, 8e-3, 4, 14, Math.PI), rimMat);
+        const strap = new THREE6.Mesh(new THREE6.TorusGeometry(0.054, 8e-3, 4, 14, Math.PI), rimMat);
         strap.rotation.x = -Math.PI / 2 - 0.35;
         strap.position.set(0, GROUND + 0.04, -5e-3);
         g.add(strap);
         for (const s of [-1, 1]) {
-          const rivet = new THREE5.Mesh(new THREE5.CylinderGeometry(8e-3, 8e-3, 6e-3, 6), lowpolyMat(shade(main, -0.15)));
+          const rivet = new THREE6.Mesh(new THREE6.CylinderGeometry(8e-3, 8e-3, 6e-3, 6), lowpolyMat(shade(main, -0.15)));
           rivet.rotation.z = Math.PI / 2;
           rivet.position.set(s * 0.057, GROUND + 0.04, -5e-3);
           g.add(rivet);
@@ -2247,7 +2397,7 @@
       const top = GROUND + 0.018;
       const sm = lowpolyMat(main, { roughness: 0.5 });
       for (const s of [-1, 1]) g.add(tube([[0, top + 4e-3, 0.125], [s * 0.022, top + 0.032, 0.09], [s * 0.044, top + 0.02, 0.05], [s * 0.05, top, 0.03]], 55e-4, sm));
-      const post = new THREE5.Mesh(new THREE5.CylinderGeometry(4e-3, 4e-3, 0.012, 5), sm);
+      const post = new THREE6.Mesh(new THREE6.CylinderGeometry(4e-3, 4e-3, 0.012, 5), sm);
       post.position.set(0, top + 4e-3, 0.125);
       g.add(post);
       return g;
@@ -2263,26 +2413,26 @@
         line.position.set(0, GROUND + 0.02, 0.045);
         g.add(line);
       }
-      const capG2 = new THREE5.CapsuleGeometry(0.048, 0.13, 4, 10);
+      const capG2 = new THREE6.CapsuleGeometry(0.048, 0.13, 4, 10);
       capG2.rotateX(Math.PI / 2);
       capG2.scale(1, 0.8, 1);
-      const upper2 = new THREE5.Mesh(capG2, lowpolyMat(main, { roughness: boot ? 0.45 : 0.95 }));
+      const upper2 = new THREE6.Mesh(capG2, lowpolyMat(main, { roughness: boot ? 0.45 : 0.95 }));
       upper2.position.set(0, GROUND + soleH2 + 0.017, 0.05);
       g.add(upper2);
       if (!boot) {
-        const toeG = new THREE5.SphereGeometry(0.05, 10, 6, 0, Math.PI, 0, Math.PI / 2);
+        const toeG = new THREE6.SphereGeometry(0.05, 10, 6, 0, Math.PI, 0, Math.PI / 2);
         toeG.scale(1, 0.75, 0.9);
-        const toe = new THREE5.Mesh(toeG, lowpolyMat("#f2efe6", { roughness: 0.7 }));
+        const toe = new THREE6.Mesh(toeG, lowpolyMat("#f2efe6", { roughness: 0.7 }));
         toe.position.set(0, GROUND + soleH2 + 2e-3, 0.12);
         g.add(toe);
       }
       const shaftH = boot ? 0.13 : 0.06;
-      const shaft = new THREE5.Mesh(new THREE5.CylinderGeometry(boot ? 0.05 : 0.047, 0.052, shaftH, 10, 1, true), lowpolyMat(main, { side: DS, roughness: boot ? 0.45 : 0.95 }));
+      const shaft = new THREE6.Mesh(new THREE6.CylinderGeometry(boot ? 0.05 : 0.047, 0.052, shaftH, 10, 1, true), lowpolyMat(main, { side: DS, roughness: boot ? 0.45 : 0.95 }));
       shaft.position.set(0, GROUND + soleH2 + shaftH / 2, -0.01);
       g.add(shaft);
       const laceMat = lowpolyMat(boot ? "#c9a46a" : "#ffffff");
       for (let i = 0; i < (boot ? 6 : 4); i++) {
-        const lace = new THREE5.Mesh(new THREE5.BoxGeometry(0.045, 4e-3, 7e-3), laceMat);
+        const lace = new THREE6.Mesh(new THREE6.BoxGeometry(0.045, 4e-3, 7e-3), laceMat);
         lace.position.set(0, GROUND + soleH2 + 0.05 + (boot ? i * 0.016 : -i * 4e-3), boot ? 0.04 - i * 2e-3 : 0.03 + i * 0.026);
         lace.rotation.x = boot ? -0.6 : -0.25;
         g.add(lace);
@@ -2295,10 +2445,10 @@
       g.add(sole2);
       const strapMat = lowpolyMat(main, { roughness: 0.6, side: DS });
       if (type === "le") {
-        const bandG = new THREE5.CylinderGeometry(0.054, 0.054, 0.075, 12, 1, true, -Math.PI / 2, Math.PI);
+        const bandG = new THREE6.CylinderGeometry(0.054, 0.054, 0.075, 12, 1, true, -Math.PI / 2, Math.PI);
         bandG.rotateX(-Math.PI / 2);
         bandG.scale(1, 0.8, 1);
-        const band = new THREE5.Mesh(bandG, strapMat);
+        const band = new THREE6.Mesh(bandG, strapMat);
         band.position.set(0, GROUND + 0.024, 0.085);
         g.add(band);
         if (item.emblemOnStrap !== false && imgs.upper) {
@@ -2309,12 +2459,12 @@
         }
       } else {
         for (const z of [0.02, 0.105]) {
-          const s = new THREE5.Mesh(new THREE5.TorusGeometry(0.05, 9e-3, 4, 12, Math.PI), strapMat);
+          const s = new THREE6.Mesh(new THREE6.TorusGeometry(0.05, 9e-3, 4, 12, Math.PI), strapMat);
           s.scale.set(1, 0.9, 1);
           s.position.set(0, GROUND + 0.022, z);
           g.add(s);
         }
-        const heel = new THREE5.Mesh(new THREE5.TorusGeometry(0.05, 9e-3, 4, 12, Math.PI), strapMat);
+        const heel = new THREE6.Mesh(new THREE6.TorusGeometry(0.05, 9e-3, 4, 12, Math.PI), strapMat);
         heel.rotation.x = -Math.PI / 2;
         heel.position.set(0, GROUND + 0.04, 0);
         g.add(heel);
@@ -2328,32 +2478,32 @@
     sole.position.set(0, GROUND + soleH / 2, 0.045);
     g.add(sole);
     const upperMat = lowpolyMat(main, { roughness: loafer ? 0.32 : 0.8, metalness: loafer ? 0.05 : 0 });
-    const capG = new THREE5.CapsuleGeometry(0.049, 0.13, 4, 10);
+    const capG = new THREE6.CapsuleGeometry(0.049, 0.13, 4, 10);
     capG.rotateX(Math.PI / 2);
     capG.scale(1, loafer ? 0.66 : 0.82, 1);
-    const upper = new THREE5.Mesh(capG, upperMat);
+    const upper = new THREE6.Mesh(capG, upperMat);
     upper.position.set(0, GROUND + soleH + (loafer ? 0.012 : 0.018), 0.05);
     g.add(upper);
-    const collar = new THREE5.Mesh(new THREE5.CylinderGeometry(0.046, 0.05, loafer ? 0.03 : 0.05, 10, 1, true), lowpolyMat(loafer ? main : shade(main, -0.08), { side: DS }));
+    const collar = new THREE6.Mesh(new THREE6.CylinderGeometry(0.046, 0.05, loafer ? 0.03 : 0.05, 10, 1, true), lowpolyMat(loafer ? main : shade(main, -0.08), { side: DS }));
     collar.position.set(0, GROUND + soleH + 0.03, -0.01);
     g.add(collar);
     if (!loafer) {
       const laceMat = lowpolyMat(item.colors.lace || "#ffffff");
       for (let i = 0; i < 4; i++) {
-        const lace = new THREE5.Mesh(new THREE5.BoxGeometry(0.05, 5e-3, 8e-3), laceMat);
+        const lace = new THREE6.Mesh(new THREE6.BoxGeometry(0.05, 5e-3, 8e-3), laceMat);
         lace.position.set(0, GROUND + soleH + 0.05 - i * 4e-3, 0.03 + i * 0.028);
         lace.rotation.x = -0.25;
         g.add(lace);
       }
-      const tab = new THREE5.Mesh(new THREE5.BoxGeometry(0.03, 0.04, 0.01), lowpolyMat(accent));
+      const tab = new THREE6.Mesh(new THREE6.BoxGeometry(0.03, 0.04, 0.01), lowpolyMat(accent));
       tab.position.set(0, GROUND + soleH + 0.035, -0.072);
       g.add(tab);
-      const stripe = new THREE5.Mesh(new THREE5.BoxGeometry(4e-3, 0.012, 0.12), lowpolyMat(accent));
+      const stripe = new THREE6.Mesh(new THREE6.BoxGeometry(4e-3, 0.012, 0.12), lowpolyMat(accent));
       stripe.position.set(side * 0.05, GROUND + soleH + 0.018, 0.04);
       stripe.rotation.x = -0.15;
       g.add(stripe);
     } else {
-      const band = new THREE5.Mesh(new THREE5.BoxGeometry(0.07, 0.01, 0.02), lowpolyMat(shade(main, -0.15)));
+      const band = new THREE6.Mesh(new THREE6.BoxGeometry(0.07, 0.01, 0.02), lowpolyMat(shade(main, -0.15)));
       band.position.set(0, GROUND + soleH + 0.047, 0.05);
       band.rotation.x = -0.3;
       g.add(band);
@@ -2376,30 +2526,30 @@
     const main = item.colors.main, accent = item.colors.accent || shade(main, -0.2);
     const mat = lowpolyMat(main, { side: DS });
     const acc = lowpolyMat(accent, { side: DS });
-    const g = new THREE5.Group();
+    const g = new THREE6.Group();
     let hideHairTop = true;
     if (type === "luoi-trai") {
-      const crownG = new THREE5.SphereGeometry(0.134, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5);
+      const crownG = new THREE6.SphereGeometry(0.134, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5);
       crownG.scale(0.97, 0.92, 1.05);
-      const crown = new THREE5.Mesh(crownG, mat);
+      const crown = new THREE6.Mesh(crownG, mat);
       crown.position.y = 0.135;
       crown.rotation.x = -0.12;
       g.add(crown);
       if (item.colors.front) {
-        const fG = new THREE5.SphereGeometry(0.1355, 14, 8, Math.PI / 2 - 1.15, 2.3, 0, Math.PI * 0.5);
+        const fG = new THREE6.SphereGeometry(0.1355, 14, 8, Math.PI / 2 - 1.15, 2.3, 0, Math.PI * 0.5);
         fG.scale(0.97, 0.92, 1.05);
-        const front = new THREE5.Mesh(fG, lowpolyMat(item.colors.front, { side: DS }));
+        const front = new THREE6.Mesh(fG, lowpolyMat(item.colors.front, { side: DS }));
         front.position.y = 0.135;
         front.rotation.x = -0.12;
         g.add(front);
       }
-      const brimG = new THREE5.CylinderGeometry(0.11, 0.11, 8e-3, 14, 1, false, -Math.PI / 2, Math.PI);
+      const brimG = new THREE6.CylinderGeometry(0.11, 0.11, 8e-3, 14, 1, false, -Math.PI / 2, Math.PI);
       brimG.scale(1, 1, 0.85);
-      const brim = new THREE5.Mesh(brimG, acc);
+      const brim = new THREE6.Mesh(brimG, acc);
       brim.position.set(0, 0.14, 0.09);
       brim.rotation.x = 0.14;
       g.add(brim);
-      const btn = new THREE5.Mesh(new THREE5.SphereGeometry(0.012, 6, 4), acc);
+      const btn = new THREE6.Mesh(new THREE6.SphereGeometry(0.012, 6, 4), acc);
       btn.position.set(0, 0.258, -0.012);
       g.add(btn);
       const art = imgs.front ? imageCanvas(imgs.front) : item.emblem ? emblemCanvas : null;
@@ -2410,37 +2560,37 @@
         g.add(d);
       }
     } else if (type === "bucket") {
-      const crown = new THREE5.Mesh(new THREE5.CylinderGeometry(0.112, 0.13, 0.1, 14), mat);
+      const crown = new THREE6.Mesh(new THREE6.CylinderGeometry(0.112, 0.13, 0.1, 14), mat);
       crown.position.y = 0.2;
       g.add(crown);
-      const brim = new THREE5.Mesh(new THREE5.CylinderGeometry(0.13, 0.19, 0.05, 16, 1, true), mat);
+      const brim = new THREE6.Mesh(new THREE6.CylinderGeometry(0.13, 0.19, 0.05, 16, 1, true), mat);
       brim.position.y = 0.13;
       g.add(brim);
-      const band = new THREE5.Mesh(new THREE5.CylinderGeometry(0.131, 0.132, 0.02, 14, 1, true), acc);
+      const band = new THREE6.Mesh(new THREE6.CylinderGeometry(0.131, 0.132, 0.02, 14, 1, true), acc);
       band.position.y = 0.16;
       g.add(band);
     } else if (type === "non-la") {
-      const coneMat = new THREE5.MeshStandardMaterial({ map: toTexture(nonLaTexture(main)), side: DS, roughness: 0.9, flatShading: true });
-      const cone = new THREE5.Mesh(new THREE5.ConeGeometry(0.25, 0.16, 28, 1, true), coneMat);
+      const coneMat = new THREE6.MeshStandardMaterial({ map: toTexture(nonLaTexture(main)), side: DS, roughness: 0.9, flatShading: true });
+      const cone = new THREE6.Mesh(new THREE6.ConeGeometry(0.25, 0.16, 28, 1, true), coneMat);
       cone.position.y = 0.26;
       g.add(cone);
-      const strap = new THREE5.Mesh(new THREE5.TorusGeometry(0.115, 4e-3, 4, 16, Math.PI), acc);
+      const strap = new THREE6.Mesh(new THREE6.TorusGeometry(0.115, 4e-3, 4, 16, Math.PI), acc);
       strap.rotation.z = Math.PI;
       strap.position.set(0, 0.17, 0.015);
       g.add(strap);
     } else if (type === "bao-hiem") {
-      const shellG = new THREE5.SphereGeometry(0.145, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5);
+      const shellG = new THREE6.SphereGeometry(0.145, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5);
       shellG.scale(0.97, 0.95, 1.06);
-      const shell = new THREE5.Mesh(shellG, lowpolyMat(main, { roughness: 0.28, side: DS }));
+      const shell = new THREE6.Mesh(shellG, lowpolyMat(main, { roughness: 0.28, side: DS }));
       shell.position.y = 0.13;
       g.add(shell);
-      const ring = new THREE5.Mesh(new THREE5.CylinderGeometry(0.142, 0.143, 0.024, 16, 1, true), acc);
+      const ring = new THREE6.Mesh(new THREE6.CylinderGeometry(0.142, 0.143, 0.024, 16, 1, true), acc);
       ring.scale.set(0.97, 1, 1.06);
       ring.position.y = 0.142;
       g.add(ring);
-      const visorG = new THREE5.CylinderGeometry(0.1, 0.1, 6e-3, 12, 1, false, -Math.PI / 2, Math.PI);
+      const visorG = new THREE6.CylinderGeometry(0.1, 0.1, 6e-3, 12, 1, false, -Math.PI / 2, Math.PI);
       visorG.scale(1, 1, 0.55);
-      const visor = new THREE5.Mesh(visorG, acc);
+      const visor = new THREE6.Mesh(visorG, acc);
       visor.position.set(0, 0.15, 0.13);
       visor.rotation.x = 0.25;
       g.add(visor);
@@ -2457,27 +2607,27 @@
         g.add(d);
       }
     } else if (type === "len") {
-      const crownG = new THREE5.SphereGeometry(0.132, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55);
+      const crownG = new THREE6.SphereGeometry(0.132, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55);
       crownG.scale(0.97, 1.12, 1.05);
-      const crown = new THREE5.Mesh(crownG, mat);
+      const crown = new THREE6.Mesh(crownG, mat);
       crown.position.y = 0.122;
       g.add(crown);
-      const fold = new THREE5.Mesh(new THREE5.CylinderGeometry(0.133, 0.136, 0.05, 14, 1, true), acc);
+      const fold = new THREE6.Mesh(new THREE6.CylinderGeometry(0.133, 0.136, 0.05, 14, 1, true), acc);
       fold.scale.set(0.98, 1, 1.06);
       fold.position.y = 0.13;
       g.add(fold);
-      const pom = new THREE5.Mesh(new THREE5.IcosahedronGeometry(0.035, 1), acc);
+      const pom = new THREE6.Mesh(new THREE6.IcosahedronGeometry(0.035, 1), acc);
       pom.position.y = 0.282;
       g.add(pom);
     } else if (type === "tot-nghiep") {
-      const cap = new THREE5.Mesh(new THREE5.CylinderGeometry(0.126, 0.13, 0.08, 14), mat);
+      const cap = new THREE6.Mesh(new THREE6.CylinderGeometry(0.126, 0.13, 0.08, 14), mat);
       cap.position.y = 0.2;
       g.add(cap);
-      const board = new THREE5.Mesh(new THREE5.BoxGeometry(0.3, 0.012, 0.3), mat);
+      const board = new THREE6.Mesh(new THREE6.BoxGeometry(0.3, 0.012, 0.3), mat);
       board.position.y = 0.245;
       board.rotation.y = Math.PI / 4;
       g.add(board);
-      const btn = new THREE5.Mesh(new THREE5.CylinderGeometry(0.012, 0.012, 0.01, 8), acc);
+      const btn = new THREE6.Mesh(new THREE6.CylinderGeometry(0.012, 0.012, 0.01, 8), acc);
       btn.position.y = 0.255;
       g.add(btn);
       const cord = limb(0.15, 3e-3, 3e-3, acc, 4);
@@ -2498,7 +2648,7 @@
     const main = item.colors.main, accent = item.colors.accent || shade(main, -0.25);
     const mat = lowpolyMat(main, { roughness: 0.85 });
     const acc = lowpolyMat(accent, { roughness: 0.8 });
-    const g = new THREE5.Group();
+    const g = new THREE6.Group();
     const chestZ = (y) => trunkRadius(y) * b.sz + 0.03;
     if (type === "balo" || type === "balo-laptop") {
       const slim = type === "balo-laptop";
@@ -2517,7 +2667,7 @@
         p.rotation.y = Math.PI;
         g.add(p);
       }
-      const handle = new THREE5.Mesh(new THREE5.TorusGeometry(0.03, 7e-3, 4, 10, Math.PI), acc);
+      const handle = new THREE6.Mesh(new THREE6.TorusGeometry(0.03, 7e-3, 4, 10, Math.PI), acc);
       handle.position.set(0, 0.45, backZ);
       g.add(handle);
       const strapMat = lowpolyMat(shade(main, -0.12), { roughness: 0.85 });
@@ -2532,7 +2682,7 @@
           [s * (trunkRadius(0.16) * b.sx + 0.012), 0.15, 0],
           [x * 1.5, 0.13, backZ + d / 2]
         ], 0.011, strapMat));
-        const buckle = new THREE5.Mesh(new THREE5.BoxGeometry(0.028, 0.02, 8e-3), lowpolyMat("#1c1c1e"));
+        const buckle = new THREE6.Mesh(new THREE6.BoxGeometry(0.028, 0.02, 8e-3), lowpolyMat("#1c1c1e"));
         buckle.position.set(x * 1.15, 0.3, chestZ(0.3) + 0.01);
         g.add(buckle);
       }
@@ -2560,7 +2710,7 @@
       flap.position.set(bx - 2e-3, 0.03, -0.02);
       g.add(flap);
       for (const z of [-0.1, 0.06]) {
-        const clasp = new THREE5.Mesh(new THREE5.BoxGeometry(8e-3, 0.03, 0.022), lowpolyMat("#c9b98f", { metalness: 0.6, roughness: 0.35 }));
+        const clasp = new THREE6.Mesh(new THREE6.BoxGeometry(8e-3, 0.03, 0.022), lowpolyMat("#c9b98f", { metalness: 0.6, roughness: 0.35 }));
         clasp.position.set(bx - 0.04, -0.03, z);
         g.add(clasp);
       }
@@ -2571,7 +2721,7 @@
         p.rotation.y = -Math.PI / 2;
         g.add(p);
       }
-      const handle = new THREE5.Mesh(new THREE5.TorusGeometry(0.045, 8e-3, 4, 10, Math.PI), acc);
+      const handle = new THREE6.Mesh(new THREE6.TorusGeometry(0.045, 8e-3, 4, 10, Math.PI), acc);
       handle.rotation.y = Math.PI / 2;
       handle.position.set(bx, 0.095, -0.02);
       g.add(handle);
@@ -2598,7 +2748,7 @@
     return { parts: [{ joint: "torso", obj: shadowed(g) }] };
   }
   function ribbon(points, width, mat) {
-    const curve = new THREE5.CatmullRomCurve3(points.map((p) => new THREE5.Vector3(...p)));
+    const curve = new THREE6.CatmullRomCurve3(points.map((p) => new THREE6.Vector3(...p)));
     curve.curveType = "centripetal";
     const N = 64;
     const pos = [], uv = [], idx = [];
@@ -2606,8 +2756,8 @@
       const t = i / N;
       const p = curve.getPointAt(t);
       const tan = curve.getTangentAt(t);
-      const out = new THREE5.Vector3(p.x, 0, p.z).normalize();
-      const side = new THREE5.Vector3().crossVectors(tan, out).normalize().multiplyScalar(width / 2);
+      const out = new THREE6.Vector3(p.x, 0, p.z).normalize();
+      const side = new THREE6.Vector3().crossVectors(tan, out).normalize().multiplyScalar(width / 2);
       pos.push(p.x - side.x, p.y - side.y, p.z - side.z, p.x + side.x, p.y + side.y, p.z + side.z);
       uv.push(t, 0, t, 1);
       if (i < N) {
@@ -2615,19 +2765,19 @@
         idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
       }
     }
-    const g = new THREE5.BufferGeometry();
-    g.setAttribute("position", new THREE5.Float32BufferAttribute(pos, 3));
-    g.setAttribute("uv", new THREE5.Float32BufferAttribute(uv, 2));
+    const g = new THREE6.BufferGeometry();
+    g.setAttribute("position", new THREE6.Float32BufferAttribute(pos, 3));
+    g.setAttribute("uv", new THREE6.Float32BufferAttribute(uv, 2));
     g.setIndex(idx);
     g.computeVertexNormals();
-    return new THREE5.Mesh(g, mat);
+    return new THREE6.Mesh(g, mat);
   }
   function buildCard(ctx) {
     var _a;
     const { item, rig, cardCanvas, emblem, emblemCanvas } = ctx;
     const type = ((_a = item.options) == null ? void 0 : _a.type) || "day-deo";
     const b = rig.build;
-    const g = new THREE5.Group();
+    const g = new THREE6.Group();
     const main = item.colors.main || (emblem == null ? void 0 : emblem.main) || "#b3141d";
     const textColor = item.colors.text || "#ffffff";
     const holderColor = item.colors.accent || main;
@@ -2635,7 +2785,7 @@
     const metal = lowpolyMat("#c8ccd2", { metalness: 0.75, roughness: 0.3 });
     const cardTex = toTexture(cardCanvas);
     const makeCard = (scale, holder) => {
-      const c = new THREE5.Group();
+      const c = new THREE6.Group();
       const portrait = cardCanvas.height > cardCanvas.width;
       const w = (portrait ? 0.0757 : 0.12) * scale, h2 = (portrait ? 0.12 : 0.0757) * scale;
       c.userData.holderHeight = h2 + (holder === "silicone" ? 0.026 : 0.012);
@@ -2655,10 +2805,10 @@
         };
         const outerW = w + 0.024, outerH = h2 + 0.026;
         const plastic = lowpolyMat(holderColor, { roughness: 0.42 });
-        const outline = roundedPath(THREE5.Shape, outerW, outerH, 9e-3);
-        outline.holes.push(roundedPath(THREE5.Path, w - 2e-3, h2 - 2e-3, 3e-3));
-        const geometry = new THREE5.ExtrudeGeometry(outline, { depth: 5e-3, steps: 1, bevelEnabled: true, bevelThickness: 8e-4, bevelSize: 8e-4, bevelSegments: 2, curveSegments: 10 });
-        const frame = new THREE5.Mesh(geometry, plastic);
+        const outline = roundedPath(THREE6.Shape, outerW, outerH, 9e-3);
+        outline.holes.push(roundedPath(THREE6.Path, w - 2e-3, h2 - 2e-3, 3e-3));
+        const geometry2 = new THREE6.ExtrudeGeometry(outline, { depth: 5e-3, steps: 1, bevelEnabled: true, bevelThickness: 8e-4, bevelSize: 8e-4, bevelSegments: 2, curveSegments: 10 });
+        const frame = new THREE6.Mesh(geometry2, plastic);
         frame.position.z = -2e-3;
         frame.name = "red-card-frame";
         c.add(frame);
@@ -2672,7 +2822,7 @@
         c.add(slot);
         c.userData.attachmentLocal = slot.position.toArray();
       } else {
-        c.add(rbox(w + 0.012, h2 + 0.012, 5e-3, 4e-3, new THREE5.MeshStandardMaterial({ color: "#eef3f8", transparent: true, opacity: 0.35, roughness: 0.1 })));
+        c.add(rbox(w + 0.012, h2 + 0.012, 5e-3, 4e-3, new THREE6.MeshStandardMaterial({ color: "#eef3f8", transparent: true, opacity: 0.35, roughness: 0.1 })));
       }
       const face = decal(cardTex, w, h2, { transparent: false });
       face.position.z = holder === "silicone" ? 22e-4 : 45e-4;
@@ -2680,7 +2830,7 @@
       return c;
     };
     if (type === "day-deo") {
-      const ribbonMat = new THREE5.MeshStandardMaterial({
+      const ribbonMat = new THREE6.MeshStandardMaterial({
         map: toTexture(ribbonTexture(((emblem == null ? void 0 : emblem.name) || "Đại học Bách khoa Hà Nội").toUpperCase(), main, textColor, { logo: emblemCanvas, wordmark: (emblem == null ? void 0 : emblem.wordmark) || "HUST" })),
         side: DS,
         roughness: 0.7
@@ -2697,16 +2847,16 @@
       }
       const hardwareZ = chestZ(0.25) + 0.013;
       for (const side of [-1, 1]) {
-        const rivet = new THREE5.Mesh(new THREE5.CylinderGeometry(28e-4, 28e-4, 14e-4, 12), metal);
+        const rivet = new THREE6.Mesh(new THREE6.CylinderGeometry(28e-4, 28e-4, 14e-4, 12), metal);
         rivet.rotation.x = Math.PI / 2;
         rivet.position.set(side * 8e-3, 0.257, hardwareZ);
         g.add(rivet);
       }
-      const ring = new THREE5.Mesh(new THREE5.TorusGeometry(8e-3, 13e-4, 6, 24), metal);
+      const ring = new THREE6.Mesh(new THREE6.TorusGeometry(8e-3, 13e-4, 6, 24), metal);
       ring.position.set(0, 0.244, hardwareZ);
       ring.name = "lanyard-split-ring";
       g.add(ring);
-      const swivel = new THREE5.Mesh(new THREE5.CylinderGeometry(27e-4, 27e-4, 9e-3, 10), metal);
+      const swivel = new THREE6.Mesh(new THREE6.CylinderGeometry(27e-4, 27e-4, 9e-3, 10), metal);
       swivel.position.set(0, 0.231, hardwareZ);
       g.add(swivel);
       const hook = tube([
@@ -2724,7 +2874,7 @@
       g.add(gate);
       const card = makeCard(1, "silicone");
       card.rotation.x = -0.06;
-      const attachment = new THREE5.Vector3(...card.userData.attachmentLocal).applyEuler(card.rotation);
+      const attachment = new THREE6.Vector3(...card.userData.attachmentLocal).applyEuler(card.rotation);
       card.position.set(0, 0.211 - attachment.y, hardwareZ - attachment.z);
       card.name = "student-card-holder";
       g.add(card);
@@ -2734,7 +2884,7 @@
       card.position.set(x, 0.28, chestZ(0.28) + 6e-3);
       card.rotation.set(-0.1, 0.32, 0);
       g.add(card);
-      const clip = new THREE5.Mesh(new THREE5.BoxGeometry(0.02, 0.025, 6e-3), metal);
+      const clip = new THREE6.Mesh(new THREE6.BoxGeometry(0.02, 0.025, 6e-3), metal);
       clip.position.set(x - 4e-3, card.position.y + card.userData.holderHeight / 2 + 5e-3, chestZ(0.32) + 8e-3);
       clip.rotation.y = 0.32;
       g.add(clip);
@@ -2746,11 +2896,11 @@
     const { item } = ctx;
     const type = ((_a = item.options) == null ? void 0 : _a.type) || "tron";
     const frame = lowpolyMat(item.colors.main, { roughness: 0.35, metalness: type === "tron" || type === "nua" ? 0.5 : 0.1 });
-    const g = new THREE5.Group();
+    const g = new THREE6.Group();
     g.position.y = 0.114;
     const sq = type !== "tron";
     for (const s of [-1, 1]) {
-      const ring = new THREE5.Mesh(new THREE5.TorusGeometry(sq ? 0.03 : 0.025, 36e-4, 4, sq ? 4 : 16), frame);
+      const ring = new THREE6.Mesh(new THREE6.TorusGeometry(sq ? 0.03 : 0.025, 36e-4, 4, sq ? 4 : 16), frame);
       if (sq) {
         ring.rotation.z = Math.PI / 4;
         ring.scale.set(1.15, 0.85, 1);
@@ -2758,24 +2908,24 @@
       ring.position.set(s * 0.039, 0, 0.117);
       g.add(ring);
       if (type === "ram") {
-        const lens = new THREE5.Mesh(new THREE5.CircleGeometry(sq ? 0.03 : 0.025, sq ? 4 : 16), new THREE5.MeshStandardMaterial({ color: item.colors.accent || "#1b1f2a", transparent: true, opacity: 0.85, roughness: 0.15, metalness: 0.3 }));
+        const lens = new THREE6.Mesh(new THREE6.CircleGeometry(sq ? 0.03 : 0.025, sq ? 4 : 16), new THREE6.MeshStandardMaterial({ color: item.colors.accent || "#1b1f2a", transparent: true, opacity: 0.85, roughness: 0.15, metalness: 0.3 }));
         lens.rotation.z = Math.PI / 4;
         lens.scale.set(1.15, 0.85, 1);
         lens.position.set(s * 0.039, 0, 0.117);
         g.add(lens);
       }
-      const temple = new THREE5.Mesh(new THREE5.BoxGeometry(4e-3, 5e-3, 0.12), frame);
+      const temple = new THREE6.Mesh(new THREE6.BoxGeometry(4e-3, 5e-3, 0.12), frame);
       temple.position.set(s * 0.1, 4e-3, 0.06);
       g.add(temple);
     }
     if (type === "nua") {
       for (const s of [-1, 1]) {
-        const brow = new THREE5.Mesh(new THREE5.BoxGeometry(0.07, 0.011, 8e-3), lowpolyMat(item.colors.accent || "#1b1b1d", { roughness: 0.4 }));
+        const brow = new THREE6.Mesh(new THREE6.BoxGeometry(0.07, 0.011, 8e-3), lowpolyMat(item.colors.accent || "#1b1b1d", { roughness: 0.4 }));
         brow.position.set(s * 0.039, 0.018, 0.118);
         g.add(brow);
       }
     }
-    const bridge = new THREE5.Mesh(new THREE5.BoxGeometry(0.022, 4e-3, 4e-3), frame);
+    const bridge = new THREE6.Mesh(new THREE6.BoxGeometry(0.022, 4e-3, 4e-3), frame);
     bridge.position.set(0, 6e-3, 0.119);
     g.add(bridge);
     return { parts: [{ joint: "head", obj: shadowed(g) }] };
@@ -2785,23 +2935,21 @@
     const { item, emblemCanvas } = ctx;
     const type = ((_a = item.options) == null ? void 0 : _a.type) || "laptop";
     const main = item.colors.main, accent = item.colors.accent || shade(main, -0.25);
-    const g = new THREE5.Group();
+    const g = new THREE6.Group();
     let pose = {};
     if (type === "laptop") {
       const lap = rbox(0.022, 0.215, 0.305, 8e-3, lowpolyMat(main, { roughness: 0.35, metalness: 0.4 }));
       lap.position.set(0.035, -0.135, 0.06);
       g.add(lap);
-      if (item.emblem && emblemCanvas) {
-        const st = decal(emblemCanvas, 0.06, 0.06);
-        st.position.set(0.035 - 0.0115, -0.13, 0.06);
-        st.rotation.y = -Math.PI / 2;
-        g.add(st);
-      }
+      const logo = createLaptopLogo({ height: 0.052 });
+      logo.position.set(0.035 - 0.0118, -0.135, 0.06);
+      logo.rotation.y = -Math.PI / 2;
+      g.add(logo);
     } else if (type === "vo") {
       const book = rbox(0.018, 0.21, 0.15, 4e-3, lowpolyMat(main));
       book.position.set(0.032, -0.12, 0.04);
       g.add(book);
-      const label = new THREE5.Mesh(new THREE5.PlaneGeometry(0.09, 0.05), lowpolyMat("#ffffff"));
+      const label = new THREE6.Mesh(new THREE6.PlaneGeometry(0.09, 0.05), lowpolyMat("#ffffff"));
       label.position.set(0.032 - 95e-4, -0.1, 0.04);
       label.rotation.y = -Math.PI / 2;
       g.add(label);
@@ -2810,10 +2958,10 @@
       pen.rotation.x = 0.3;
       g.add(pen);
     } else if (type === "binh-nuoc") {
-      const bottle = new THREE5.Mesh(new THREE5.CylinderGeometry(0.032, 0.032, 0.19, 10), lowpolyMat(main, { roughness: 0.3, metalness: 0.35 }));
+      const bottle = new THREE6.Mesh(new THREE6.CylinderGeometry(0.032, 0.032, 0.19, 10), lowpolyMat(main, { roughness: 0.3, metalness: 0.35 }));
       bottle.position.set(0.02, -0.07, 0.02);
       g.add(bottle);
-      const lid = new THREE5.Mesh(new THREE5.CylinderGeometry(0.026, 0.03, 0.035, 10), lowpolyMat(accent));
+      const lid = new THREE6.Mesh(new THREE6.CylinderGeometry(0.026, 0.03, 0.035, 10), lowpolyMat(accent));
       lid.position.set(0.02, 0.04, 0.02);
       g.add(lid);
       pose = { elbowR: -0.75 };
@@ -2821,11 +2969,11 @@
       const shaft = limb(0.7, 75e-4, 75e-4, lowpolyMat("#3a3a3a", { metalness: 0.5 }), 6);
       shaft.position.set(0.012, -0.03, 0.02);
       g.add(shaft);
-      const fold = new THREE5.Mesh(new THREE5.ConeGeometry(0.04, 0.46, 8), lowpolyMat(main));
+      const fold = new THREE6.Mesh(new THREE6.ConeGeometry(0.04, 0.46, 8), lowpolyMat(main));
       fold.rotation.x = Math.PI;
       fold.position.set(0.012, -0.47, 0.02);
       g.add(fold);
-      const hook = new THREE5.Mesh(new THREE5.TorusGeometry(0.03, 8e-3, 4, 10, Math.PI), lowpolyMat(accent));
+      const hook = new THREE6.Mesh(new THREE6.TorusGeometry(0.03, 8e-3, 4, 10, Math.PI), lowpolyMat(accent));
       hook.position.set(0.012, -0.03, 0.05);
       hook.rotation.y = Math.PI / 2;
       hook.rotation.z = Math.PI;
@@ -2843,10 +2991,10 @@
       const book = rbox(0.045, 0.24, 0.17, 4e-3, lowpolyMat(main));
       book.position.set(0.04, -0.13, 0.04);
       g.add(book);
-      const pages = new THREE5.Mesh(new THREE5.BoxGeometry(0.038, 0.232, 4e-3), lowpolyMat("#f6f2e6"));
+      const pages = new THREE6.Mesh(new THREE6.BoxGeometry(0.038, 0.232, 4e-3), lowpolyMat("#f6f2e6"));
       pages.position.set(0.04, -0.13, 0.04 + 0.085);
       g.add(pages);
-      const band = new THREE5.Mesh(new THREE5.BoxGeometry(0.0455, 0.03, 0.172), lowpolyMat(accent));
+      const band = new THREE6.Mesh(new THREE6.BoxGeometry(0.0455, 0.03, 0.172), lowpolyMat(accent));
       band.position.set(0.04, -0.06, 0.04);
       g.add(band);
       const book2 = rbox(0.022, 0.21, 0.15, 4e-3, lowpolyMat(item.colors.second || "#e8b93a"));
@@ -2857,24 +3005,24 @@
       pen.position.set(0.012, -0, 0.03);
       pen.rotation.x = 0.9;
       g.add(pen);
-      const clip = new THREE5.Mesh(new THREE5.BoxGeometry(3e-3, 0.04, 4e-3), lowpolyMat(accent, { metalness: 0.6 }));
+      const clip = new THREE6.Mesh(new THREE6.BoxGeometry(3e-3, 0.04, 4e-3), lowpolyMat(accent, { metalness: 0.6 }));
       clip.position.set(0.018, -0.012, 0.035);
       clip.rotation.x = 0.9;
       g.add(clip);
       pose = { elbowR: -0.9 };
     } else if (type === "hop-but") {
-      const pouch = new THREE5.Mesh(new THREE5.CapsuleGeometry(0.035, 0.15, 4, 8), lowpolyMat(main));
+      const pouch = new THREE6.Mesh(new THREE6.CapsuleGeometry(0.035, 0.15, 4, 8), lowpolyMat(main));
       pouch.rotation.x = Math.PI / 2;
       pouch.scale.set(1, 1, 0.75);
       pouch.position.set(0.02, -0.08, 0.04);
       g.add(pouch);
-      const zip = new THREE5.Mesh(new THREE5.BoxGeometry(4e-3, 6e-3, 0.2), lowpolyMat(accent));
+      const zip = new THREE6.Mesh(new THREE6.BoxGeometry(4e-3, 6e-3, 0.2), lowpolyMat(accent));
       zip.position.set(0.02, -0.052, 0.04);
       g.add(zip);
       pose = { elbowR: -0.6 };
     } else if (type === "dien-thoai") {
       const phone = rbox(0.074, 0.155, 9e-3, 8e-3, lowpolyMat(main, { roughness: 0.3, metalness: 0.3 }));
-      const scr = new THREE5.Mesh(new THREE5.PlaneGeometry(0.068, 0.145), new THREE5.MeshStandardMaterial({ color: "#1d2433", emissive: "#2a3f66", emissiveIntensity: 0.6, roughness: 0.2 }));
+      const scr = new THREE6.Mesh(new THREE6.PlaneGeometry(0.068, 0.145), new THREE6.MeshStandardMaterial({ color: "#1d2433", emissive: "#2a3f66", emissiveIntensity: 0.6, roughness: 0.2 }));
       scr.position.z = 48e-4;
       phone.add(scr);
       phone.position.set(0.02, -0.08, 0.035);
@@ -2882,11 +3030,11 @@
       g.add(phone);
       pose = { elbowR: -1.1 };
     } else if (type === "ong-ban-ve") {
-      const tubeM = new THREE5.Mesh(new THREE5.CylinderGeometry(0.038, 0.038, 0.64, 10), lowpolyMat(main));
+      const tubeM = new THREE6.Mesh(new THREE6.CylinderGeometry(0.038, 0.038, 0.64, 10), lowpolyMat(main));
       tubeM.position.set(0.04, -0.22, 0.02);
       g.add(tubeM);
       for (const y of [0.1, -0.54]) {
-        const capM = new THREE5.Mesh(new THREE5.CylinderGeometry(0.041, 0.041, 0.05, 10), lowpolyMat(accent));
+        const capM = new THREE6.Mesh(new THREE6.CylinderGeometry(0.041, 0.041, 0.05, 10), lowpolyMat(accent));
         capM.position.set(0.04, y, 0.02);
         g.add(capM);
       }
@@ -2901,7 +3049,7 @@
     const { item, imgs } = ctx;
     const cloth = ((_a = item.options) == null ? void 0 : _a.type) === "vai";
     const rows = 6;
-    const geo = new THREE5.CylinderGeometry(0.133, 0.122, 0.088, 18, rows, true, -1.12, 2.24);
+    const geo = new THREE6.CylinderGeometry(0.133, 0.122, 0.088, 18, rows, true, -1.12, 2.24);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const y = pos.getY(i);
@@ -2914,9 +3062,9 @@
     geo.computeVertexNormals();
     geo.scale(0.9, 1, 1);
     const tex = imgs.front ? toTexture(imageCanvas(imgs.front)) : toTexture(maskTexture(item.colors.main, { pleats: !cloth, edge: !cloth }));
-    const mask = new THREE5.Mesh(geo, new THREE5.MeshStandardMaterial({ map: tex, side: DS, roughness: 0.95, flatShading: true }));
+    const mask = new THREE6.Mesh(geo, new THREE6.MeshStandardMaterial({ map: tex, side: DS, roughness: 0.95, flatShading: true }));
     mask.position.y = 0.064;
-    const g = new THREE5.Group();
+    const g = new THREE6.Group();
     g.add(mask);
     const loopMat = lowpolyMat(item.colors.accent || "#f4f6f8");
     for (const s of [-1, 1]) {
@@ -2933,23 +3081,23 @@
     const main = item.colors.main, accent = item.colors.accent || shade(main, -0.25);
     const mat = lowpolyMat(main, { roughness: 0.4 });
     const pad = lowpolyMat(accent, { roughness: 0.9 });
-    const g = new THREE5.Group();
+    const g = new THREE6.Group();
     const cup = () => {
-      const c = new THREE5.Group();
-      const shell = new THREE5.Mesh(new THREE5.CylinderGeometry(0.044, 0.046, 0.028, 14), mat);
+      const c = new THREE6.Group();
+      const shell = new THREE6.Mesh(new THREE6.CylinderGeometry(0.044, 0.046, 0.028, 14), mat);
       shell.rotation.z = Math.PI / 2;
       c.add(shell);
-      const cushion = new THREE5.Mesh(new THREE5.TorusGeometry(0.034, 0.012, 6, 14), pad);
+      const cushion = new THREE6.Mesh(new THREE6.TorusGeometry(0.034, 0.012, 6, 14), pad);
       cushion.rotation.y = Math.PI / 2;
       c.add(cushion);
       return c;
     };
     if (type === "chup-tai") {
-      const band = new THREE5.Mesh(new THREE5.TorusGeometry(0.138, 8e-3, 5, 22, Math.PI), mat);
+      const band = new THREE6.Mesh(new THREE6.TorusGeometry(0.138, 8e-3, 5, 22, Math.PI), mat);
       band.scale.set(0.98, 1.02, 1.6);
       band.position.y = 0.105;
       g.add(band);
-      const top = new THREE5.Mesh(new THREE5.TorusGeometry(0.135, 0.011, 5, 12, Math.PI * 0.5), pad);
+      const top = new THREE6.Mesh(new THREE6.TorusGeometry(0.135, 0.011, 5, 12, Math.PI * 0.5), pad);
       top.rotation.z = Math.PI / 4;
       top.position.y = 0.105;
       g.add(top);
@@ -2962,7 +3110,7 @@
       return { parts: [{ joint: "head", obj: shadowed(g) }] };
     }
     if (type === "deo-co") {
-      const band = new THREE5.Mesh(new THREE5.TorusGeometry(0.095, 8e-3, 5, 22, Math.PI), mat);
+      const band = new THREE6.Mesh(new THREE6.TorusGeometry(0.095, 8e-3, 5, 22, Math.PI), mat);
       band.rotation.x = -Math.PI / 2 - 0.25;
       band.position.set(0, 0.5, -5e-3);
       g.add(band);
@@ -2975,7 +3123,7 @@
       return { parts: [{ joint: "torso", obj: shadowed(g) }] };
     }
     for (const s of [-1, 1]) {
-      const bud = new THREE5.Mesh(new THREE5.IcosahedronGeometry(0.012, 1), mat);
+      const bud = new THREE6.Mesh(new THREE6.IcosahedronGeometry(0.012, 1), mat);
       bud.position.set(s * 0.112, 0.112, 4e-3);
       g.add(bud);
       const stem = limb(0.03, 45e-4, 45e-4, mat, 6);
@@ -3070,12 +3218,12 @@
     }
     // -------------------------------------------------- Cảnh
     _initScene() {
-      const r = new THREE6.WebGLRenderer({ antialias: true, alpha: true });
+      const r = new THREE7.WebGLRenderer({ antialias: true, alpha: true });
       r.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-      r.outputEncoding = THREE6.sRGBEncoding;
-      r.toneMapping = THREE6.NoToneMapping;
+      r.outputEncoding = THREE7.sRGBEncoding;
+      r.toneMapping = THREE7.NoToneMapping;
       r.shadowMap.enabled = true;
-      r.shadowMap.type = THREE6.PCFSoftShadowMap;
+      r.shadowMap.type = THREE7.PCFSoftShadowMap;
       r.domElement.style.display = "block";
       r.domElement.style.width = "100%";
       r.domElement.style.height = "100%";
@@ -3083,12 +3231,12 @@
       r.domElement.setAttribute("role", "img");
       this.container.appendChild(r.domElement);
       this.renderer = r;
-      const scene = new THREE6.Scene();
+      const scene = new THREE7.Scene();
       this.scene = scene;
-      const cam = new THREE6.PerspectiveCamera(30, 1, 0.05, 50);
+      const cam = new THREE7.PerspectiveCamera(30, 1, 0.05, 50);
       this.camera = cam;
-      scene.add(new THREE6.HemisphereLight("#ffffff", "#b5a990", 0.62));
-      const key = new THREE6.DirectionalLight("#fff6ea", 0.95);
+      scene.add(new THREE7.HemisphereLight("#ffffff", "#b5a990", 0.62));
+      const key = new THREE7.DirectionalLight("#fff6ea", 0.95);
       key.position.set(2.2, 4, 3);
       key.castShadow = true;
       key.shadow.mapSize.set(1024, 1024);
@@ -3096,14 +3244,14 @@
       key.shadow.bias = -5e-4;
       key.shadow.normalBias = 0.02;
       scene.add(key);
-      const rim = new THREE6.DirectionalLight("#c9d6ff", 0.4);
+      const rim = new THREE7.DirectionalLight("#c9d6ff", 0.4);
       rim.position.set(-3, 2.5, -2.5);
       scene.add(rim);
-      const ground = new THREE6.Mesh(new THREE6.PlaneGeometry(8, 8), new THREE6.ShadowMaterial({ opacity: 0.14 }));
+      const ground = new THREE7.Mesh(new THREE7.PlaneGeometry(8, 8), new THREE7.ShadowMaterial({ opacity: 0.14 }));
       ground.rotation.x = -Math.PI / 2;
       ground.receiveShadow = true;
       scene.add(ground);
-      const blob = new THREE6.Mesh(new THREE6.PlaneGeometry(0.9, 0.9), new THREE6.MeshBasicMaterial({ map: blobShadow(), transparent: true, depthWrite: false }));
+      const blob = new THREE7.Mesh(new THREE7.PlaneGeometry(0.9, 0.9), new THREE7.MeshBasicMaterial({ map: blobShadow(), transparent: true, depthWrite: false }));
       blob.rotation.x = -Math.PI / 2;
       blob.position.y = 2e-3;
       scene.add(blob);
@@ -3119,7 +3267,7 @@
       this._ro = new ResizeObserver(() => this._resize());
       this._ro.observe(this.container);
       this._resize();
-      this.clock = new THREE6.Clock();
+      this.clock = new THREE7.Clock();
       r.setAnimationLoop(() => this._tick());
     }
     _resize() {
@@ -3160,7 +3308,7 @@
     // -------------------------------------------------- Camera
     _focusPose(name) {
       const f = FOCUS[name] || FOCUS.full;
-      const target = new THREE6.Vector3(...f.target);
+      const target = new THREE7.Vector3(...f.target);
       let az = 0.35;
       if (this.camera.position.lengthSq() > 0) {
         const d = this.camera.position.clone().sub(this.controls.target);
@@ -3169,7 +3317,7 @@
       if (name === "card" || name === "feet") az = 0.3;
       const narrow = this.camera.aspect < 0.8 && name === "full" ? 1.25 : 1;
       const dist = f.dist * narrow;
-      const pos = new THREE6.Vector3(
+      const pos = new THREE7.Vector3(
         target.x + dist * Math.sin(f.polar) * Math.sin(az),
         target.y + dist * Math.cos(f.polar),
         target.z + dist * Math.sin(f.polar) * Math.cos(az)
@@ -3281,6 +3429,8 @@
     }
     _applyRules() {
       var _a, _b, _c, _d;
+      const bottom = this.resolveItem(this.state.equipped.bottom);
+      setBodyCoverage(this.rig, bottom ? bottom.options || {} : null);
       const hat = this.slots.hat;
       const hair = this.slots.hair;
       if (hair == null ? void 0 : hair.hideUnderHat) for (const m of hair.hideUnderHat) m.visible = !(hat && hat.hideHairTop);
@@ -3363,7 +3513,7 @@
     }
     /** Ảnh chân dung chính diện (dùng cho thẻ sinh viên) */
     portrait(w = 300, h2 = 400) {
-      const cam = new THREE6.PerspectiveCamera(22, w / h2, 0.05, 20);
+      const cam = new THREE7.PerspectiveCamera(22, w / h2, 0.05, 20);
       const headY = (0.965 + 0.572 + 0.11) * (this.state.body.height || 0.97);
       cam.position.set(0, headY + 0.02, 1.25);
       cam.lookAt(0, headY - 0.03, 0);
@@ -3371,7 +3521,7 @@
       const saved2 = [j.head.rotation.y, j.head.rotation.x, j.torso.rotation.y];
       j.head.rotation.set(0, 0, 0);
       j.torso.rotation.y = 0;
-      const size = new THREE6.Vector2();
+      const size = new THREE7.Vector2();
       this.renderer.getSize(size);
       const pr = this.renderer.getPixelRatio();
       this.renderer.setPixelRatio(1);
@@ -3401,7 +3551,7 @@
   };
 
   // avatar/src/js/thumbs.js
-  var THREE7 = __toESM(require_three());
+  var THREE8 = __toESM(require_three());
   var VIEW = {
     hair: [0.5, 0.25, 1],
     top: [0.45, 0.15, 1],
@@ -3416,20 +3566,20 @@
   var ThumbMaker = class {
     constructor(size = 160) {
       this.size = size;
-      this.renderer = new THREE7.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      this.renderer = new THREE8.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(size, size, false);
-      this.renderer.outputEncoding = THREE7.sRGBEncoding;
-      this.renderer.toneMapping = THREE7.NoToneMapping;
-      this.scene = new THREE7.Scene();
-      this.scene.add(new THREE7.HemisphereLight("#ffffff", "#b5a990", 0.75));
-      const d = new THREE7.DirectionalLight("#ffffff", 0.85);
+      this.renderer.outputEncoding = THREE8.sRGBEncoding;
+      this.renderer.toneMapping = THREE8.NoToneMapping;
+      this.scene = new THREE8.Scene();
+      this.scene.add(new THREE8.HemisphereLight("#ffffff", "#b5a990", 0.75));
+      const d = new THREE8.DirectionalLight("#ffffff", 0.85);
       d.position.set(2, 3, 3);
       this.scene.add(d);
-      const back = new THREE7.DirectionalLight("#ffffff", 0.4);
+      const back = new THREE8.DirectionalLight("#ffffff", 0.4);
       back.position.set(-2, 2, -3);
       this.scene.add(back);
-      this.camera = new THREE7.PerspectiveCamera(28, 1, 0.01, 20);
+      this.camera = new THREE8.PerspectiveCamera(28, 1, 0.01, 20);
       this.cache = /* @__PURE__ */ new Map();
       this.queue = Promise.resolve();
     }
@@ -3463,17 +3613,17 @@
       for (const p of res.parts) linearize(p.obj);
       for (const p of res.parts) if (p.obj.userData.belt) p.obj.visible = false;
       this.rig.root.updateMatrixWorld(true);
-      const box = new THREE7.Box3();
+      const box = new THREE8.Box3();
       for (const p of res.parts) box.expandByObject(p.obj);
       if (item.slot === "footwear") {
         box.makeEmpty();
         box.expandByObject(res.parts[0].obj);
       }
-      const center = box.getCenter(new THREE7.Vector3());
-      const size = box.getSize(new THREE7.Vector3());
+      const center = box.getCenter(new THREE8.Vector3());
+      const size = box.getSize(new THREE8.Vector3());
       const r = Math.max(size.x, size.y, size.z) * 0.5;
-      const dir = new THREE7.Vector3(...VIEW[item.slot] || [0.5, 0.3, 1]).normalize();
-      const dist = r / Math.sin(THREE7.MathUtils.degToRad(this.camera.fov / 2)) * 1.12;
+      const dir = new THREE8.Vector3(...VIEW[item.slot] || [0.5, 0.3, 1]).normalize();
+      const dist = r / Math.sin(THREE8.MathUtils.degToRad(this.camera.fov / 2)) * 1.12;
       this.camera.position.copy(center).addScaledVector(dir, dist);
       this.camera.lookAt(center);
       this.renderer.setClearColor(0, 0);
@@ -3518,6 +3668,7 @@
     { id: "toc-ngan", slot: "hair", name: "Tóc ngắn", colors: { main: "#1c1714" }, palette: HAIR_COLORS, options: { style: "ngan" } },
     { id: "toc-mai-lech", slot: "hair", name: "Mái lệch", colors: { main: "#2b201a" }, palette: HAIR_COLORS, options: { style: "mai-lech" } },
     { id: "toc-cua", slot: "hair", name: "Đầu cua", colors: { main: "#1c1714" }, palette: HAIR_COLORS, options: { style: "cua" } },
+    { id: "toc-dau-moi", slot: "hair", name: "Đầu moi", colors: { main: "#1c1714" }, palette: HAIR_COLORS, options: { style: "moi" } },
     { id: "toc-bob", slot: "hair", name: "Tóc bob", colors: { main: "#3b2a20" }, palette: HAIR_COLORS, options: { style: "bob" } },
     { id: "toc-dai", slot: "hair", name: "Tóc dài", colors: { main: "#1c1714" }, palette: HAIR_COLORS, options: { style: "dai" } },
     { id: "toc-buoc", slot: "hair", name: "Buộc đuôi ngựa", colors: { main: "#2b201a", accent: "#d24b6a" }, palette: HAIR_COLORS, options: { style: "buoc" } },
@@ -4695,7 +4846,7 @@
       { class: "item", "aria-pressed": String(equipped), onclick: onPick },
       fig,
       h("span", { class: "item-name" }, item.name),
-      item.group === "truong" ? h("span", { class: "tag" }, item.collection === "hust-phuong-thao" ? "Phương Thảo" : "HUST") : null
+      item.group === "truong" ? h("span", { class: "tag" }, "HUST") : null
     );
   }
   async function busy(fn) {
@@ -4736,7 +4887,7 @@
     if (hasCollection) {
       parts.push(section(
         "Bộ sưu tập HUST",
-        segmented([["all", "Tất cả"], ["shop", "Đồng phục Phương Thảo"]], filter, (value) => {
+        segmented([["all", "Tất cả"], ["shop", "Đồng phục HUST"]], filter, (value) => {
           collectionFilter[slot.id] = value;
           renderPanel();
         }, "Lọc bộ sưu tập"),
@@ -4767,7 +4918,7 @@
     var _a;
     const rows = [];
     const base = catalog_default.items.find((i) => i.id === item.id);
-    if ((_a = base.source) == null ? void 0 : _a.url) rows.push(h("a", { href: base.source.url, target: "_blank", rel: "noopener noreferrer", class: "hint" }, "Xem mẫu tham khảo · May Phương Thảo ↗"));
+    if ((_a = base.source) == null ? void 0 : _a.url) rows.push(h("a", { href: base.source.url, target: "_blank", rel: "noopener noreferrer", class: "hint" }, "Xem mẫu tham khảo ↗"));
     if (base.fixedColors) rows.push(h("p", { class: "note" }, "Dây đeo và vỏ thẻ giữ màu đỏ theo mẫu HUST."));
     if (!base.fixedColors) rows.push(h(
       "div",
