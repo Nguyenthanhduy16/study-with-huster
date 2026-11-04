@@ -17,10 +17,13 @@ class Surface {
 }
 const windowEvents = new Surface(), document = new Surface(), canvas = new Surface(), joystick = new Surface();
 const knob = { style: {} }; joystick.querySelector = () => knob;
+// nhãn tên của người khác (nằm đè lên khung 3D): bắt đầu kéo trên nhãn vẫn phải xoay camera
+const labelsEl = new Surface(), tag = { classList: { contains: () => false }, isConnected: true, clicks: 0, click() { this.clicks++; } };
+tag.closest = sel => (sel === '.po-tag' ? tag : null);
 document.head = { appendChild() {} }; document.getElementById = () => joystick;
 const api = { yaw: 0, pitch: 0, keys: {} }, room = { kind: 'room', module: { api } };
 const sandbox = {
-  document, canvas, performance, Math, Map, console,
+  document, canvas, labelsEl, performance, Math, Map, console,
   addEventListener: windowEvents.addEventListener.bind(windowEvents),
   U: { clamp: (v, min, max) => Math.max(min, Math.min(max, v)), h: () => ({}) },
   me: { mode: 'walk' }, keys: { f: 0, b: 0, l: 0, r: 0, tl: 0, tr: 0, run: 0 },
@@ -74,4 +77,12 @@ const beforeFrozen = api.yaw; pointer('pointerdown', 300, 200); pointer('pointer
 run('frozen = false; me.mode = "campus"');
 pointer('pointerdown', 300, 200, { button: 2 }); pointer('pointermove', 400, 200, { button: 2 });
 assert(sandbox.cam.az < 0, 'right drag turns campus camera'); pointer('pointerup', 400, 200, { button: 2 }); assert.equal(sandbox.clicks, 0);
+run('me.mode = "walk"');
+const yawTag = api.yaw; key('keydown', 'KeyW');
+labelsEl.send('pointerdown', { target: tag, clientX: 300, clientY: 200 }); pointer('pointermove', 360, 200);
+assert(api.yaw > yawTag, 'kéo bắt đầu trên nhãn tên của người khác vẫn xoay camera khi đang giữ W');
+pointer('pointerup', 360, 200); assert.equal(tag.clicks, 0, 'kéo trên nhãn không mở hồ sơ'); assert.equal(api.keys.f, 1);
+labelsEl.send('pointerdown', { target: tag, clientX: 300, clientY: 200 }); pointer('pointerup', 301, 200);
+assert.equal(tag.clicks, 1, 'bấm nhanh trên nhãn vẫn mở hồ sơ'); assert.equal(sandbox.clicks, 0, 'bấm nhãn không thành bấm-để-đi');
+key('keyup', 'KeyW'); assert.equal(api.keys.f, 0);
 console.log('ĐẠT: đồng thời WASD + kéo chuột; hai ngón thu phóng; cần điều khiển + vuốt; không click nhầm; blur/chat/modal xoá đầu vào.');

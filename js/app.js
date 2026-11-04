@@ -654,17 +654,24 @@
       if (World.setAct(net.me.id, it.k)) toast(`${E.icon} ${E.label} — bước đi hoặc chọn "Dừng" để cất đi.`, '', 3500);
       else toast('Lúc này chưa làm được việc đó.');
     }
+    /* giữ Q / giữ nút: con trỏ nằm trên vòng → chọn đúng ô dưới con trỏ (tính từ TÂM vòng). Vòng bị đẩy vào trong khi
+       chuột/nút ở sát mép màn hình nên tâm vòng có thể lệch khỏi chỗ bắt đầu giữ — tính theo chỗ bắt đầu thì sáng nhầm ô bên cạnh.
+       Con trỏ ngoài vòng (vuốt nhanh từ nút ✋) → chọn theo hướng kéo tính từ chỗ bắt đầu giữ. */
     function moveHold(x, y) {
       if (!st || st.mode !== 'hold') return;
       if (Math.hypot(x - st.ax, y - st.ay) > 10) st.moved = true;
-      setSel(sectorAt(x - st.ax, y - st.ay, false));
+      const dc = Math.hypot(x - st.cx, y - st.cy);
+      if (dc < st.R * 0.38) { setSel(-1); return; }                        // giữa vòng = không chọn
+      const onRing = sectorAt(x - st.cx, y - st.cy, true);
+      setSel(onRing >= 0 ? onRing : st.moved ? sectorAt(x - st.ax, y - st.ay, false) : -1);
     }
-    /* thả: có ô đang sáng → chọn; bấm nhanh (theo thời điểm của sự kiện, không phụ thuộc khung hình chậm) → vòng đứng yên */
+    /* thả: bấm nhanh không rê (theo thời điểm của sự kiện, không phụ thuộc khung hình chậm) → vòng đứng yên;
+       có ô đang sáng → chọn; còn lại → đóng */
     function release(ts) {
       if (!st || st.mode !== 'hold') return;
       const quick = (ts == null ? performance.now() : ts) - st.t < 320 && !st.moved;
-      if (st.sel >= 0) choose(st.sel);
-      else if (quick) { st.mode = 'toggle'; hintText(); setSel(-1); hub.focus({ preventScroll: true }); }
+      if (quick) { st.mode = 'toggle'; hintText(); setSel(-1); hub.focus({ preventScroll: true }); }
+      else if (st.sel >= 0) choose(st.sel);
       else close();
     }
     /* ---- phím ---- */

@@ -642,15 +642,24 @@
     const orbiting = () => me.mode === 'campus' || me.mode === 'seat';
     const canLook = () => !observe && !frozen && !going && !camHold && (orbiting() || me.mode === 'walk');
     canvas.addEventListener('contextmenu', e => e.preventDefault());
-    canvas.addEventListener('pointerdown', e => {
+    const down = (e, tag) => {
       if (!canLook() || (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2)) return;
       canvas.focus?.({ preventScroll: true });
       try { canvas.setPointerCapture(e.pointerId); } catch (_) { }
-      pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, btn: e.button });
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, btn: e.button, tag });
       if (pts.size > 1) multi = true;
       if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: curDist() }; }
       e.preventDefault();
+    };
+    canvas.addEventListener('pointerdown', e => down(e, null));
+    /* nhãn tên / bong bóng của người khác và NPC nằm đè lên khung 3D (bấm vào để xem hồ sơ). Bắt đầu kéo trên nhãn vẫn phải
+       xoay được camera (nhất là khi đang giữ W/A/S/D giữa đám đông): kéo → xoay; bấm nhanh không kéo → mở như bấm vào nhãn. */
+    let tagLook = 0;
+    labelsEl.addEventListener('pointerdown', e => {
+      const tag = e.target.closest && e.target.closest('.po-tag');
+      if (tag && !tag.classList.contains('me')) down(e, tag);
     });
+    labelsEl.addEventListener('click', e => { if (e.isTrusted && performance.now() - tagLook < 500) e.stopPropagation(); }, true);
     canvas.addEventListener('pointermove', e => {
       const p = pts.get(e.pointerId);
       if (!p) { if (!pts.size && e.pointerType === 'mouse') hover(e); return; }
@@ -676,7 +685,9 @@
       const p = pts.get(e.pointerId); if (!p) return;
       pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
       try { canvas.releasePointerCapture(e.pointerId); } catch (_) { }
-      if (e.type === 'pointerup' && canLook() && !multi && !p.moved && p.btn === 0 && performance.now() - p.t < 600) click(e);
+      if (e.type === 'pointerup' && canLook() && !multi && !p.moved && p.btn === 0 && performance.now() - p.t < 600) {
+        if (p.tag) { tagLook = performance.now(); if (p.tag.isConnected) p.tag.click(); } else click(e);
+      }
       if (!pts.size) multi = false;
     };
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
@@ -1054,14 +1065,38 @@
     if (me.avatar && me.avatar.setDetail) me.avatar.setDetail(true);
     others.list = list;
   }
+  /* bong bóng chat nằm trên nhãn tên: màn hình thấp (điện thoại xoay ngang, cửa sổ nhỏ) hoặc camera nhìn từ dưới lên thì
+     bong bóng trồi lên tận thanh trên cùng và bị các thẻ HUD che mất. Dời cả nhãn xuống vừa đủ để bong bóng hiện dưới thẻ HUD
+     nằm phía trên nó (đè lên đầu nhân vật một chút còn hơn không đọc được). Kích thước nhãn chỉ đo lại khi nội dung đổi. */
+  let hudRects = [], hudT = 0;
+  function hudTop(now) {
+    if (now - hudT < 1000) return hudRects;
+    hudT = now;
+    hudRects = [...document.querySelectorAll('.po-top .po-card, .po-top-r > *')].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
+    return hudRects;
+  }
+  function keepBubbleVisible(el, px, py) {
+    const box = el.querySelector('.po-bubbles'), last = box && box.lastElementChild;
+    const key = (box ? box.children.length : 0) + ':' + (last ? last.textContent.length : 0) + ':' + el.lastElementChild.textContent.length;
+    if (el._szKey !== key) { el._szKey = key; el._sz = { w: el.offsetWidth, h: el.offsetHeight }; }
+    const { w, h } = el._sz, top = py - h;
+    let safe = 4;
+    for (const r of hudTop(performance.now())) if (r.left < px + w / 2 && r.right > px - w / 2 && r.bottom > safe) safe = r.bottom + 6;
+    return top < safe ? safe + h : py;
+  }
   function labels(camera) {
     const W = labelsEl.clientWidth, Hh = labelsEl.clientHeight, maxD = me.space === 'campus' ? 45 : 20;
+    // camera vừa được đặt lại trong khung hình này (placeCam/lookAt) nhưng ma trận chỉ được tính khi vẽ:
+    // tính ngay ở đây, nếu không nhãn tên + bong bóng chiếu theo camera của khung trước → trễ một khung, rung khi vừa đi vừa xoay
+    camera.updateMatrixWorld();
     const place = (el, obj, y, d, hide) => {
       if (hide || !obj.visible || d > maxD) { el.style.display = 'none'; return; }
       obj.getWorldPosition(tmp); tmp.y += y; tmp.project(camera);
       if (tmp.z > 1 || tmp.x < -1.2 || tmp.x > 1.2 || tmp.y < -1.2 || tmp.y > 1.2) { el.style.display = 'none'; return; }
       el.style.display = '';
-      el.style.transform = `translate(${((tmp.x + 1) / 2 * W).toFixed(1)}px,${((1 - tmp.y) / 2 * Hh).toFixed(1)}px) translate(-50%,-100%)`;
+      const px = (tmp.x + 1) / 2 * W; let py = (1 - tmp.y) / 2 * Hh;
+      if (el.classList.contains('talk')) py = keepBubbleVisible(el, px, py);
+      el.style.transform = `translate(${px.toFixed(1)}px,${py.toFixed(1)}px) translate(-50%,-100%)`;
       el.style.opacity = d > maxD * 0.7 && !el.classList.contains('talk') ? '0.55' : '1';
       // người gần đè lên người xa; ai đang nói thì bong bóng nổi lên trên mọi nhãn tên
       el.style.zIndex = String((el.classList.contains('talk') ? 3000 : 1000) - Math.round(d * 10));
