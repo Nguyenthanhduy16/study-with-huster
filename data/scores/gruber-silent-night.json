@@ -1,0 +1,570 @@
+{
+ "id": "gruber-silent-night",
+ "title": "Silent Night · Gruber",
+ "source": {
+  "kind": "public-domain-melody",
+  "note": "Giai điệu Stille Nacht của Franz Xaver Gruber (1818), thuộc phạm vi công cộng. Bản hai tay do dự án tự nhập."
+ },
+ "tempoBpm": 76,
+ "timeSignature": [
+  3,
+  4
+ ],
+ "ticksPerQuarter": 480,
+ "midiText": "Gruber - Stille Nacht (1818). Two-hand arrangement for Hoc Online Cung Huster, CC0.",
+ "performance": {
+  "rightVelocity": 80,
+  "leftVelocity": 54,
+  "pedal": false,
+  "note": "Tay phải giai điệu, tay trái đệm; lực phím do dự án chọn."
+ },
+ "measures": [
+  {
+   "number": 1,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 1.5
+    },
+    {
+     "pitch": "A4",
+     "beats": 0.5
+    },
+    {
+     "pitch": "G4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "right": [
+    {
+     "pitch": "E4",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 1.5
+    },
+    {
+     "pitch": "A4",
+     "beats": 0.5
+    },
+    {
+     "pitch": "G4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 4,
+   "right": [
+    {
+     "pitch": "E4",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 5,
+   "right": [
+    {
+     "pitch": "D5",
+     "beats": 2
+    },
+    {
+     "pitch": "D5",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G2",
+      "D3",
+      "B3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 6,
+   "right": [
+    {
+     "pitch": "B4",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G2",
+      "D3",
+      "B3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 7,
+   "right": [
+    {
+     "pitch": "C5",
+     "beats": 2
+    },
+    {
+     "pitch": "C5",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 8,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 9,
+   "right": [
+    {
+     "pitch": "A4",
+     "beats": 2
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "F2",
+      "C3",
+      "A3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 10,
+   "right": [
+    {
+     "pitch": "C5",
+     "beats": 1.5
+    },
+    {
+     "pitch": "B4",
+     "beats": 0.5
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "F2",
+      "C3",
+      "A3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 11,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 1.5
+    },
+    {
+     "pitch": "A4",
+     "beats": 0.5
+    },
+    {
+     "pitch": "G4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 12,
+   "right": [
+    {
+     "pitch": "E4",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 13,
+   "right": [
+    {
+     "pitch": "A4",
+     "beats": 2
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "F2",
+      "C3",
+      "A3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 14,
+   "right": [
+    {
+     "pitch": "C5",
+     "beats": 1.5
+    },
+    {
+     "pitch": "B4",
+     "beats": 0.5
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "F2",
+      "C3",
+      "A3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 15,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 1.5
+    },
+    {
+     "pitch": "A4",
+     "beats": 0.5
+    },
+    {
+     "pitch": "G4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 16,
+   "right": [
+    {
+     "pitch": "E4",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 17,
+   "right": [
+    {
+     "pitch": "D5",
+     "beats": 2
+    },
+    {
+     "pitch": "D5",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G2",
+      "D3",
+      "B3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 18,
+   "right": [
+    {
+     "pitch": "F5",
+     "beats": 1.5
+    },
+    {
+     "pitch": "D5",
+     "beats": 0.5
+    },
+    {
+     "pitch": "B4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G2",
+      "F3",
+      "B3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 19,
+   "right": [
+    {
+     "pitch": "C5",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 20,
+   "right": [
+    {
+     "pitch": "E5",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 21,
+   "right": [
+    {
+     "pitch": "C5",
+     "beats": 1.5
+    },
+    {
+     "pitch": "G4",
+     "beats": 0.5
+    },
+    {
+     "pitch": "E4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 22,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 1.5
+    },
+    {
+     "pitch": "F4",
+     "beats": 0.5
+    },
+    {
+     "pitch": "D4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G2",
+      "F3",
+      "B3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 23,
+   "right": [
+    {
+     "pitch": "C4",
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C3",
+      "E3",
+      "G3"
+     ],
+     "beats": 3
+    }
+   ]
+  },
+  {
+   "number": 24,
+   "right": [
+    {
+     "rest": true,
+     "beats": 3
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "C2",
+      "C3"
+     ],
+     "beats": 3
+    }
+   ]
+  }
+ ]
+}

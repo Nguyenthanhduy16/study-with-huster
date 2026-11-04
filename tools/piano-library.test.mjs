@@ -78,3 +78,18 @@ test('provided-score bytes in the library are reproducible from the verified fou
   assert.deepEqual(Buffer.from(entry.midiBase64, 'base64'), buildScoreMidi(score));
   assert.equal(Library.load(entry.id).duration, 10000);
 });
+
+test('two-hand public-domain arrangements are reproducible from data/scores and play without any import', () => {
+  const files = fs.readdirSync(new URL('../data/scores/', import.meta.url)).filter(f => f.endsWith('.json'));
+  assert.ok(files.length >= 2);
+  for (const f of files) {
+    const score = JSON.parse(read('data/scores/' + f)), entry = manifest.find(e => e.id === score.id);
+    assert.ok(entry && entry.builtin && !entry.userProvided, score.id + ' bundled');
+    assert.equal(entry.edition, 'data/scores/' + f);
+    assert.deepEqual(Buffer.from(entry.midiBase64, 'base64'), buildScoreMidi(score), score.id + ' bytes');
+    const song = Library.load(entry.id);
+    assert.ok(song.notes.length > 20 && song.timeline.length > song.notes.length, score.id + ' has melody and accompaniment');
+    const top = Math.min(...score.measures.flatMap(m => m.right.filter(n => !n.rest).map(n => n.pitch ? 1 : 0)));
+    assert.equal(top, 1, score.id + ' right hand is a single melody line');
+  }
+});

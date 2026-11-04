@@ -1,4 +1,4 @@
-// Reproducible SMF1 from the manually verified opening in the supplied score.
+// Reproducible SMF1 from a hand-entered two-hand score (data/*.json, data/scores/*.json).
 // Usage: node tools/build-score-midi.mjs [output.mid] [score.json]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -38,7 +38,7 @@ export function buildScoreMidi(score) {
     {tick: 0, order: 2, bytes: meta(88, [numerator, 2, 24, 8])},
     // SMF FF59 requires a major/minor choice. Preserve the written signature as
     // text instead of inventing a mode that the supplied page does not state.
-    {tick: 0, order: 3, bytes: meta(1, Buffer.from('Key signature: 6 flats; mode unspecified. Excerpt: page 1, measures 1-4.'))}
+    {tick: 0, order: 3, bytes: meta(1, Buffer.from(score.midiText || 'Key signature: 6 flats; mode unspecified. Excerpt: page 1, measures 1-4.'))}
   ];
   const tracks = [track(conductor, endTick)];
   for (const [hand, channel, velocity] of [['right', 0, score.performance.rightVelocity], ['left', 1, score.performance.leftVelocity]]) {
@@ -51,7 +51,7 @@ export function buildScoreMidi(score) {
         if (note.tieSegments && note.tieSegments.reduce((a, b) => a + b, 0) !== note.beats) throw new Error('Incorrect tied duration');
         const at = (index * numerator + beat) * ppq, off = at + note.beats * ppq;
         if (!Number.isInteger(at) || !Number.isInteger(off)) throw new Error('Duration cannot be represented exactly');
-        for (const pitch of note.pitches || [note.pitch]) {
+        for (const pitch of note.rest ? [] : note.pitches || [note.pitch]) {   // { rest: true, beats } = dấu lặng
           const n = pitchNumber(pitch);
           events.push({tick: at, order: 1, bytes: [144 | channel, n, velocity]}, {tick: off, order: 0, bytes: [128 | channel, n, 0]});
         }
