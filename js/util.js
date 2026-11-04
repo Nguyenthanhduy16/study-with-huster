@@ -31,7 +31,7 @@
     const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
   }));
   U.isTouch = matchMedia('(pointer: coarse)').matches;
-  U.isSmall = () => innerWidth < 720;
+  U.isSmall = () => innerWidth < 720 || innerHeight < 500;   // điện thoại xoay ngang cũng là màn hình nhỏ
 
   /* ---------- lưu trữ an toàn (có thể bị chặn ở chế độ riêng tư) ---------- */
   U.store = {

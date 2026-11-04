@@ -12,8 +12,8 @@
 <link rel="stylesheet" href="scene/tang10.css">
 <link rel="stylesheet" href="css/app.css">
 <script>
-  /* chất lượng đồ hoạ (Thấp/Vừa/Cao) — đọc trước khi dựng cảnh */
-  try { window.__SCENE_QUALITY = { low: { pr: 1, shadow: false }, mid: { pr: 1.5, shadow: true }, high: { pr: 2, shadow: true } }[JSON.parse(localStorage.getItem('pota:quality') || '"mid"')] || { pr: 1.5, shadow: true }; } catch (_) { window.__SCENE_QUALITY = { pr: 1.5, shadow: true }; }
+  /* chất lượng đồ hoạ (Thấp/Vừa/Cao) — đọc trước khi dựng cảnh; mặc định Thấp trên điện thoại/máy tính bảng cho mượt */
+  try { window.__SCENE_QUALITY = { low: { pr: 1, shadow: false }, mid: { pr: 1.5, shadow: true }, high: { pr: 2, shadow: true } }[JSON.parse(localStorage.getItem('pota:quality') || (matchMedia('(pointer: coarse)').matches ? '"low"' : '"mid"'))] || { pr: 1.5, shadow: true }; } catch (_) { window.__SCENE_QUALITY = { pr: 1.5, shadow: true }; }
 </script>
 </head>
 <body>

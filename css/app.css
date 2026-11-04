@@ -453,3 +453,75 @@ body.po-wheel-on .po-wheel-btn { background: var(--accent); color: var(--accent-
 
 .po-startup-error { max-width: 440px; margin: 18px auto 0; padding: 0 16px; }
 .po-startup-error p { line-height: 1.6; }
+
+/* =====================================================================
+   ĐIỆN THOẠI — bố cục gọn (đặt cuối file để ghi đè các quy tắc ở trên)
+   Dọc: thanh trên gọn 2 hàng vừa màn hình, thông báo hiện dưới thanh trên (không che cần điều khiển / nút ✋).
+   Ngang (chiều cao thấp): thanh trên 1 hàng, bảng bên là cột bên phải, cần điều khiển và nút ✋ sát đáy.
+   ===================================================================== */
+@media (max-width: 860px), (max-height: 500px) {
+  .po-brand .po-logo.sm, .po-brand .po-eyebrow, .po-brand .po-place { display: none; }
+  .po-brand { padding: 6px 12px; }
+  .po-meta { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+  .po-top-r { flex-wrap: nowrap; gap: 6px; min-width: 0; }
+  .po-stats, .po-tools { min-width: 0; padding: 3px; gap: 0; }
+  .po-stat { padding: 6px 7px; gap: 4px; }
+  .po-stat b { font-size: 14px; }
+  .po-ibtn { padding: 6px 7px; }
+  .po-ibtn span { font-size: 16px; }
+  /* thông báo ngắn: hiện trên cao, dưới thanh trên cùng — không đè cần điều khiển, nút ✋ */
+  .po-toasts { top: calc(118px + env(safe-area-inset-top, 0px)); bottom: auto; flex-direction: column; width: calc(100vw - 24px); max-width: 520px; }
+  .po-toast { font-size: 13px; padding: 9px 12px; }
+}
+@media (max-width: 380px) {
+  .po-stat { padding: 5px 5px; }
+  .po-ibtn { padding: 5px 5px; }
+  .po-stat b { font-size: 13px; }
+}
+/* điện thoại xoay ngang / cửa sổ thấp */
+@media (max-height: 500px) {
+  .po-top { flex-direction: row; align-items: flex-start; top: calc(6px + env(safe-area-inset-top, 0px)); }
+  .po-brand { flex: 0 1 auto; padding: 5px 10px; }
+  .po-zone { font-size: 13.5px; }
+  .po-meta { font-size: 10.5px; }
+  .po-top-r { justify-content: flex-end; }
+  .po-toasts { top: calc(58px + env(safe-area-inset-top, 0px)); width: min(60vw, 520px); }
+  .po-quiz, .po-quizchip, .po-notice { top: 58px; }
+  .po-quiz { max-height: calc(100% - 70px); }
+  /* bảng bên: cột bên phải thay cho tấm trượt từ dưới lên (chiều cao không đủ) */
+  .po-side { top: calc(6px + env(safe-area-inset-top, 0px)); bottom: calc(6px + env(safe-area-inset-bottom, 0px)); left: auto; right: max(6px, env(safe-area-inset-right));
+    height: auto; width: min(400px, 52vw); max-width: none; margin: 0; border-radius: 16px; z-index: 12; }
+  .po-side.closed { transform: translateX(calc(100% + 24px)); }
+  .po-tabs button { padding: 4px 2px; }
+  .po-tabs button span { font-size: 10px; }
+  .po-joy { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: 104px; height: 104px; }
+  .po-joy i { width: 42px; height: 42px; }
+  .po-wheel-btn { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: 54px; height: 54px; }
+  .po-mini, .po-mini-btn { top: calc(56px + env(safe-area-inset-top, 0px)); bottom: auto; left: auto; right: max(10px, env(safe-area-inset-right, 0px)); }
+  .po-mini canvas { width: 120px; height: 96px; }
+  .po-focusring { top: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); }
+  .po-ticker { display: none; }
+}
+@media (max-width: 860px), (max-height: 500px) {
+  /* bảng bên đang mở: ẩn cần điều khiển, nút ✋, bản đồ nhỏ để không đè lên bảng */
+  .po-hud:has(.po-side:not(.closed)) :is(.po-joy, .po-wheel-btn, .po-mini, .po-mini-btn) { display: none !important; }
+  /* soạn tin: câu mẫu thành một hàng vuốt ngang để ô nhập luôn hiện */
+  .po-tpls { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; max-height: none; padding-bottom: 2px; scrollbar-width: none; }
+  .po-tpls::-webkit-scrollbar { display: none; }
+  .po-compose .po-note { display: none; }
+  .po-compose-row .po-in { font-size: 16px; }   /* ≥ 16px: iPhone không tự phóng to khi gõ */
+}
+@media (max-height: 500px) {
+  /* bảng chat ở màn hình ngang: bỏ dòng giải thích, thu nhỏ khoảng cách để ô nhập luôn hiện */
+  .po-pane { padding: 8px 10px; gap: 6px; }
+  .po-pane[data-pane="chat"] > .po-muted.po-small, .po-tagbar > .po-muted { display: none; }
+  .po-chat { min-height: 40px; }
+  .po-seg button { padding: 4px 6px; }
+  .po-tabs { padding: 3px; }
+}
+/* laptop 861–1400px: thanh công cụ chỉ còn biểu tượng (có chú thích khi rê chuột) để không rớt xuống dòng thứ hai
+   và bị bảng bên đè lên */
+@media (min-width: 861px) and (max-width: 1400px) {
+  .po-ibtn em { display: none; }
+  .po-top-r { flex-wrap: nowrap; }
+}
