@@ -8,7 +8,9 @@ Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn th
 
 ## Đợt 3 — tiếp tục từ mã đã push (04/11/2026)
 
-- Giữ Phòng thay đồ mới đã tích hợp: 88 món, logo và thẻ HUST, tương thích dữ liệu trang phục cũ.
+- Phòng thay đồ có 89 món, logo và thẻ HUST, tương thích dữ liệu trang phục cũ. Tóc → **Đầu moi** có mái tỉa, hai bên sát và gáy mullet; đổi màu được. Nhãn đồng phục dùng HUST, bỏ tên Phương Thảo khỏi giao diện.
+- Sửa quần bị kéo theo chân đối diện và da xuyên qua khi bước/ngồi; tự khôi phục phần da lộ ra khi đổi quần ngắn/váy. Laptop cầm tay và laptop trong vòng hành động có logo quả táo phía sau.
+- Piano có danh mục Sơn Tùng M-TP và **Xe đạp**, dùng nút **Nhập MIDI (.mid)** để chọn tệp của bạn. Các bài này chỉ có tên trong danh mục, chưa kèm bản nhạc. MIDI được đọc tại máy, giữ tempo/hợp âm/sustain/velocity khi nghe mẫu; nốt phát tiếp tục đồng bộ cùng khu. Chế độ tập chọn nốt cao nhất mỗi nhịp xuất hiện, chưa chấm tiết tấu/hợp âm.
 - Di chuyển WASD đồng thời kéo chuột trái/phải; điện thoại dùng cần điều khiển và ngón tay xoay cảnh riêng. Gõ chat, mở vòng hành động, mất focus đều giải phóng phím di chuyển.
 - Bấm ghế để đi tới rồi ngồi, hoặc nhấn **E** cạnh ghế trống; hiệu chỉnh mặt ngồi và hướng theo loại ghế. Không dịch chuyển tới ghế khi sai tầng hoặc không tìm được đường; kiểm tra ghế lại lúc tới nơi.
 - Bỏ nút dịch chuyển ở thanh dưới. Tới khu khác qua cửa/thang máy/cầu thang; tìm người ở tầng khác chỉ hướng dẫn đường đi.

@@ -18,7 +18,7 @@ Hai nhánh `wip/ghe-ngoi-render` (63bcecb) và `wip/giao-dien-render` (3762e4b) 
 
 | Yêu cầu | Mã nguồn và kết quả |
 |---|---|
-| Phòng thay đồ mới | Bản mới đã có trong repo: avatar/src/, các bundle, ảnh logo, 88 món và phong-thay-do.html. Đã kiểm tra liên kết tài nguyên, giữ tích hợp và dữ liệu trang phục cũ. Không có hai tệp đính kèm mới để so sánh ngoài nguồn repo. |
+| Phòng thay đồ mới | Bản mới đã có trong repo: avatar/src/, các bundle, ảnh logo, 89 món và phong-thay-do.html. Đã kiểm tra liên kết tài nguyên, giữ tích hợp và dữ liệu trang phục cũ. Không có hai tệp đính kèm mới để so sánh ngoài nguồn repo. |
 | Di chuyển và camera | World sở hữu đầu vào khi nhúng cảnh. WASD + kéo chuột trái/phải; cần điều khiển + ngón vuốt riêng; hai ngón thu phóng. Reset khi gõ chat/mất focus/mở radial; tốc độ theo độ nghiêng cần điều khiển. |
 | Ngồi ghế | Căn vị trí hông/cao độ/hướng theo loại ghế. Đi tới điểm tiếp cận hợp lệ mới ngồi và kiểm tra ghế lại lúc đến. Không teleport khi sai tầng/không có đường. Xử lý phòng đầy, đứng dậy an toàn, giữ ghế NPC trước khi dựng NPC và tranh ghế đàn. |
 | Không dùng nút dịch chuyển | Thanh dưới chỉ giữ thao tác theo ngữ cảnh. Tới khu khác qua cửa/cầu thang/thang máy. Tìm bạn khác tầng/khu chỉ hướng dẫn; lỗi tìm đường không dùng dịch chuyển dự phòng. |
@@ -69,6 +69,19 @@ Nhánh WIP ghi nhận bài thử toàn bộ 491 chỗ ngồi đã tìm ra các v
 - Sân thượng: chậu cây góc giàn nằm ngay trước ghế dài. Đã sửa nguồn `tools/nguon/tang10.html` và tạo lại `scene/tang10.js`.
 
 ## Lệnh phát triển
+
+### Bổ sung theo ảnh và góp ý
+
+- **Quần khi đi:** giới hạn trọng số mỗi ống theo đúng chuỗi xương chân; ẩn tam giác da hoàn toàn nằm trong quần để tránh xuyên do lưới khác nhau. Tự khôi phục khi đổi độ dài/váy/bỏ quần, không ảnh hưởng tay và hình học dùng chung.
+- **Đầu moi:** thêm `toc-dau-moi` vào mục Tóc, mái ngắn tỉa, thái dương sát và gáy mullet dài; đổi màu và đội mũ được. Chưa kiểm tra trực quan trên GPU.
+- **Laptop:** logo quả táo dạng hình học ở mặt sau laptop cầm tay và laptop hành động, dùng chung hình học an toàn khi đổi trang phục.
+- **Nhãn đồng phục:** bỏ chữ Phương Thảo trên thẻ món, bộ lọc và dòng tham khảo trong giao diện phòng thay đồ độc lập/nhúng; giữ dữ liệu nguồn tham khảo trong catalog.
+- **Piano:** danh mục Em của ngày hôm qua, Chúng ta của hiện tại, Hãy trao cho anh (Sơn Tùng M-TP), Xe đạp. Các mục cần MIDI do người dùng nhập, không kèm giai điệu. Đọc tệp cục bộ; phát giữ tempo, hợp âm, ngân và lực phím, chia sẻ nốt qua mạng hiện có. Dừng khi rời đàn/ẩn tab. Tập theo chỉ chọn nốt cao nhất của mỗi thời điểm, chưa chấm nhịp/hợp âm.
+- `tools/avatar-clothing.test.mjs`: hình học Three thật, 3 thể hình/nhiều kiểu quần, chân đối diện, 575 phép so tia trong chu kỳ bước/ngồi không phát hiện da xuyên quá 3 mm; kiểm tra khôi phục da và logo.
+- `tools/hair-style.test.mjs`: 5 kiểm tra catalog/hình học, thái dương, mái, gáy, màu và mũ; không thay thế quan sát kiểu tóc thật.
+- `tools/piano-midi.test.mjs`: 9 kiểm tra đọc MIDI, giới hạn/tệp lỗi, tempo, sustain, lực phím, dừng phát và tích hợp nguồn tái tạo cảnh.
+
+### Chạy cục bộ
 
 - `npm start`: máy chủ ngoại tuyến, cổng 3000.
 - `npm run dev`: Supabase giả lập, cổng 3000; dùng ?nguoi=1, ?nguoi=2, ?nguoi=3 cho các phiên riêng. Không dùng làm backend production.
