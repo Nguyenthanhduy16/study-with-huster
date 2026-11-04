@@ -272,6 +272,9 @@ facadeTex.wrapS=facadeTex.wrapT=THREE.RepeatWrapping;
   fm.map.repeat.set(9,2);fm2.map.repeat.set(4,2);
   const b=new THREE.Mesh(new THREE.BoxGeometry(X1-X0+.6,-GY-.35,Z1-Z0+.6),[fm2,fm2,roofMat,roofMat,fm,fm]);b.position.y=GY/2-.18;scene.add(b);}
 
+// Only rooftop fixtures participate in the close camera sweep; exclude the distant city/sky.
+const roofCameraStart=scene.children.length;
+
 /* ---------- textures for the deck ---------- */
 function planks(base,var1,gap,len=1024){return canvasTex(len,512,(g,w,h)=>{const n=8,ph=h/n;
   for(let i=0;i<n;i++){let x=-R()*w*.5;while(x<w){const L=w*(.35+R()*.45);g.fillStyle=`hsl(${base[0]+R()*var1},${base[1]+R()*8}%,${base[2]-R()*7}%)`;g.fillRect(x,i*ph,L,ph);
@@ -496,6 +499,47 @@ for(const x of [-9.5,-1.5,6.5]){place('bench',x,0,-(WK+1.0),0);addRect(x,-(WK+1.
   addRect(15,-WK-1.15,1.05,.15);}
 
 buildProps();
+
+/* ---------- camera clearance: pergola beams, dark light strands and lift-house overhang ---------- */
+// Cache static fixture bounds once. Avatars are attached later and cannot obstruct their own camera.
+const cameraSolids=[],cameraMatrix=new THREE.Matrix4(),cameraInstanceBox=new THREE.Box3();
+scene.updateMatrixWorld(true);
+for(const root of scene.children.slice(roofCameraStart))root.traverse(o=>{
+  if(!(o.isMesh||o.isLine))return;
+  const mats=Array.isArray(o.material)?o.material:[o.material];
+  if(mats.some(m=>m.transparent||m.isShaderMaterial))return;
+  const bounds=new THREE.Box3();
+  if(o.isInstancedMesh){
+    o.geometry.computeBoundingBox();
+    for(let i=0;i<o.count;i++){o.getMatrixAt(i,cameraMatrix);cameraMatrix.premultiply(o.matrixWorld);
+      bounds.union(cameraInstanceBox.copy(o.geometry.boundingBox).applyMatrix4(cameraMatrix));}
+  }else bounds.setFromObject(o);
+  if(bounds.max.y<1.2||bounds.min.y>6)return;
+  cameraSolids.push({object:o,bounds:bounds.expandByScalar(.25)});
+});
+const cameraRay=new THREE.Raycaster();cameraRay.params.Line.threshold=.045;
+const cameraFocus=V(0,0,0),cameraDirection=V(0,0,0),cameraRight=V(0,0,0),cameraUp=V(0,0,0),cameraOrigin=V(0,0,0);
+const cameraSweepBox=new THREE.Box3(),cameraCandidates=[],cameraHits=[];
+function constrainCamera(c,tx,ty,tz){
+  cameraFocus.set(tx,ty,tz);cameraDirection.copy(c.position).sub(cameraFocus);
+  const distance=cameraDirection.length();if(distance<.08)return distance;
+  cameraDirection.multiplyScalar(1/distance);
+  const halfH=c.near*Math.tan(c.fov*PI/360),halfW=halfH*c.aspect,margin=Math.hypot(halfW,halfH)+.06;
+  cameraRight.set(1,0,0).applyQuaternion(c.quaternion);cameraUp.set(0,1,0).applyQuaternion(c.quaternion);
+  cameraSweepBox.makeEmpty().expandByPoint(cameraFocus).expandByPoint(c.position).expandByScalar(margin);
+  cameraCandidates.length=0;
+  for(const s of cameraSolids)if(s.bounds.intersectsBox(cameraSweepBox))cameraCandidates.push(s.object);
+  let safe=distance;cameraRay.near=.02;cameraRay.far=distance+margin;
+  // Centre + four corners sweep the near plane, not just the camera's centre point.
+  for(const [x,y] of [[0,0],[-halfW,-halfH],[-halfW,halfH],[halfW,-halfH],[halfW,halfH]]){
+    cameraOrigin.copy(cameraFocus).addScaledVector(cameraRight,x).addScaledVector(cameraUp,y);
+    cameraRay.set(cameraOrigin,cameraDirection);cameraHits.length=0;
+    cameraRay.intersectObjects(cameraCandidates,false,cameraHits);
+    if(cameraHits.length)safe=Math.min(safe,Math.max(.08,cameraHits[0].distance-margin));
+  }
+  if(safe<distance){c.position.copy(cameraFocus).addScaledVector(cameraDirection,safe);c.lookAt(cameraFocus);}
+  return safe;
+}
 
 /* ---------- lighting: dim blue night, warm pools of light ---------- */
 const hemi=new THREE.HemisphereLight(lin('#6c72c8'),lin('#2c1c2c'),.62);scene.add(hemi);
@@ -754,7 +798,7 @@ function seatList(){const out=[];
   {const {x,z,r,h}=SD,rb=r-.45;for(let i=0;i<6;i++){const th=.45+(i+.5)*(PI-.9)/6;out.push({x:x+rb*Math.sin(th),y:h,z:z+rb*Math.cos(th),ry:th+PI,kind:'bench'});}}
   return out;}
 Object.assign(ME,{group:scene,lights,floors:[0],
-  api:{camera,controls,scene,keys,KS,SD,MOUNT,X0,X1,Z0,Z1,
+  api:{camera,controls,scene,keys,KS,SD,MOUNT,X0,X1,Z0,Z1,constrainCamera,
     get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},
     getMode:()=>mode,busy:()=>!!tween,setNight:()=>{},blocked:(x,z)=>blocked(x,z),seats:seatList,
     ext:on=>{if(!on)return;if(mode==='scope'){closeScopeUI();camera.fov=FOV0;camera.updateProjectionMatrix();}mode='ext';tween=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove('walk');for(const k in keys)keys[k]=0;},

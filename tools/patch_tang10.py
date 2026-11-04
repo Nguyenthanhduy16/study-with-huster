@@ -88,7 +88,7 @@ function seatList(){const out=[];
   {const {x,z,r,h}=SD,rb=r-.45;for(let i=0;i<6;i++){const th=.45+(i+.5)*(PI-.9)/6;out.push({x:x+rb*Math.sin(th),y:h,z:z+rb*Math.cos(th),ry:th+PI,kind:'bench'});}}
   return out;}
 Object.assign(ME,{group:scene,lights,floors:[0],
-  api:{camera,controls,scene,keys,KS,SD,MOUNT,X0,X1,Z0,Z1,
+  api:{camera,controls,scene,keys,KS,SD,MOUNT,X0,X1,Z0,Z1,constrainCamera,
     get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},
     getMode:()=>mode,busy:()=>!!tween,setNight:()=>{},blocked:(x,z)=>blocked(x,z),seats:seatList,
     ext:on=>{if(!on)return;if(mode==='scope'){closeScopeUI();camera.fov=FOV0;camera.updateProjectionMatrix();}mode='ext';tween=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove('walk');for(const k in keys)keys[k]=0;},

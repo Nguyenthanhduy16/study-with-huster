@@ -105,6 +105,91 @@ test('song guide requires user MIDI for catalog, imports locally and routes play
   assert.equal($('#pb-demo').disabled, false, 'existing public-domain guide still usable');
 });
 
+function libraryGuide(library) {
+  const source = fs.readFileSync(new URL('../scene/hust3d.js', import.meta.url), 'utf8');
+  const guide = source.slice(source.indexOf('/* ---------- song guide ---------- */'), source.indexOf('/* sitting down and standing up */'));
+  const c = clock(), elements = new Map(), remote = [], local = [], documentListeners = {};
+  const element = () => ({ hidden: false, value: '', style: {}, classList: { add() {}, remove() {} }, listeners: {}, children: [],
+    addEventListener(type, cb) { this.listeners[type] = cb; }, setAttribute() {}, replaceChildren(...items) { this.children = items; this.options = items; },
+    append(...items) { this.children.push(...items); }, blur() {}, click() { this.clicked = true; }, fire(type) { return this.listeners[type](); } });
+  const $ = id => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); };
+  const context = { window: { PianoMidi: { ...Midi, createPlayer: options => Midi.createPlayer({ ...options, ...c }) }, PianoLibrary: library, __PIANO_NET: { out: e => remote.push(e) } },
+    document: { hidden: false, addEventListener(type, cb) { documentListeners[type] = cb; }, createElement: element },
+    URL, Option: function (text, value) { return { text, value }; }, $, keyEls: {}, PIANO: { userData: { keys: {} } },
+    SOLF: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'], shift: 0, held: {},
+    box() {}, mat() {}, mk: () => ({ position: { set() {} } }), keyFor: String, buildKeys() {}, audio() {}, pressVisual() {},
+    noteOn: (m, v) => local.push(['d', m, v]), noteOff: m => local.push(['u', m]), setTimeout: c.setTimeout, clearTimeout: c.clearTimeout };
+  vm.runInNewContext([...source.matchAll(/^function (?:keyDown|keyUp|releaseAll|pnOut)\([^\n]+/gm)].map(m => m[0]).join('\n') + '\n' + guide, context);
+  return { c, $, remote, local, context, documentListeners };
+}
+
+test('bundled classical selection loads lazily, offers practice, plays chords and releases shared keys on stop', () => {
+  let calls = 0;
+  const parsed = Midi.parse(chordFile());
+  const entry = { id: 'classical-fixture', name: 'Classical test excerpt', builtin: true, source: 'https://example.org/midi', license: 'CC0', licenseUrl: 'https://creativecommons.org/publicdomain/zero/1.0/', credit: 'Fixture transcription' };
+  const library = { entries: [entry], load(id) { calls++; assert.equal(id, entry.id); return { notes: parsed.melody, timeline: parsed.timeline, duration: parsed.duration }; } };
+  const { c, $, remote, local, context } = libraryGuide(library);
+  assert.equal(calls, 0, 'startup must not parse every bundled song');
+  assert.match($('#pb-midi-status').textContent, /cổ điển có sẵn/);
+  assert.match($('#pb-song').options[7].text, /có sẵn/);
+  $('#pb-song').value = '6'; $('#pb-song').fire('change');
+  assert.equal(calls, 1); assert.equal($('#pb-demo').disabled, false);
+  assert.match($('#pb-stat').textContent, /Bấm phím 64/);
+  assert.equal($('#pb-midi-credit').hidden, false);
+  assert.equal($('#pb-midi-credit').children[0], entry.credit);
+  const links = $('#pb-midi-credit').children.filter(x => x && typeof x === 'object');
+  assert.deepEqual(links.map(x => [x.textContent, x.href, x.rel]), [['Nguồn bản nhạc', entry.source, 'noopener noreferrer'], ['CC0', entry.licenseUrl, 'noopener noreferrer']]);
+  context.keyDown(64); context.keyUp(64);
+  assert.match($('#pb-stat').textContent, /Bấm phím 67/, 'practice uses bundled melody without an imported file');
+  remote.length = 0; local.length = 0;
+  $('#pb-demo').fire('click'); c.advance(300);
+  assert.deepEqual(local.map(e => e.slice(0, 2)), [['d', 64], ['d', 60]]);
+  assert.deepEqual(remote.map(e => [e.t, e.m, e.v]), [['d', 64, 90 / 127], ['d', 60, 100 / 127]], 'bundled playback traverses actual network note handler');
+  $('#pb-song').value = ''; $('#pb-song').fire('change');
+  assert.deepEqual(remote.slice(2).map(e => [e.t, e.m]), [['u', 64], ['u', 60]], 'switching away releases both chord keys for peers');
+  const count = remote.length; c.advance(5000); assert.equal(remote.length, count, 'cancelled song cannot send delayed notes');
+  $('#pb-song').value = '6'; $('#pb-song').fire('change'); assert.equal(calls, 1, 'subsequent selection reuses parsed song');
+  $('#pb-learn').fire('click');
+  assert.match($('#pb-stat').textContent, /Bấm phím 64/);
+  $('#pb-song').value = '7'; $('#pb-song').fire('change');
+  assert.equal($('#pb-demo').disabled, true, 'modern catalog still requires personal MIDI');
+  assert.equal($('#pb-midi-credit').hidden, true);
+});
+
+test('failed bundled load is recoverable, unsafe credit URLs stay inert, local import remains usable', async () => {
+  const { $, context } = libraryGuide({ entries: [{ id: 'bad', name: '<script>literal</script>', source: 'javascript:alert(1)', license: '<b>license</b>', licenseUrl: 'data:text/html,unsafe', credit: '<img src=x>' }], load() { throw new Error('Missing embedded MIDI'); } });
+  $('#pb-song').value = '6'; assert.doesNotThrow(() => $('#pb-song').fire('change'));
+  assert.equal($('#pb-demo').disabled, true); assert.match($('#pb-stat').textContent, /Missing embedded MIDI/);
+  assert.equal($('#pb-midi-credit').children.filter(x => x && typeof x === 'object').length, 0);
+  assert.equal($('#pb-midi-credit').children[0], '<img src=x>');
+  $('#pb-midi-import').fire('click'); assert.equal($('#pb-midi-file').clicked, true);
+  const data = chordFile(); $('#pb-midi-file').files = [{ name: 'recovery.mid', size: data.length, arrayBuffer: async () => data }];
+  await $('#pb-midi-file').fire('change'); assert.equal($('#pb-demo').disabled, false);
+  assert.equal($('#pb-midi-credit').hidden, true);
+  assert.doesNotThrow(() => context.keyDown(64));
+});
+
+test('a user-provided score replaces its matching modern placeholder without hiding other import-only songs', () => {
+  const catalogName = Midi.CATALOG.find(s => s.name.startsWith('Hãy trao cho anh')).name;
+  const parsed = Midi.parse(chordFile());
+  const provided = { id: 'user-score-fixture', name: catalogName + ' · 4 ô nhịp từ bản bạn gửi', catalogName, userProvided: true, builtin: true,
+    source: 'https://example.org/provided-score.pdf', credit: 'Bản nhạc do bạn cung cấp', license: 'Tệp do người dùng cung cấp' };
+  let calls = 0;
+  const { $, c, local } = libraryGuide({ entries: [provided], load(id) { calls++; assert.equal(id, provided.id); return { notes: parsed.melody, timeline: parsed.timeline, duration: parsed.duration }; } });
+  const options = $('#pb-song').options;
+  assert.equal(options.length, 11, 'free play + six original melodies + supplied score + remaining three catalog songs');
+  assert.equal(options.filter(o => o.text.includes('Hãy trao cho anh')).length, 1);
+  for (const other of Midi.CATALOG.filter(s => s.name !== catalogName)) assert(options.some(o => o.text === other.name + ' · cần MIDI'));
+  $('#pb-song').value = '6'; $('#pb-song').fire('change');
+  assert.equal(calls, 1); assert.equal($('#pb-demo').disabled, false);
+  assert.match($('#pb-midi-status').textContent, /^Bản MIDI có sẵn/);
+  const source = $('#pb-midi-credit').children.find(x => x && typeof x === 'object');
+  assert.equal(source.textContent, 'Nguồn bản nhạc'); assert.equal(source.href, provided.source);
+  $('#pb-demo').fire('click'); c.advance(300);
+  assert.deepEqual(local.map(e => e.slice(0, 2)), [['d', 64], ['d', 60]]);
+  $('#pb-song').value = ''; $('#pb-song').fire('change');
+});
+
 test('generator MIDI guide and DOM injection exactly match shipped assets and are idempotent', () => {
   const result = spawnSync('python3', ['-c', `import ast,json,pathlib
 source=pathlib.Path('tools/patch_scene.py').read_text();t=ast.parse(source); values={}
@@ -114,6 +199,8 @@ hook=source[source.index('# ---------- móc 7:'):source.index('# Tự chạy khi
 state={'js':'prefix;const NI={C:0,D:2,E:4,F:5,G:7,A:9,B:11};oldGuide();buildKeys();renderLane();suffix;', 'dom':'  <div class="pb-guide" id="pb-guide" hidden>', 'errors':[]}
 exec(hook,state);once=(state['js'],state['dom']);exec(hook,state)
 assert not state['errors'] and once==(state['js'],state['dom'])
+legacy={'js':'const NI={C:0,D:2,E:4,F:5,G:7,A:9,B:11};/* [midi-library] Named songs */oldGuide();buildKeys();renderLane();','dom':'  <div class="pb-row" data-midi-library><input id="pb-midi-file"></div>\\n', 'errors':[], 're':__import__('re')}
+exec(hook,legacy);assert not legacy['errors'] and 'id="pb-midi-credit"' in legacy['dom'] and '[midi-library-v2]' in legacy['js']
 print(json.dumps(values))`], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   const { MIDI_GUIDE, MIDI_DOM } = JSON.parse(result.stdout);

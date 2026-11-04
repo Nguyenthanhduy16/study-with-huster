@@ -1,0 +1,78 @@
+{
+  "id": "hay-trao-cho-anh-opening-4-bars",
+  "title": "Hãy trao cho anh — trích đoạn 4 ô nhịp đầu",
+  "source": {
+    "kind": "user-provided-score",
+    "filename": "htca.pdf",
+    "page": 1,
+    "system": 1,
+    "measures": [1, 2, 3, 4],
+    "note": "Chép thủ công từ bản PDF người dùng cung cấp; không phải toàn bài. Không kèm PDF gốc, không khẳng định giấy phép công cộng."
+  },
+  "tempoBpm": 96,
+  "timeSignature": [4, 4],
+  "keySignature": {
+    "flats": 6,
+    "alteredNotes": ["Bb", "Eb", "Ab", "Db", "Gb", "Cb"],
+    "mode": "unspecified",
+    "note": "Dấu hóa 6 giáng; bản phổ không ghi rõ trưởng/thứ. Cao độ MIDI ghi trực tiếp, không tự chọn mode."
+  },
+  "ticksPerQuarter": 480,
+  "performance": {
+    "rightVelocity": 82,
+    "leftVelocity": 60,
+    "pedal": false,
+    "note": "Giữ đủ trường độ ghi trên phổ, gộp nốt nối; không tự thêm pedal hay rubato. Cường độ hai tay là lựa chọn phát lại vì phổ không ghi dynamics."
+  },
+  "measures": [
+    {
+      "number": 1,
+      "right": [
+        {"pitch": "Eb5", "beats": 0.75},
+        {"pitch": "Bb5", "beats": 0.75, "tieSegments": [0.25, 0.5]},
+        {"pitch": "Gb5", "beats": 0.5},
+        {"pitch": "Gb5", "beats": 0.75},
+        {"pitch": "F5", "beats": 0.75, "tieSegments": [0.25, 0.5]},
+        {"pitch": "Gb5", "beats": 0.5}
+      ],
+      "left": [{"pitches": ["Eb3", "Bb3"], "beats": 4}]
+    },
+    {
+      "number": 2,
+      "right": [
+        {"pitch": "Eb5", "beats": 0.75},
+        {"pitch": "Bb5", "beats": 0.75, "tieSegments": [0.25, 0.5]},
+        {"pitch": "Gb5", "beats": 0.5},
+        {"pitch": "Gb5", "beats": 1},
+        {"pitch": "Gb5", "beats": 0.5},
+        {"pitch": "F5", "beats": 0.5}
+      ],
+      "left": [{"pitches": ["Cb3", "Gb3"], "beats": 4}]
+    },
+    {
+      "number": 3,
+      "right": [
+        {"pitch": "Eb5", "beats": 0.75},
+        {"pitch": "Bb5", "beats": 0.75, "tieSegments": [0.25, 0.5]},
+        {"pitch": "Gb5", "beats": 0.5},
+        {"pitch": "Gb5", "beats": 0.75},
+        {"pitch": "F5", "beats": 0.75, "tieSegments": [0.25, 0.5]},
+        {"pitch": "Gb5", "beats": 0.5}
+      ],
+      "left": [{"pitches": ["Ab2", "Eb3"], "beats": 4}]
+    },
+    {
+      "number": 4,
+      "right": [
+        {"pitch": "F5", "beats": 0.75},
+        {"pitch": "F5", "beats": 0.75, "tieSegments": [0.25, 0.5]},
+        {"pitch": "Gb5", "beats": 0.5},
+        {"pitch": "Ab5", "beats": 0.5},
+        {"pitch": "Bb4", "beats": 0.5},
+        {"pitch": "Gb5", "beats": 0.5},
+        {"pitch": "F5", "beats": 0.5}
+      ],
+      "left": [{"pitches": ["Bb2", "F3"], "beats": 4}]
+    }
+  ]
+}
