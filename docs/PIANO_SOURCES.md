@@ -1,6 +1,6 @@
 # Nhạc có sẵn trong đàn
 
-Chọn bài trong danh sách ở đàn tầng 6, rồi bấm **Nghe mẫu** hoặc **Tập theo**. Không cần nhập tệp. Sáu giai điệu mẫu cũ vẫn giữ; thư viện mới có 9 bản cổ điển và 1 trích đoạn từ PDF người dùng gửi.
+Chọn bài trong danh sách ở đàn tầng 6, rồi bấm **Nghe mẫu** hoặc **Tập theo**. Không cần nhập tệp. Sáu giai điệu mẫu cũ vẫn giữ; thư viện có 9 bản cổ điển Mutopia, 2 bản hai tay tự nhập từ giai điệu công cộng và 1 trích đoạn từ PDF người dùng gửi. Không bài nào trong danh sách bắt nhập MIDI.
 
 MIDI gốc được lưu nguyên byte dưới dạng Base64 trong `data/piano-library.json`, kèm SHA-256, nguồn, người soạn bản số và thông tin giấy phép. `node tools/build-piano-library.mjs` tạo `js/piano-library.js`; trình duyệt chỉ giải mã/đọc bản được chọn, không gọi máy chủ ngoài để phát nhạc. Bản dựng hiện tại chứa 67.656 byte MIDI trước Base64.
 
@@ -32,7 +32,17 @@ Người dùng cung cấp `htca.pdf` (3 trang). Thư viện chỉ chép **trang 
 
 Bản nguồn do người dùng gửi, không được gán nhãn Public Domain hoặc Creative Commons. PDF gốc không nằm trong repo. Dữ liệu chép ở `data/hay-trao-cho-anh-excerpt.json`; `tools/build-score-midi.mjs` tạo MIDI tái lập được. Mã SHA-256 của PDF nguồn và MIDI nằm trong catalog để đối chiếu; kiểm thử so byte MIDI sinh ra với bản nhúng.
 
-Bản này thay đúng mục “Hãy trao cho anh” trước đây chỉ có tên và yêu cầu nhập MIDI. Ba mục hiện đại khác vẫn cần tệp do người dùng cung cấp.
+Bản này thay đúng mục “Hãy trao cho anh” trước đây chỉ có tên và yêu cầu nhập MIDI. Trong đàn không hiện dòng ghi công/nguồn cho bài này; thông tin nguồn chỉ ghi ở tài liệu này. Ba tên hiện đại khác (Em của ngày hôm qua, Chúng ta của hiện tại, Xe đạp) đã bỏ khỏi danh sách vì không có bản nhạc được phép nhúng; muốn thêm bài, gửi bản phổ để chép như bài này, hoặc dùng nút Nhập MIDI.
+
+## Bản hai tay từ giai điệu công cộng
+
+Hai bản dưới đây do dự án tự nhập nốt (tay phải giai điệu, tay trái đệm), không chép từ bản phối hay bản ghi âm nào. Giai điệu gốc đã thuộc phạm vi công cộng; bản hai tay phát hành theo [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Dữ liệu nốt ở `data/scores/*.json`, dựng MIDI bằng `node tools/build-score-midi.mjs <ra.mid> <bản.json>`; kiểm thử so byte MIDI sinh ra với bản nhúng.
+
+<a id="canon-in-d"></a>
+- **Canon in D · Pachelbel** (~1680): Rê trưởng, 4/4, 66 BPM, 17 ô nhịp. Bè trầm lặp 4 lần; giai điệu mở đầu nốt trắng rồi biến tấu nốt đen, kết ở Rê.
+
+<a id="silent-night"></a>
+- **Silent Night · Gruber** (Stille Nacht, 1818): chuyển về Đô trưởng, 3/4, 76 BPM, 24 ô nhịp, đủ một lời. Tay trái hợp âm C/F/G/G7.
 
 ## Cập nhật thư viện
 
