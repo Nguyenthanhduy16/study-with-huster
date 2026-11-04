@@ -1,0 +1,570 @@
+{
+ "id": "pachelbel-canon-d",
+ "title": "Canon in D · Pachelbel",
+ "source": {
+  "kind": "public-domain-melody",
+  "note": "Giai điệu và bè trầm của Johann Pachelbel (~1680), tác phẩm thuộc phạm vi công cộng. Bản hai tay rút gọn do dự án tự nhập."
+ },
+ "tempoBpm": 66,
+ "timeSignature": [
+  4,
+  4
+ ],
+ "ticksPerQuarter": 480,
+ "midiText": "Pachelbel - Canon in D (ground bass + opening and quarter-note variation). Two-hand arrangement for Hoc Online Cung Huster, CC0.",
+ "performance": {
+  "rightVelocity": 80,
+  "leftVelocity": 54,
+  "pedal": false,
+  "note": "Tay phải giai điệu, tay trái đệm; lực phím do dự án chọn."
+ },
+ "measures": [
+  {
+   "number": 1,
+   "right": [
+    {
+     "pitch": "F#5",
+     "beats": 2
+    },
+    {
+     "pitch": "E5",
+     "beats": 2
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "D2",
+      "D3"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "A1",
+      "A2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "right": [
+    {
+     "pitch": "D5",
+     "beats": 2
+    },
+    {
+     "pitch": "C#5",
+     "beats": 2
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "B1",
+      "B2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "F#1",
+      "F#2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "right": [
+    {
+     "pitch": "B4",
+     "beats": 2
+    },
+    {
+     "pitch": "A4",
+     "beats": 2
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G1",
+      "G2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "D2",
+      "D3"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 4,
+   "right": [
+    {
+     "pitch": "B4",
+     "beats": 2
+    },
+    {
+     "pitch": "C#5",
+     "beats": 2
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G1",
+      "G2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "A1",
+      "A2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 5,
+   "right": [
+    {
+     "pitch": "D5",
+     "beats": 2
+    },
+    {
+     "pitch": "C#5",
+     "beats": 2
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "D2",
+      "D3"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "A1",
+      "A2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 6,
+   "right": [
+    {
+     "pitch": "B4",
+     "beats": 2
+    },
+    {
+     "pitch": "A4",
+     "beats": 2
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "B1",
+      "B2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "F#1",
+      "F#2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 7,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 2
+    },
+    {
+     "pitch": "F#4",
+     "beats": 2
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G1",
+      "G2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "D2",
+      "D3"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 8,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 2
+    },
+    {
+     "pitch": "E4",
+     "beats": 2
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G1",
+      "G2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "A1",
+      "A2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 9,
+   "right": [
+    {
+     "pitch": "D4",
+     "beats": 1
+    },
+    {
+     "pitch": "F#4",
+     "beats": 1
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    },
+    {
+     "pitch": "G4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "D2",
+      "D3"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "A1",
+      "A2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 10,
+   "right": [
+    {
+     "pitch": "F#4",
+     "beats": 1
+    },
+    {
+     "pitch": "D4",
+     "beats": 1
+    },
+    {
+     "pitch": "F#4",
+     "beats": 1
+    },
+    {
+     "pitch": "E4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "B1",
+      "B2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "F#1",
+      "F#2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 11,
+   "right": [
+    {
+     "pitch": "D4",
+     "beats": 1
+    },
+    {
+     "pitch": "B3",
+     "beats": 1
+    },
+    {
+     "pitch": "D4",
+     "beats": 1
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G1",
+      "G2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "D2",
+      "D3"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 12,
+   "right": [
+    {
+     "pitch": "G4",
+     "beats": 1
+    },
+    {
+     "pitch": "B4",
+     "beats": 1
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    },
+    {
+     "pitch": "G4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G1",
+      "G2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "A1",
+      "A2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 13,
+   "right": [
+    {
+     "pitch": "F#4",
+     "beats": 1
+    },
+    {
+     "pitch": "D4",
+     "beats": 1
+    },
+    {
+     "pitch": "E4",
+     "beats": 1
+    },
+    {
+     "pitch": "C#5",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "D2",
+      "D3"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "A1",
+      "A2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 14,
+   "right": [
+    {
+     "pitch": "D5",
+     "beats": 1
+    },
+    {
+     "pitch": "F#5",
+     "beats": 1
+    },
+    {
+     "pitch": "A5",
+     "beats": 1
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "B1",
+      "B2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "F#1",
+      "F#2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 15,
+   "right": [
+    {
+     "pitch": "B4",
+     "beats": 1
+    },
+    {
+     "pitch": "G4",
+     "beats": 1
+    },
+    {
+     "pitch": "A4",
+     "beats": 1
+    },
+    {
+     "pitch": "F#4",
+     "beats": 1
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G1",
+      "G2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "D2",
+      "D3"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 16,
+   "right": [
+    {
+     "pitch": "D4",
+     "beats": 1
+    },
+    {
+     "pitch": "D5",
+     "beats": 1
+    },
+    {
+     "pitch": "D5",
+     "beats": 1.5
+    },
+    {
+     "pitch": "C#5",
+     "beats": 0.5
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "G1",
+      "G2"
+     ],
+     "beats": 2
+    },
+    {
+     "pitches": [
+      "A1",
+      "A2"
+     ],
+     "beats": 2
+    }
+   ]
+  },
+  {
+   "number": 17,
+   "right": [
+    {
+     "pitch": "D5",
+     "beats": 4
+    }
+   ],
+   "left": [
+    {
+     "pitches": [
+      "D2",
+      "D3",
+      "A3"
+     ],
+     "beats": 4
+    }
+   ]
+  }
+ ]
+}

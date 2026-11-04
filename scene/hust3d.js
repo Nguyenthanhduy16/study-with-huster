@@ -1854,12 +1854,10 @@ const SONGS=[
 ];
 const NI={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
 SONGS.forEach(sg=>sg.notes=sg.n.split(/\s+/).map(t=>{const [nm,d]=t.split(':');const mm=/^([A-G])(#?)(\d)$/.exec(nm);return {m:12*(+mm[3]+1)+NI[mm[1]]+(mm[2]?1:0),d:d?+d:1};}));
-/* [midi-library-v2] Classical MIDIs are bundled; modern catalog titles require a personal MIDI. */
+/* [midi-library-v2] Classical MIDIs are bundled; every listed song plays without importing a file (Nhập MIDI is optional). */
 const MIDI=window.PianoMidi,LIBRARY=window.PianoLibrary;
 const libraryReady=!!(LIBRARY&&Array.isArray(LIBRARY.entries)&&typeof LIBRARY.load==='function');
-if(libraryReady)SONGS.push(...LIBRARY.entries.map(s=>({id:s.id,name:s.name,builtin:true,source:s.source,license:s.license,licenseUrl:s.licenseUrl,credit:s.credit,notes:[]})));
-const providedCatalog=new Set(libraryReady?LIBRARY.entries.map(s=>s.catalogName).filter(Boolean):[]);
-if(MIDI)SONGS.push(...MIDI.CATALOG.filter(s=>!providedCatalog.has(s.name)).map(s=>({name:s.name,requiresMidi:true,notes:[]})));
+if(libraryReady)SONGS.push(...LIBRARY.entries.map(s=>({id:s.id,name:s.name,builtin:true,source:s.source,license:s.license,licenseUrl:s.licenseUrl,credit:s.credit,userProvided:!!s.userProvided,notes:[]})));
 const songSel=$('#pb-song');
 function refreshSongs(){songSel.replaceChildren(new Option('Chơi tự do',''),...SONGS.map((sg,i)=>new Option(sg.name+(sg.builtin?' · có sẵn':sg.requiresMidi?' · cần MIDI':sg.timeline?' · MIDI đã nhập':''),String(i))));}
 refreshSongs();
@@ -1896,9 +1894,9 @@ songSel.addEventListener('change',()=>{stopDemo();song=songSel.value===''?null:S
   startSong();songSel.blur();});
 const midiInput=$('#pb-midi-file'),midiStatus=$('#pb-midi-status'),midiCredit=$('#pb-midi-credit');let importVersion=0;
 function sourceLink(text,value){try{const url=new URL(value);if(!/^https?:$/.test(url.protocol))return null;const a=document.createElement('a');a.textContent=text;a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';return a;}catch(_){return null;}}
-function showSongInfo(){midiCredit.replaceChildren();midiCredit.hidden=!(song&&song.builtin);
+function showSongInfo(){midiCredit.replaceChildren();midiCredit.hidden=!(song&&song.builtin&&!song.userProvided);
   if(song&&song.builtin){midiStatus.textContent=song.loadError||'Bản MIDI có sẵn · chọn “Nghe mẫu” để nghe, hoặc “Tập theo” để chơi từng nốt.';
-    if(song.credit)midiCredit.append(String(song.credit));const source=sourceLink('Nguồn bản nhạc',song.source),license=sourceLink(song.license||'Giấy phép',song.licenseUrl);if(source)midiCredit.append(' · ',source);if(license)midiCredit.append(' · ',license);else if(song.license)midiCredit.append(' · '+String(song.license));}
+    if(!song.userProvided){if(song.credit)midiCredit.append(String(song.credit));const source=sourceLink('Nguồn bản nhạc',song.source),license=sourceLink(song.license||'Giấy phép',song.licenseUrl);if(source)midiCredit.append(' · ',source);if(license)midiCredit.append(' · ',license);else if(song.license)midiCredit.append(' · '+String(song.license));}}
   else if(song&&song.requiresMidi)midiStatus.textContent='Bài này cần MIDI của bạn · chọn “Nhập MIDI” để thêm. Tệp chỉ đọc trên máy; nốt được chia sẻ khi phát.';
   else if(song&&song.timeline)midiStatus.textContent='MIDI đã nhập trong phiên này · chọn “Nghe mẫu” để phát.';
   else midiStatus.textContent=libraryReady?'Các bản cổ điển có sẵn trong danh sách · chọn một bài rồi bấm “Nghe mẫu”, không cần tải tệp.':'Chưa tải được thư viện cổ điển. Bạn vẫn có thể chơi bài mẫu hoặc nhập MIDI.';}

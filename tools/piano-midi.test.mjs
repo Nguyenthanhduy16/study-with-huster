@@ -77,7 +77,7 @@ test('actual piano key hook preserves imported velocity locally and across the n
   assert.deepEqual(remote.map(e => e.v), [.25, .78]);
 });
 
-test('song guide requires user MIDI for catalog, imports locally and routes playback through existing keys', async () => {
+test('song guide lists no import-only songs; optional local import routes playback through existing keys', async () => {
   const source = fs.readFileSync(new URL('../scene/hust3d.js', import.meta.url), 'utf8');
   const guideSource = source.slice(source.indexOf('/* ---------- song guide ---------- */'), source.indexOf('/* sitting down and standing up */'));
   const c = clock(), elements = new Map(), keys = [], velocities = [], documentListeners = {};
@@ -89,9 +89,8 @@ test('song guide requires user MIDI for catalog, imports locally and routes play
     box() {}, mat() {}, mk: () => ({ position: { set() {} } }), keyFor: String, buildKeys() {}, audio() {}, releaseAll() {},
     keyDown: (m, v) => { keys.push(['d', m]); velocities.push(v); }, keyUp: m => keys.push(['u', m]), setTimeout: c.setTimeout, clearTimeout: c.clearTimeout };
   vm.runInNewContext(guideSource, context);
-  assert.equal($('#pb-song').options.length, 11, 'six existing melodies plus four named metadata entries');
-  $('#pb-song').value = '6'; $('#pb-song').fire('change');
-  assert.equal($('#pb-demo').disabled, true); assert.match($('#pb-stat').textContent, /MIDI/);
+  assert.equal($('#pb-song').options.length, 7, 'free play + six existing melodies; no "cần MIDI" placeholders');
+  assert(!$('#pb-song').options.some(o => /cần MIDI/.test(o.text)));
   const data = chordFile(); $('#pb-midi-file').files = [{ name: 'my-song.mid', size: data.length, arrayBuffer: async () => data }];
   await $('#pb-midi-file').fire('change');
   assert.equal($('#pb-demo').disabled, false); assert.equal($('#pb-song').value, '6');
@@ -151,8 +150,9 @@ test('bundled classical selection loads lazily, offers practice, plays chords an
   $('#pb-song').value = '6'; $('#pb-song').fire('change'); assert.equal(calls, 1, 'subsequent selection reuses parsed song');
   $('#pb-learn').fire('click');
   assert.match($('#pb-stat').textContent, /Bấm phím 64/);
-  $('#pb-song').value = '7'; $('#pb-song').fire('change');
-  assert.equal($('#pb-demo').disabled, true, 'modern catalog still requires personal MIDI');
+  assert.equal($('#pb-song').options.length, 8, 'free play + six melodies + bundled piece; no import-only placeholders');
+  assert(!$('#pb-song').options.some(o => /cần MIDI/.test(o.text)), 'no listed song requires a personal MIDI');
+  $('#pb-song').value = ''; $('#pb-song').fire('change');
   assert.equal($('#pb-midi-credit').hidden, true);
 });
 
@@ -169,7 +169,7 @@ test('failed bundled load is recoverable, unsafe credit URLs stay inert, local i
   assert.doesNotThrow(() => context.keyDown(64));
 });
 
-test('a user-provided score replaces its matching modern placeholder without hiding other import-only songs', () => {
+test('a user-provided score plays without import and shows no transcription credit line', () => {
   const catalogName = Midi.CATALOG.find(s => s.name.startsWith('Hãy trao cho anh')).name;
   const parsed = Midi.parse(chordFile());
   const provided = { id: 'user-score-fixture', name: catalogName + ' · 4 ô nhịp từ bản bạn gửi', catalogName, userProvided: true, builtin: true,
@@ -177,14 +177,14 @@ test('a user-provided score replaces its matching modern placeholder without hid
   let calls = 0;
   const { $, c, local } = libraryGuide({ entries: [provided], load(id) { calls++; assert.equal(id, provided.id); return { notes: parsed.melody, timeline: parsed.timeline, duration: parsed.duration }; } });
   const options = $('#pb-song').options;
-  assert.equal(options.length, 11, 'free play + six original melodies + supplied score + remaining three catalog songs');
+  assert.equal(options.length, 8, 'free play + six original melodies + supplied score; no import-only songs');
   assert.equal(options.filter(o => o.text.includes('Hãy trao cho anh')).length, 1);
-  for (const other of Midi.CATALOG.filter(s => s.name !== catalogName)) assert(options.some(o => o.text === other.name + ' · cần MIDI'));
+  assert(!options.some(o => /cần MIDI/.test(o.text)));
   $('#pb-song').value = '6'; $('#pb-song').fire('change');
   assert.equal(calls, 1); assert.equal($('#pb-demo').disabled, false);
   assert.match($('#pb-midi-status').textContent, /^Bản MIDI có sẵn/);
-  const source = $('#pb-midi-credit').children.find(x => x && typeof x === 'object');
-  assert.equal(source.textContent, 'Nguồn bản nhạc'); assert.equal(source.href, provided.source);
+  assert.equal($('#pb-midi-credit').hidden, true, 'no "chép từ bản PDF" credit line for the user-provided score');
+  assert.equal(($('#pb-midi-credit').children || []).length, 0);
   $('#pb-demo').fire('click'); c.advance(300);
   assert.deepEqual(local.map(e => e.slice(0, 2)), [['d', 64], ['d', 60]]);
   $('#pb-song').value = ''; $('#pb-song').fire('change');
