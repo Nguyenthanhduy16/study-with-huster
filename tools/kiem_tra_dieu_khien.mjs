@@ -35,6 +35,7 @@ const sandbox = {
   curDist: () => sandbox.distance, setDist: d => { sandbox.distance = d; }, distance: 3.4
 };
 const ctx = vm.createContext(sandbox);
+vm.runInContext(source.slice(source.indexOf('  function liftCameraLocked()'), source.indexOf('  function applyOpt()')), ctx);
 vm.runInContext(source.slice(source.indexOf('  const KMAP ='), source.indexOf('  function curKind()')) + '\nbindInput();', ctx);
 // Also register the real embedded scene look handlers on the same canvas. They must
 // leave look to World, otherwise every drag rotates twice or another finger steals it.

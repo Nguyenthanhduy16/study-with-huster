@@ -574,21 +574,24 @@ var AvatarKit = (() => {
     });
     return obj;
   }
-  function setBodyCoverage(rig, bottom) {
+  function setBodyCoverage(rig, bottom, top = null) {
     const mesh = rig && rig.bodyMesh;
     if (!mesh) return;
     const source = rig.uncoveredGeometry || (rig.uncoveredGeometry = mesh.geometry);
     const covered = bottom && !bottom.skirt;
-    const key = covered ? bottom.length || "full" : "none";
+    const sleeve = top && top.sleeve !== "none" ? top.sleeve || "short" : "none";
+    const topKey = top ? JSON.stringify([sleeve, !!top.tucked, !!top.vneck, top.collar === "hood"]) : "no-top";
+    const key = `${covered ? bottom.length || "full" : "none"}|${topKey}`;
     if (rig.coverageKey === key) return;
     rig.coverageKey = key;
     const previous = mesh.geometry;
-    if (!covered) mesh.geometry = source;
+    if (!covered && !top) mesh.geometry = source;
     else {
       const G = rig.model.legs.L, P = rig.model.P[1];
-      const hem = bottom.length === "shorts" ? G.kn[1] + 0.16 : G.an[1] + (bottom.length === "capri" ? 0.16 : 0.035);
+      const hem = (bottom == null ? void 0 : bottom.length) === "shorts" ? G.kn[1] + 0.16 : G.an[1] + ((bottom == null ? void 0 : bottom.length) === "capri" ? 0.16 : 0.035);
       const { position: p, skinIndex: ids, skinWeight: weights } = source.attributes;
-      const underCloth = (i) => {
+      const underTrousers = (i) => {
+        if (!covered) return false;
         if (p.getY(i) < hem + 6e-3 || p.getY(i) > P + 0.06) return false;
         for (let k = 0; k < 4; k++) {
           const bone = ids.array[i * 4 + k];
@@ -596,12 +599,36 @@ var AvatarKit = (() => {
         }
         return true;
       };
+      const sleeveLen = sleeve === "long" ? DIM.upperArm + DIM.foreArm - 0.025 : 0.15;
+      const underSleeve = (i) => {
+        if (sleeve === "none") return false;
+        const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+        if (Math.abs(x) < rig.model.shoulderX - 0.1 || y > P + DIM.shoulderY + 0.085) return false;
+        const side = x >= 0 ? "L" : "R", A = rig.model.arms[side];
+        const along = segT(x, y, z, A.sh, A.wr) * (DIM.upperArm + DIM.foreArm);
+        if (along > sleeveLen - 8e-3) return false;
+        const arm = Math.min(rig.model.arm(side, x, y, z), rig.model.deltoid(side, x, y, z));
+        return arm < rig.model.trunk(x, y, z) + 0.04;
+      };
+      const underTopTorso = (i) => {
+        if (!top) return false;
+        const x = p.getX(i), y = p.getY(i), z = p.getZ(i), M = rig.model;
+        const dominant = ids.getX(i);
+        if (dominant >= 1 && dominant <= 7) return false;
+        if (y < P + (top.tucked ? 0.035 : -0.095) + 8e-3 || y > P + 0.49) return false;
+        const neckY = P + (top.collar === "hood" ? 0.475 : 0.488) + 0.02 - 0.03 * Math.max(0, Math.min(1, (z + 0.02) / 0.08));
+        if (Math.hypot(x, (z - 4e-3) * 1.08) < 0.064 && y > neckY - 0.036) return false;
+        if (top.vneck && y > P + 0.389 + 1.5 * Math.abs(x) && z > 0.024) return false;
+        return Math.min(M.trunk(x, y, z), M.glute("L", x, y, z), M.glute("R", x, y, z)) < 0.028;
+      };
+      const hidden = new Uint8Array(p.count);
+      for (let i = 0; i < p.count; i++) hidden[i] = underTrousers(i) || underSleeve(i) || underTopTorso(i) ? 1 : 0;
       const kept = [], count = source.index ? source.index.count : p.count;
       for (let t = 0; t < count; t += 3) {
         const a = source.index ? source.index.getX(t) : t;
         const b = source.index ? source.index.getX(t + 1) : t + 1;
         const c = source.index ? source.index.getX(t + 2) : t + 2;
-        if (!(underCloth(a) && underCloth(b) && underCloth(c))) kept.push(a, b, c);
+        if (!(hidden[a] && hidden[b] && hidden[c])) kept.push(a, b, c);
       }
       mesh.geometry = source.clone();
       mesh.geometry.setIndex(kept);
@@ -1595,32 +1622,46 @@ var AvatarKit = (() => {
     m.castShadow = true;
     return { skinned: m };
   }
-  function skinTop(geo, M, options) {
+  function skinTop(geo, M, options, garmentParts = null) {
     const fullArm = DIM.upperArm + DIM.foreArm;
     const sleeveLen = options.sleeve === "long" ? fullArm - 0.025 : options.sleeve === "none" ? 0 : 0.15;
-    skinByDistance(geo, M.segments.filter((segment) => segment.bone === 0 || segment.bone >= 2 && segment.bone <= 7));
-    const p = geo.attributes.position, indices = geo.attributes.skinIndex, weights = geo.attributes.skinWeight;
+    const p = geo.attributes.position;
+    const indices = new Uint16Array(p.count * 4), weights = new Float32Array(p.count * 4);
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-      const side = x >= 0 ? "L" : "R", arm = M.arms[side], base = side === "L" ? 2 : 5;
-      const along = segT(x, y, z, arm.sh, arm.wr) * fullArm;
-      const armDistance = Math.max(M.arm(side, x, y, z, 0.012, { upTo: sleeveLen, withHand: false }), along - sleeveLen);
-      const blend = sleeveLen ? smooth(-0.018, 0.018, M.trunk(x, y, z, 0.014) - armDistance) : 0;
-      const armWeights = [0, 0, 0];
-      for (let k = 0; k < 4; k++) {
-        const bone = indices.array[i * 4 + k];
-        if (bone >= base && bone <= base + 2) armWeights[bone - base] += weights.array[i * 4 + k];
+      const trunk = Math.min(M.trunk(x, y, z), M.neck(x, y, z), M.glute("L", x, y, z), M.glute("R", x, y, z));
+      const arms = ["L", "R"].map((side2) => {
+        const A = M.arms[side2], along = segT(x, y, z, A.sh, A.wr) * fullArm;
+        return Math.max(Math.min(
+          M.arm(side2, x, y, z, 0, { upTo: sleeveLen, withHand: false }),
+          M.deltoid(side2, x, y, z)
+        ), along - sleeveLen);
+      });
+      const sideIndex = arms[0] <= arms[1] ? 0 : 1, side = sideIndex === 0 ? "L" : "R";
+      const shoulderBlend = smooth(M.P[1] + 0.2, M.P[1] + 0.28, y);
+      let blend = sleeveLen ? smooth(-0.035 * shoulderBlend, 0.035, trunk - arms[sideIndex]) : 0;
+      if (options.sleeve === "long" && garmentParts) {
+        const parts = garmentParts(x, y, z);
+        const separated = 1 - smooth(M.P[1] + 0.2, M.P[1] + 0.3, y);
+        const width = 6e-3 + 0.035 * (1 - separated);
+        const sleeveWeight = smooth(-width, width, parts.trunk - Math.min(...parts.arms));
+        blend = blend * (1 - separated) + sleeveWeight * separated;
       }
-      const sum = armWeights[0] + armWeights[1] + armWeights[2];
-      indices.setXYZW(i, 0, base, base + 1, base + 2);
-      weights.setXYZW(
-        i,
-        1 - blend,
-        blend * (sum ? armWeights[0] / sum : 1),
-        blend * (sum ? armWeights[1] / sum : 0),
-        blend * (sum ? armWeights[2] / sum : 0)
-      );
+      const base = side === "L" ? 2 : 5;
+      const candidates = M.segments.filter((s) => s.bone >= base && s.bone <= base + 2).map((s) => {
+        const d = segDist(x, y, z, s.a, s.b);
+        return { bone: s.bone, w: 1 / Math.pow(d * d + 1e-4, 2) };
+      });
+      const sum = candidates.reduce((n, s) => n + s.w, 0);
+      indices[i * 4] = 0;
+      weights[i * 4] = 1 - blend;
+      candidates.forEach((s, k) => {
+        indices[i * 4 + k + 1] = s.bone;
+        weights[i * 4 + k + 1] = blend * s.w / sum;
+      });
     }
+    geo.setAttribute("skinIndex", new THREE4.Uint16BufferAttribute(indices, 4));
+    geo.setAttribute("skinWeight", new THREE4.Float32BufferAttribute(weights, 4));
     return geo;
   }
   function hairGeometry(M, style, hatOn) {
@@ -1746,7 +1787,7 @@ var AvatarKit = (() => {
     const sleeveLen = o.sleeve === "long" ? fullArm - 0.025 : o.sleeve === "none" ? 0 : 0.15;
     const neckFront = o.collar === "hood" ? 0.475 : 0.488;
     const neckY = (z) => P + neckFront + 0.02 - 0.03 * clamp01((z + 0.02) / 0.08);
-    const field = (x, y, z) => {
+    const garmentParts = (x, y, z) => {
       const flare = o.tucked ? 0 : 0.013 * smooth(P + 0.15, P + 0.08, y);
       const waistTaper = o.waistFit ? 5e-3 * Math.exp(-(((y - P - 0.17) / 0.13) ** 2)) : 0;
       let d = M.trunk(x, y, z, base + flare - waistTaper);
@@ -1757,6 +1798,7 @@ var AvatarKit = (() => {
           if (y > hemY - 0.02) d = smin(d, M.leg(s, x, y, z, base + flare + 4e-3, { thighOnly: true }), 0.03);
         }
       }
+      const arms = [];
       if (sleeveLen > 0) {
         for (const s of ["L", "R"]) {
           const A = M.arms[s];
@@ -1764,8 +1806,18 @@ var AvatarKit = (() => {
           const loose = (o.sleeve === "long" ? 0.011 : 0.012) + (o.sleeve === "short" ? 8e-3 * smooth(0.05, 0.15, st) : 0) + (jacket ? 4e-3 : 0);
           let a = M.arm(s, x, y, z, loose, { upTo: sleeveLen, withHand: false });
           a = Math.max(a, st - sleeveLen);
-          d = smin(d, a, 0.02);
+          arms.push(a);
         }
+      }
+      return { trunk: d, arms };
+    };
+    const field = (x, y, z) => {
+      const parts = garmentParts(x, y, z);
+      let d = parts.trunk;
+      for (const a of parts.arms) d = smin(d, a, 0.02);
+      if (o.sleeve === "long") {
+        const gap = 0.012 * (1 - smooth(P + 0.2, P + 0.3, y));
+        if (gap > 0) d = Math.max(d, gap - Math.abs(parts.trunk - Math.min(...parts.arms)));
       }
       d = Math.max(d, hemY - y);
       d = Math.max(d, -Math.max(Math.hypot(x, (z - 4e-3) * 1.08) - 0.058, neckY(z) - 0.03 - y));
@@ -1794,7 +1846,7 @@ var AvatarKit = (() => {
     };
     const g = surfaceNets(field, [-0.43, P - 0.2, -0.27], [0.43, P + 0.64, 0.25], 95e-4);
     relax(g, 1, 0.4);
-    skinTop(g, M, o);
+    skinTop(g, M, o, garmentParts);
     return perTriangleUV(g, (x, y, z, cx, cy, cz) => {
       if (sleeveLen > 0 && !o.sportsCollar) {
         for (const s of ["L", "R"]) {

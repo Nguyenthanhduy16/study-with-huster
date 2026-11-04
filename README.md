@@ -1,4 +1,4 @@
-# Phòng ôn thi ảo — bản thử nghiệm độc lập
+# Học Online Cùng Huster — bản thử nghiệm độc lập
 
 Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn thấy các bạn khác đang ôn cùng mình, trong Thư viện Tạ Quang Bửu và sân trước thư viện dựng lại bằng 3D.
 
@@ -10,6 +10,9 @@ Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn th
 
 - Phòng thay đồ có 89 món, logo và thẻ HUST, tương thích dữ liệu trang phục cũ. Tóc → **Đầu moi** có mái tỉa, hai bên sát và gáy mullet; đổi màu được. Nhãn đồng phục dùng HUST, bỏ tên Phương Thảo khỏi giao diện.
 - Sửa quần bị kéo theo chân đối diện và da xuyên qua khi bước/ngồi; tự khôi phục phần da lộ ra khi đổi quần ngắn/váy. Laptop cầm tay và laptop trong vòng hành động có logo quả táo phía sau.
+- Sửa áo khi vung tay: tính cả vùng vai/cơ delta, chuyển tiếp trọng số liên tục và che da bên trong áo; khôi phục da khi đổi kiểu cổ, gấu, tay dài/ngắn hoặc bỏ áo.
+- Tên ứng dụng và tiêu đề tab là **Học Online Cùng Huster**. Màn đăng nhập chỉ cần hồ sơ/nhân vật rồi bấm **Học ngay**; luôn bắt đầu ở sân trước thư viện, bỏ lựa chọn điểm vào và nhận câu hỏi tự động.
+- Khi bước vào cabin thang máy, camera tự chuyển sang nhìn từ mắt nhân vật và khóa đổi góc/thu phóng cho tới khi bước ra. Giữ lựa chọn góc nhìn và khoảng cách trước chuyến đi để khôi phục.
 - Piano có danh mục Sơn Tùng M-TP và **Xe đạp**, dùng nút **Nhập MIDI (.mid)** để chọn tệp của bạn. Các bài này chỉ có tên trong danh mục, chưa kèm bản nhạc. MIDI được đọc tại máy, giữ tempo/hợp âm/sustain/velocity khi nghe mẫu; nốt phát tiếp tục đồng bộ cùng khu. Chế độ tập chọn nốt cao nhất mỗi nhịp xuất hiện, chưa chấm tiết tấu/hợp âm.
 - Di chuyển WASD đồng thời kéo chuột trái/phải; điện thoại dùng cần điều khiển và ngón tay xoay cảnh riêng. Gõ chat, mở vòng hành động, mất focus đều giải phóng phím di chuyển.
 - Bấm ghế để đi tới rồi ngồi, hoặc nhấn **E** cạnh ghế trống; hiệu chỉnh mặt ngồi và hướng theo loại ghế. Không dịch chuyển tới ghế khi sai tầng hoặc không tìm được đường; kiểm tra ghế lại lúc tới nơi.
@@ -78,7 +81,7 @@ Hai nhánh WIP về ghế và giao diện đã được tích hợp trên nền 
 | 6. Ví sao | Mục "Của tôi": **ví = tổng sao đã kiếm − sao đã tiêu** (bảng xếp hạng vẫn tính sao đã kiếm). **☕ Cà phê 2⭐**: cầm ly cà phê trên tay 30 phút (ai cũng thấy, chỉ để trang trí). **💧 Uống nước miễn phí**: cầm chai nước 10 phút và tính lại lời nhắc uống nước. Sách: "sắp có". Mua bán làm trên máy chủ (không sửa được ở trình duyệt). |
 | 🥭 Hái xoài | Tới gần một trong 6 cây xoài → "Hái xoài" → cầm gậy, bấm "Chọc!" (hoặc Space) cho thanh tiến độ đầy → quả xoài trên cây rơi xuống thật (90 giây sau mọc lại) → "Chấm muối tôm · lấy vía qua môn" (không ghi tên nhãn hàng nào) → **Giấy chứng nhận Xoài thần (mang tính giải trí)** tải về được, mỗi ngày 1 giấy (máy chủ kiểm tra) → chọn "📚 Lên thư viện ôn thi" hoặc "🌳 Đi dạo tiếp". |
 | 🙏 Xin vía chăm chỉ | NPC **Anh thủ khoa** trên sân (chỉ hiện ở chế độ Dạo chơi). Bấm "Xin vía" → tự xếp hàng sau những bạn tới trước (hàng thật, theo thời điểm xếp), tới lượt anh thủ khoa cổ vũ, bạn cúi chào, tên bạn có ✨ tới hết ngày. |
-| 📸 Chụp ảnh chữ HUST | NPC **Chị thợ ảnh** đứng trước chữ HUST. Bấm "Chụp ảnh" → bạn đứng trước chữ, đếm 3-2-1, nhân vật tạo dáng ngẫu nhiên, bạn bè đứng gần cũng lọt khung → ảnh có viền "Phòng ôn thi ảo · Sân Thư viện Tạ Quang Bửu" + tên + giờ, tải về được. |
+| 📸 Chụp ảnh chữ HUST | NPC **Chị thợ ảnh** đứng trước chữ HUST. Bấm "Chụp ảnh" → bạn đứng trước chữ, đếm 3-2-1, nhân vật tạo dáng ngẫu nhiên, bạn bè đứng gần cũng lọt khung → ảnh có viền "Học Online Cùng Huster · Sân Thư viện Tạ Quang Bửu" + tên + giờ, tải về được. |
 | 🗑️ Nhặt rác | 12 món rác (giấy vo, chai, lon, túi) rải trên sân, đổi chỗ mỗi giờ, hiện chấm cam trên bản đồ nhỏ. Bấm vào rác (ở xa thì tự đi tới) → **+1 "Điểm tình nguyện ảo 🌱"** (đặt tên khác "điểm rèn luyện" để không gây hiểu lầm), tối đa 30 lần/ngày, mỗi lần cách nhau ≥ 8 giây (máy chủ kiểm tra). |
 
 

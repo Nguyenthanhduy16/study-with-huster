@@ -1,5 +1,5 @@
 /* =====================================================================
-   CẤU HÌNH PHÒNG ÔN THI ẢO — sửa ở đây là đủ
+   CẤU HÌNH HỌC ONLINE CÙNG HUSTER — sửa ở đây là đủ
    ===================================================================== */
 
 /* 1) KẾT NỐI SUPABASE
@@ -19,7 +19,7 @@ window.SUPABASE_ANON_KEY = '';
 
 /* 2) THÔNG TIN CHUNG */
 window.APP = {
-  name: 'Phòng ôn thi ảo',
+  name: 'Học Online Cùng Huster',
   club: 'Bản demo',
   disclaimer: 'Bản demo thử nghiệm — không phải trang chính thức của Đại học Bách khoa Hà Nội.',
   // Toạ độ Đại học Bách khoa Hà Nội (lấy thời tiết thật từ Open-Meteo, miễn phí, không cần khoá)
