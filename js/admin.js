@@ -1,5 +1,5 @@
 /* =====================================================================
-   TRANG QUẢN TRỊ PHÒNG ÔN THI ẢO (admin.html)
+   TRANG QUẢN TRỊ HỌC ONLINE CÙNG HUSTER (admin.html)
    Trực tuyến: gọi các hàm admin_* trên Supabase kèm mật khẩu quản trị.
    Ngoại tuyến: chỉnh cấu hình & ngân hàng câu hỏi lưu trên trình duyệt này (để xem thử).
    ===================================================================== */
@@ -83,10 +83,10 @@
       catch (x) { err.textContent = x.message; }
     };
     $('#app').replaceChildren(h('div.ad-login', null, h('form.po-card', { onsubmit: go },
-      h('div.po-eyebrow', null, 'Phòng ôn thi ảo'), h('h1', { style: { margin: 0 } }, 'Quản trị'),
+      h('div.po-eyebrow', null, 'Học Online Cùng Huster'), h('h1', { style: { margin: 0 } }, 'Quản trị'),
       online ? h('p.po-muted.po-small', { style: { margin: 0 } }, 'Nhập mật khẩu quản trị đã đặt trong Supabase (xem hướng dẫn cài đặt).')
         : h('p.ad-off', { style: { margin: 0 } }, 'Chưa cấu hình Supabase: trang quản trị chạy NGOẠI TUYẾN, chỉ chỉnh cấu hình & câu hỏi cho trình duyệt này. Nhập mật khẩu bất kỳ để vào.'),
-      pw, err, h('button.po-btn', { type: 'submit' }, 'Đăng nhập'), h('a.po-small', { href: 'index.html' }, '← Về Phòng ôn thi ảo'))));
+      pw, err, h('button.po-btn', { type: 'submit' }, 'Đăng nhập'), h('a.po-small', { href: 'index.html' }, '← Về Học Online Cùng Huster'))));
     pw.focus();
   }
 
@@ -95,7 +95,7 @@
   async function start() {
     await loadSettings().catch(() => { settings = lset(); });
     $('#app').replaceChildren(h('div.ad', null,
-      h('nav.ad-nav', null, h('div.brand', null, h('div.po-logo.sm', { html: '<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#34489a"/><path d="M14 24l18-8 18 8-18 8z" fill="#ffd166"/><path d="M22 29v10c0 4 20 4 20 0V29l-10 5z" fill="#fff"/></svg>' }), h('div', null, h('div.po-eyebrow', null, 'Quản trị'), h('b', null, 'Phòng ôn thi ảo'))),
+      h('nav.ad-nav', null, h('div.brand', null, h('div.po-logo.sm', { html: '<svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#34489a"/><path d="M14 24l18-8 18 8-18 8z" fill="#ffd166"/><path d="M22 29v10c0 4 20 4 20 0V29l-10 5z" fill="#fff"/></svg>' }), h('div', null, h('div.po-eyebrow', null, 'Quản trị'), h('b', null, 'Học Online Cùng Huster'))),
         TABS.map(([id, l]) => h('button', { 'data-t': id, onclick: () => { tab = id; render(); } }, l)), h('div.sp'),
         h('button', { onclick: () => { sessionStorage.removeItem('pota-admin'); location.reload(); } }, '↩︎ Đăng xuất')),
       h('main.ad-main', { id: 'main' })));

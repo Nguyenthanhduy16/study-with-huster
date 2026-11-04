@@ -40,12 +40,29 @@
   const ang = a => Math.atan2(Math.sin(a), Math.cos(a));
   const tmp = new V3(), tmp2 = new V3();
 
+  // Chỉ ép góc nhìn tạm thời trong cabin; không sửa lựa chọn đã lưu của người chơi.
+  // inLift() kiểm tra vị trí mắt sau bước đi, kể cả khung hình đầu vừa bước vào cabin.
+  function liftCameraLocked() {
+    const space = sp(), api = space && space.module && space.module.api;
+    return !observe && me.mode === 'walk' && space?.kind === 'room' && !!api &&
+      (typeof api.inLift === 'function' ? api.inLift() : !!api.rider);
+  }
+  function effectiveView() { return liftCameraLocked() ? 'first' : opt.view; }
+  function syncCameraView(camera) {
+    const first = effectiveView() === 'first';
+    if (camera) {
+      const fov = first ? 70 : 62;
+      if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    }
+    if (me.avatar) me.avatar.root.visible = me.mode !== 'piano' && !(me.mode === 'walk' && first);
+    return first;
+  }
   function applyOpt() {
     window.__LOOK_K = opt.look * (opt.reduce ? 0.75 : 1);
     window.__WALK_K = 0.75 * opt.speed;
     const fov = opt.view === 'first' ? 70 : 62;
     if (S) for (const k in S.spaces) { const c = S.spaces[k].camera; if (c.fov !== fov) { c.fov = fov; c.updateProjectionMatrix(); } }
-    if (me.avatar && me.mode === 'walk') me.avatar.root.visible = opt.view !== 'first';
+    syncCameraView(sp()?.camera);
   }
 
   /* ------------------------------------------------------------------
@@ -137,7 +154,7 @@
   function setMode(m) {
     if (me.mode === m) return;
     me.mode = m;
-    if (me.avatar) me.avatar.root.visible = m !== 'piano' && !(m === 'walk' && opt.view === 'first');
+    syncCameraView(sp()?.camera);
     ev.emit('mode-changed', m);
   }
 
@@ -692,7 +709,7 @@
       const p = pts.get(e.pointerId);
       if (!p) { if (!pts.size && e.pointerType === 'mouse') hover(e); return; }
       if (!canLook()) { p.x = e.clientX; p.y = e.clientY; p.moved = true; return; }
-      if (pinch && pts.size === 2 && (me.mode !== 'walk' || opt.view !== 'first')) {
+      if (pinch && pts.size === 2 && (me.mode !== 'walk' || effectiveView() !== 'first')) {
         p.x = e.clientX; p.y = e.clientY; const [a, b] = [...pts.values()];
         setDist(pinch.dist * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)));
       } else if (pts.size === 1) {
@@ -722,7 +739,7 @@
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('lostpointercapture', e => { if (pts.has(e.pointerId)) { finishTagLook(pts.get(e.pointerId).tag); pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) multi = false; } });
     canvas.addEventListener('wheel', e => {
-      if (me.mode === 'campus' || me.mode === 'seat' || (me.mode === 'walk' && opt.view !== 'first')) { setDist(curDist() * (1 + Math.sign(e.deltaY) * 0.1)); e.preventDefault(); }
+      if (me.mode === 'campus' || me.mode === 'seat' || (me.mode === 'walk' && effectiveView() !== 'first')) { setDist(curDist() * (1 + Math.sign(e.deltaY) * 0.1)); e.preventDefault(); }
     }, { passive: false });
 
     // cần điều khiển ảo (điện thoại): đi theo hướng camera như phím W/A/S/D; ngón kia vẫn kéo trên màn hình để xoay
@@ -747,6 +764,7 @@
   function curKind() { return me.mode === 'campus' ? 'campus' : me.mode === 'seat' ? 'seat' : 'walk'; }
   function curDist() { return cam.dist[curKind()]; }
   function setDist(d) {
+    if (liftCameraLocked()) return;
     const k = curKind(), lim = { campus: [3, 14], walk: [1.6, 5.5], seat: [1.3, 4.5] }[k];
     cam.dist[k] = U.clamp(d, lim[0], lim[1]);
   }
@@ -1067,12 +1085,12 @@
     const nt = space.mount && Math.hypot(me.x - space.mount.x, me.z - space.mount.z) < 2.6 ? 'scope'
       : pi && Math.abs(me.y - pi.y) < 1.5 && Math.hypot(me.x - pi.x, me.z - pi.z) < 3.2 ? 'piano' : null;
     if (nt !== nearThing) { nearThing = nt; ev.emit('near-thing', nt); }
-    if (opt.view === 'first') return;
+    if (syncCameraView(camera)) return;
     // ngôi thứ ba: camera sau lưng góc nhìn của người dùng, khoảng cách CỐ ĐỊNH (không tự phóng to/thu nhỏ); chỉ chặn không cho vượt trần
     saved = { cam: camera, p: camera.position.clone(), q: camera.quaternion.clone() };
     const fl = space.floorOf(me.y + 0.1), base = me.y, ceil = Math.max(base, fl) + space.ceil(fl) - 0.2;
     const el = U.clamp(0.32 + api.pitch * 0.55, 0.02, 1.0);
-    const want = api.rider ? Math.min(cam.dist.walk, 1.8) : cam.dist.walk;
+    const want = cam.dist.walk;
     placeCam(camera, dt, me.x, me.y + 1.5, me.z, Math.PI - api.yaw + Math.PI, Math.min(el, Math.asin(U.clamp((ceil - (me.y + 1.5)) / want, -1, 1))), want, () => true, false);
   }
   let autoDrive = false;
@@ -1151,7 +1169,7 @@
     }
     if (myLabel) {
       myLabel.classList.remove('pinned');
-      if (me.avatar && me.mode !== 'idle' && me.mode !== 'piano' && !(me.mode === 'walk' && opt.view === 'first')) { me.avatar.root.getWorldPosition(tmp2); place(myLabel, me.avatar.root, topOf(me.avatar, me.mode === 'seat'), tmp2.distanceTo(camera.position)); }
+      if (me.avatar && me.mode !== 'idle' && me.mode !== 'piano' && !(me.mode === 'walk' && effectiveView() === 'first')) { me.avatar.root.getWorldPosition(tmp2); place(myLabel, me.avatar.root, topOf(me.avatar, me.mode === 'seat'), tmp2.distanceTo(camera.position)); }
       else if (me.mode !== 'idle' && myLabel.classList.contains('talk')) {
         // không thấy nhân vật của mình (nhìn bằng mắt / đang chơi đàn): bong bóng của mình ghim giữa màn hình
         myLabel.classList.add('pinned'); myLabel.style.display = ''; myLabel.style.opacity = '1'; myLabel.style.zIndex = '4000';
@@ -1409,7 +1427,7 @@
         o.label.classList.remove('talk');
       }
     },
-    setOpt(o) { Object.assign(opt, o); U.store.set('view', opt); applyOpt(); if (me.mode === 'walk' && me.avatar) me.avatar.root.visible = opt.view !== 'first'; },
+    setOpt(o) { const next = Object.assign({}, o); if (liftCameraLocked()) delete next.view; Object.assign(opt, next); U.store.set('view', opt); applyOpt(); },
     others, info, presence: () => presence,
     peopleHere() { return presence.filter(p => p.zone === me.zone && p.uid !== me.uid); },
     nearBuilding: () => nearB,

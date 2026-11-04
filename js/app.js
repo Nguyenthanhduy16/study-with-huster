@@ -1,5 +1,5 @@
 /* =====================================================================
-   ỨNG DỤNG PHÒNG ÔN THI ẢO — điều phối giao diện
+   ỨNG DỤNG HỌC ONLINE CÙNG HUSTER — điều phối giao diện
    Mục lục: 1 khởi động · 2 chào mừng & đăng nhập · 3 vào phòng · 4 hiện diện & tên
             5 giờ học & trạng thái · 6 câu hỏi chung · 7 nhắc nghỉ & tập trung
             8 bảng bên (xếp hạng, trò chuyện, hỏi bài, của tôi) · 9 hộp thoại
@@ -66,13 +66,13 @@
     ];
     modal(close => h('div.po-dlg',
       null,
-      h('h2', null, 'Chào mừng đến Phòng ôn thi ảo 👋'),
+      h('h2', null, 'Chào mừng đến Học Online Cùng Huster 👋'),
       h('p.po-muted', { style: { margin: 0, fontSize: '14px', lineHeight: 1.55 } },
         'Một góc ôn thi chung cho sinh viên trong mùa thi: bạn học ở nhà nhưng vẫn thấy rất nhiều bạn đang ôn cùng mình — trong khuôn viên trường và Thư viện Tạ Quang Bửu dựng lại bằng 3D.'),
       h('div.po-feats', null, feats.map(f => h('div.po-feat', null, h('div.i', { text: f[0] }), h('div', null, h('b', { text: f[1] }), h('span', { text: f[2] }))))),
       h('div.po-steps', null,
         h('div.po-step', null, h('i', null, '1'), 'Điền họ tên, MSSV và chọn nhân vật'),
-        h('div.po-step', null, h('i', null, '2'), 'Vào thư viện hoặc dạo sân trường (WASD / bấm chuột)'),
+        h('div.po-step', null, h('i', null, '2'), 'Bắt đầu ở sân trước thư viện rồi đi bộ vào học (WASD / bấm chuột)'),
         h('div.po-step', null, h('i', null, '3'), 'Học thôi! Bấm vào bạn khác để xem hồ sơ, gửi lời động viên')),
       h('p.po-note', null, APP.disclaimer),
       h('div.po-dlg-foot', null, h('button.po-btn', { onclick: () => { store.set('welcomed', 1); close(); done(); } }, 'Bắt đầu →'))
@@ -160,22 +160,14 @@
   function login(prof) {
     const root = $('#po-login'); root.hidden = false;
     const saved = store.get('login', {});
-    let start = saved.start || 'library';
     const f = {
       name: h('input.po-in', { id: 'f-name', autocomplete: 'name', placeholder: 'Nguyễn Văn An', maxlength: 40, value: prof ? prof.full_name : (saved.name || '') }),
       mssv: h('input.po-in', { id: 'f-mssv', inputmode: 'numeric', placeholder: '20231234', maxlength: 9, value: prof ? prof.mssv : (saved.mssv || '') }),
-      quiz: h('input', { type: 'checkbox', checked: prof ? prof.quiz : (saved.quiz !== false) }),
       hideRank: h('input', { type: 'checkbox', checked: prof ? prof.hide_rank : false }),
       hideStatus: h('input', { type: 'checkbox', checked: prof ? prof.hide_status : false })
     };
     const eName = h('div.err'), eMssv = h('div.err'), eForm = h('div.err');
     const ed = avatarPicker(prof && prof.style && Object.keys(prof.style).length ? prof.style : saved.style, () => ({ name: U.titleName(f.name.value || ''), mssv: f.mssv.value }));
-    const startBtns = h('div.po-start', null,
-      h('button', { type: 'button', 'data-v': 'library', onclick: e => pick(e) }, h('span.e', null, '📚'), h('div', null, h('b', null, 'Vào thẳng thư viện'), h('span', null, 'Ngồi học ngay ở phòng 401'))),
-      h('button', { type: 'button', 'data-v': 'campus', onclick: e => pick(e) }, h('span.e', null, '🌳'), h('div', null, h('b', null, 'Sân trước thư viện'), h('span', null, 'Đi bộ, chào bạn bè rồi vào thư viện'))));
-    function pick(e) { start = e.currentTarget.dataset.v; $$('button', startBtns).forEach(b => b.classList.toggle('on', b.dataset.v === start)); }
-    $$('button', startBtns).forEach(b => b.classList.toggle('on', b.dataset.v === start));
-
     const checkN = () => { const e = U.checkName(f.name.value, A.banned); eName.textContent = f.name.value ? (e || '') : ''; f.name.classList.toggle('bad', !!e && !!f.name.value); return !e; };
     const checkM = () => { const e = U.checkMssv(f.mssv.value); eMssv.textContent = f.mssv.value ? (e || '') : ''; f.mssv.classList.toggle('bad', !!e && !!f.mssv.value); return !e; };
     f.name.addEventListener('blur', () => { if (f.name.value.trim()) f.name.value = U.titleName(f.name.value); checkN(); ed.refresh && ed.refresh(); });
@@ -183,11 +175,11 @@
     f.name.addEventListener('input', () => { if (eName.textContent) checkN(); });
     f.mssv.addEventListener('input', () => { f.mssv.value = f.mssv.value.replace(/\D/g, ''); if (eMssv.textContent || f.mssv.value.length >= 8) checkM(); });
 
-    const go = h('button.po-btn', { type: 'submit', style: { width: '100%', padding: '13px' } }, prof ? 'Vào phòng tiếp tục học →' : 'Vào phòng →');
+    const go = h('button.po-btn', { type: 'submit', style: { width: '100%', padding: '13px' } }, 'Học ngay');
     const form = h('form.po-card.po-login-card', { onsubmit: submit },
       h('div', { style: { display: 'flex', gap: '12px', alignItems: 'center' } },
         h('div.po-logo.sm', { html: $('.po-logo').innerHTML }),
-        h('div', null, h('div.po-eyebrow', null, 'Bản demo'), h('h1', null, prof ? 'Chào lại, ' + prof.display_name.split(' ').slice(-1)[0] + '!' : 'Phòng ôn thi ảo'))),
+        h('div', null, h('div.po-eyebrow', null, 'Bản demo'), h('h1', null, prof ? 'Chào lại, ' + prof.display_name.split(' ').slice(-1)[0] + '!' : 'Học Online Cùng Huster'))),
       h('p.lead', null, net.mode === 'online'
         ? 'Điền đúng họ tên và MSSV của bạn. Mọi người chỉ thấy MSSV dạng 2023****.'
         : 'Đang chạy CHẾ ĐỘ NGOẠI TUYẾN: chỉ có mình bạn, dữ liệu lưu trên trình duyệt này.'),
@@ -195,8 +187,6 @@
         h('div.po-field', null, h('label', { for: 'f-name' }, 'Họ và tên'), f.name, eName),
         h('div.po-field', null, h('label', { for: 'f-mssv' }, 'Mã số sinh viên'), f.mssv, eMssv)),
       h('div.po-field', null, h('label', null, 'Nhân vật của bạn'), ed.el),
-      h('div.po-field', null, h('label', null, 'Bắt đầu ở đâu?'), startBtns),
-      h('label.po-check', null, f.quiz, h('span', null, h('b', null, 'Nhận câu hỏi ôn tập Giải tích + Đại số'), h('br'), h('span.po-muted.po-small', null, `Mỗi ${S().quiz.period_min} phút một câu chung cho cả phòng (chỉ chọn được lúc vào phòng).`))),
       h('details.po-more', null, h('summary', null, 'Quyền riêng tư & cách tính giờ'),
         h('div', null,
           h('label.po-check', null, f.hideRank, 'Ẩn tôi khỏi bảng xếp hạng'),
@@ -213,24 +203,24 @@
       if (!f.mssv.value.trim()) { eMssv.textContent = 'Vui lòng nhập MSSV.'; }
       if (!okN || !okM || !f.name.value.trim() || !f.mssv.value.trim()) return;
       go.disabled = true; go.textContent = 'Đang vào…'; eForm.textContent = '';
-      const data = { name: U.titleName(f.name.value), mssv: f.mssv.value.trim(), quiz: f.quiz.checked, style: ed.get(), hideRank: f.hideRank.checked, hideStatus: f.hideStatus.checked };
+      const data = { name: U.titleName(f.name.value), mssv: f.mssv.value.trim(), quiz: false, style: ed.get(), hideRank: f.hideRank.checked, hideStatus: f.hideStatus.checked };
       try {
         const r = await net.register(data);
         if (!r || !r.ok) {
           const m = (r && r.error) || 'Không vào được, thử lại nhé.';
           if (r && r.field === 'name') eName.textContent = m; else if (r && r.field === 'mssv') eMssv.textContent = m; else eForm.textContent = m;
-          go.disabled = false; go.textContent = 'Vào phòng →'; return;
+          go.disabled = false; go.textContent = 'Học ngay'; return;
         }
-        store.set('login', { name: data.name, mssv: data.mssv, quiz: data.quiz, style: data.style, start });
+        store.set('login', { name: data.name, mssv: data.mssv, quiz: false, style: data.style, start: 'campus' });
         ed.stop(); root.hidden = true; root.replaceChildren();
         A.profile = r.profile;
-        enterRoom(start === 'library' ? 'lib_a' : 'campus');
-      } catch (err) { eForm.textContent = err.message; go.disabled = false; go.textContent = 'Vào phòng →'; }
+        enterRoom('campus');
+      } catch (err) { eForm.textContent = err.message; go.disabled = false; go.textContent = 'Học ngay'; }
     }
   }
 
   function roomClosed() {
-    modal(() => h('div.po-dlg', null, h('h2', null, 'Phòng ôn thi ảo đang tạm đóng'),
+    modal(() => h('div.po-dlg', null, h('h2', null, 'Học Online Cùng Huster đang tạm đóng'),
       h('p.po-muted', null, 'Ban tổ chức đang tạm đóng phòng. Bạn quay lại sau nhé!'),
       h('div.po-dlg-foot', null, h('button.po-btn', { onclick: () => location.reload() }, 'Tải lại'))), { noClose: true });
   }
@@ -338,7 +328,7 @@
   function updateZoneLabel() {
     const z = ZONES[A.zone]; if (!z) return;
     $('#po-zone').textContent = z.name;
-    document.title = z.short + ' · Phòng ôn thi ảo';
+    document.title = z.short + ' · Học Online Cùng Huster';
   }
 
   /* Lời nhắc theo ngữ cảnh (KHÔNG còn nút dịch chuyển): nhân vật tự đi bộ tới mọi nơi —
@@ -454,7 +444,7 @@
     for (const [x, y] of [[90, 90], [1110, 90], [90, 760], [1110, 760]]) { g.fillStyle = '#f2b23a'; g.beginPath(); g.ellipse(x, y, 20, 26, 0.5, 0, 7); g.fill(); g.fillStyle = '#4f8a2b'; g.beginPath(); g.ellipse(x + 10, y - 26, 6, 14, 0.9, 0, 7); g.fill(); }
     g.textAlign = 'center'; g.fillStyle = '#7a4d0d'; g.font = F(800, 60); g.fillText('GIẤY CHỨNG NHẬN XOÀI THẦN', 600, 180, 1000);
     g.font = F(600, 26); g.fillStyle = '#a0742a'; g.fillText('(mang tính giải trí)', 600, 222);
-    g.fillStyle = '#3b2c14'; g.font = F(500, 30); g.fillText('Phòng ôn thi ảo trân trọng chứng nhận bạn', 600, 320);
+    g.fillStyle = '#3b2c14'; g.font = F(500, 30); g.fillText('Học Online Cùng Huster trân trọng chứng nhận bạn', 600, 320);
     g.font = F(800, 56); g.fillStyle = '#1f4f2a'; g.fillText(name, 600, 400);
     g.font = F(500, 30); g.fillStyle = '#3b2c14';
     g.fillText('đã hái được quả XOÀI THẦN ở sân Thư viện Tạ Quang Bửu,', 600, 470, 1060);
@@ -533,10 +523,10 @@
     const sw = shotCv.width, sh = shotCv.height, k = Math.max(W / sw, Hc / sh), dw = sw * k, dh = sh * k;
     g.save(); g.beginPath(); g.rect(24, 24, W - 48, Hc - 24); g.clip(); g.drawImage(shotCv, (W - dw) / 2, (Hc - dh) / 2, dw, dh); g.restore();
     const d = U.hanoiParts(), F = (w, sz) => `${w} ${sz}px "Be Vietnam Pro", system-ui, sans-serif`;
-    g.fillStyle = '#1f2a44'; g.font = F(800, 34); g.textAlign = 'left'; g.fillText('Phòng ôn thi ảo · Sân Thư viện Tạ Quang Bửu', 32, Hc + 52);
+    g.fillStyle = '#1f2a44'; g.font = F(800, 34); g.textAlign = 'left'; g.fillText('Học Online Cùng Huster · Sân Thư viện Tạ Quang Bửu', 32, Hc + 52);
     g.font = F(500, 24); g.fillStyle = '#5b6478'; g.fillText(((A.profile && A.profile.display_name) || '') + ' · ' + `${d.d}/${d.mo}/${d.y} ${String(d.h).padStart(2, '0')}:${String(d.mi).padStart(2, '0')}`, 32, Hc + 92);
     g.textAlign = 'right'; g.font = F(400, 18); g.fillText('Ảnh lưu niệm · bản demo', W - 32, Hc + 92);
-    showImage('📸 Ảnh lưu niệm', out, 'anh-luu-niem-thu-vien.jpg', 'Ảnh chụp trong Phòng ôn thi ảo. Bạn có thể tải về và chia sẻ.');
+    showImage('📸 Ảnh lưu niệm', out, 'anh-luu-niem-thu-vien.jpg', 'Ảnh chụp trong Học Online Cùng Huster. Bạn có thể tải về và chia sẻ.');
   }
 
   /* =================================================================
@@ -833,7 +823,7 @@
     if (A.kicked) return; A.kicked = true;
     net.presence.leave();
     modal(() => h('div.po-dlg', null, h('h2', null, 'Bạn đã được mời ra khỏi phòng'),
-      h('p.po-muted', null, 'Ban tổ chức đã mời bạn rời phòng ôn thi ảo. Nếu có nhầm lẫn, hãy liên hệ ban tổ chức.'),
+      h('p.po-muted', null, 'Ban tổ chức đã mời bạn rời Học Online Cùng Huster. Nếu có nhầm lẫn, hãy liên hệ ban tổ chức.'),
       h('div.po-dlg-foot', null, h('button.po-btn', { onclick: () => location.reload() }, 'Đã hiểu'))), { noClose: true });
   }
 
@@ -1448,7 +1438,7 @@
       try { const r = await net.updatePrefs(World.me.style, p.hide_rank, p.hide_status); if (r) setProfile(r); toast('Đã lưu.'); } catch (e) { toast(e.message, 'err'); }
       net.presence.update({ st: p.hide_status ? 'hoc' : currentState() });
     };
-    const fb = h('textarea.po-in', { rows: 3, maxlength: 1000, placeholder: 'Góp ý, báo lỗi, ý tưởng cho Phòng ôn thi ảo…' });
+    const fb = h('textarea.po-in', { rows: 3, maxlength: 1000, placeholder: 'Góp ý, báo lỗi, ý tưởng cho Học Online Cùng Huster…' });
     const fbKind = h('select.po-in', null, h('option', { value: 'gop_y' }, 'Góp ý'), h('option', { value: 'bao_loi' }, 'Báo lỗi'), h('option', { value: 'bao_cao' }, 'Báo cáo vi phạm'));
     const q = store.get('quality', 'mid');
     pane.replaceChildren(...[

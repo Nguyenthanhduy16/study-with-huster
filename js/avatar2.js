@@ -166,7 +166,7 @@
   /* ảnh thẻ sinh viên (tên + MSSV đã che) để hiện trong hồ sơ */
   function cardImage(style, name, mssv, w = 340) {
     const st = normState(style), em = st.emblem || CAT.defaults.emblem;
-    const big = K.drawStudentCard(Object.assign({}, CAT.defaults.card, { name: name || 'Sinh viên', id: mssv || '', major: 'Phòng ôn thi ảo', cohort: 'Mùa thi 2026', photo: null, template: null }), emblemCanvas(em), em);
+    const big = K.drawStudentCard(Object.assign({}, CAT.defaults.card, { name: name || 'Sinh viên', id: mssv || '', major: 'Học Online Cùng Huster', cohort: 'Mùa thi 2026', photo: null, template: null }), emblemCanvas(em), em);
     const c = document.createElement('canvas'); c.width = w; c.height = Math.round(w * big.height / big.width);
     c.getContext('2d').drawImage(big, 0, 0, c.width, c.height); return c;
   }
@@ -208,7 +208,7 @@
     }
     cardCanvas() {
       const em = this.state.emblem || CAT.defaults.emblem;
-      const c = Object.assign({}, CAT.defaults.card, { name: this.name || 'Sinh viên', id: this.mssv || '', major: 'Phòng ôn thi ảo', cohort: 'Mùa thi 2026', photo: null, template: null });
+      const c = Object.assign({}, CAT.defaults.card, { name: this.name || 'Sinh viên', id: this.mssv || '', major: 'Học Online Cùng Huster', cohort: 'Mùa thi 2026', photo: null, template: null });
       const big = K.drawStudentCard(c, emblemCanvas(em), em);
       const sm = document.createElement('canvas'), w = this.opts.me ? 512 : 256;
       sm.width = w; sm.height = Math.round(w * big.height / big.width);
@@ -255,11 +255,12 @@
     /* quy tắc giống phòng thay đồ: tóc gọn khi đội mũ, thắt lưng chỉ lộ khi áo sơ vin, tay cầm đồ */
     rules() {
       const bottom = resolve(this.state, this.state.equipped.bottom);
-      if (K.setBodyCoverage) K.setBodyCoverage(this.rig, bottom ? (bottom.options || {}) : null);
+      const top = resolve(this.state, this.state.equipped.top);
+      if (K.setBodyCoverage) K.setBodyCoverage(this.rig, bottom ? (bottom.options || {}) : null, top ? (top.options || {}) : null);
       const hat = this.slots.hat, hair = this.slots.hair;
       if (hair && hair.hideUnderHat) for (const m of hair.hideUnderHat) m.visible = !(hat && hat.hideHairTop);
       this.pose = Object.assign({ elbowR: 0 }, (this.slots.handheld && this.slots.handheld.pose) || {});
-      const top = resolve(this.state, this.state.equipped.top), tucked = !!(top && top.options && top.options.tucked);
+      const tucked = !!(top && top.options && top.options.tucked);
       for (const p of (this.slots.bottom && this.slots.bottom.parts) || []) if (p.obj.userData.belt) p.obj.visible = tucked;
     }
     disposeTree(obj) {

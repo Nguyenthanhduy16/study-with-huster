@@ -63,29 +63,46 @@ function skinnedPart(geo, mat) {
 
 // Thân áo theo thân người; chỉ phần tay áo được nhận trọng số xương tay.
 // Khoảng cách tới mọi xương sẽ khiến bàn tay ở gần hông kéo cả gấu áo/váy.
-function skinTop(geo, M, options) {
+function skinTop(geo, M, options, garmentParts = null) {
   const fullArm = DIM.upperArm + DIM.foreArm;
   const sleeveLen = options.sleeve === 'long' ? fullArm - 0.025 : options.sleeve === 'none' ? 0 : 0.15;
-  skinByDistance(geo, M.segments.filter((segment) => segment.bone === 0 || (segment.bone >= 2 && segment.bone <= 7)));
-  const p = geo.attributes.position, indices = geo.attributes.skinIndex, weights = geo.attributes.skinWeight;
+  const p = geo.attributes.position;
+  const indices = new Uint16Array(p.count * 4), weights = new Float32Array(p.count * 4);
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const side = x >= 0 ? 'L' : 'R', arm = M.arms[side], base = side === 'L' ? 2 : 5;
-    const along = segT(x, y, z, arm.sh, arm.wr) * fullArm;
-    const armDistance = Math.max(M.arm(side, x, y, z, 0.012, { upTo: sleeveLen, withHand: false }), along - sleeveLen);
-    const blend = sleeveLen ? smooth(-0.018, 0.018, M.trunk(x, y, z, 0.014) - armDistance) : 0;
-    const armWeights = [0, 0, 0];
-    for (let k = 0; k < 4; k++) {
-      const bone = indices.array[i * 4 + k];
-      if (bone >= base && bone <= base + 2) armWeights[bone - base] += weights.array[i * 4 + k];
+    const trunk = Math.min(M.trunk(x, y, z), M.neck(x, y, z), M.glute('L', x, y, z), M.glute('R', x, y, z));
+    const arms = ['L', 'R'].map(side => {
+      const A = M.arms[side], along = segT(x, y, z, A.sh, A.wr) * fullArm;
+      // Restrict influence to the actual sleeve. A wrist next to the waist
+      // must never pull the hem up when the avatar raises an arm.
+      return Math.max(Math.min(M.arm(side, x, y, z, 0, { upTo: sleeveLen, withHand: false }),
+        M.deltoid(side, x, y, z)), along - sleeveLen);
+    });
+    const sideIndex = arms[0] <= arms[1] ? 0 : 1, side = sideIndex === 0 ? 'L' : 'R';
+    // Include the deltoid, then blend continuously through the armpit instead
+    // of switching chains abruptly (which stretches a triangle into a spike).
+    const shoulderBlend = smooth(M.P[1] + 0.20, M.P[1] + 0.28, y);
+    let blend = sleeveLen ? smooth(-0.035 * shoulderBlend, 0.035, trunk - arms[sideIndex]) : 0;
+    if (options.sleeve === 'long' && garmentParts) {
+      // Use the SAME inflated surfaces as the geometric slit. Body-distance
+      // classification differs at the flared hem and would weld the new cap
+      // back to the torso through partial forearm weights.
+      const parts = garmentParts(x, y, z);
+      const separated = 1 - smooth(M.P[1] + 0.20, M.P[1] + 0.30, y);
+      const width = 0.006 + 0.035 * (1 - separated);
+      const sleeveWeight = smooth(-width, width, parts.trunk - Math.min(...parts.arms));
+      blend = blend * (1 - separated) + sleeveWeight * separated;
     }
-    const sum = armWeights[0] + armWeights[1] + armWeights[2];
-    indices.setXYZW(i, 0, base, base + 1, base + 2);
-    weights.setXYZW(i, 1 - blend,
-      blend * (sum ? armWeights[0] / sum : 1),
-      blend * (sum ? armWeights[1] / sum : 0),
-      blend * (sum ? armWeights[2] / sum : 0));
+    const base = side === 'L' ? 2 : 5;
+    const candidates = M.segments.filter(s => s.bone >= base && s.bone <= base + 2).map(s => {
+      const d = segDist(x, y, z, s.a, s.b); return { bone: s.bone, w: 1 / Math.pow(d * d + 1e-4, 2) };
+    });
+    const sum = candidates.reduce((n, s) => n + s.w, 0);
+    indices[i * 4] = 0; weights[i * 4] = 1 - blend;
+    candidates.forEach((s, k) => { indices[i * 4 + k + 1] = s.bone; weights[i * 4 + k + 1] = blend * s.w / sum; });
   }
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(indices, 4));
+  geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
   return geo;
 }
 
@@ -217,7 +234,7 @@ function topGeometry(M, o) {
   const neckFront = o.collar === 'hood' ? 0.475 : 0.488;
   const neckY = (z) => P + neckFront + 0.02 - 0.03 * clamp01((z + 0.02) / 0.08);
 
-  const field = (x, y, z) => {
+  const garmentParts = (x, y, z) => {
     // áo bỏ ngoài: dày hơn quanh hông để phủ kín cạp quần
     const flare = o.tucked ? 0 : 0.013 * smooth(P + 0.15, P + 0.08, y);
     const waistTaper = o.waistFit ? 0.005 * Math.exp(-(((y - P - 0.17) / 0.13) ** 2)) : 0;
@@ -229,6 +246,7 @@ function topGeometry(M, o) {
         if (y > hemY - 0.02) d = smin(d, M.leg(s, x, y, z, base + flare + 0.004, { thighOnly: true }), 0.03);
       }
     }
+    const arms = [];
     if (sleeveLen > 0) {
       for (const s of ['L', 'R']) {
         const A = M.arms[s];
@@ -236,8 +254,22 @@ function topGeometry(M, o) {
         const loose = (o.sleeve === 'long' ? 0.011 : 0.012) + (o.sleeve === 'short' ? 0.008 * smooth(0.05, 0.15, st) : 0) + (jacket ? 0.004 : 0);
         let a = M.arm(s, x, y, z, loose, { upTo: sleeveLen, withHand: false });
         a = Math.max(a, st - sleeveLen);
-        d = smin(d, a, 0.02);
+        arms.push(a);
       }
+    }
+    return { trunk: d, arms };
+  };
+  const field = (x, y, z) => {
+    const parts = garmentParts(x, y, z);
+    let d = parts.trunk;
+    for (const a of parts.arms) d = smin(d, a, 0.02);
+    if (o.sleeve === 'long') {
+      // Resting cuffs touch the hip. A smooth SDF union otherwise makes an
+      // actual cloth bridge from wrist to hem that stretches on every step.
+      // Carve a resolvable separation below the armpit; iso-surfaces close
+      // both sides, and the shoulder remains attached above the fade band.
+      const gap = 0.012 * (1 - smooth(P + 0.20, P + 0.30, y));
+      if (gap > 0) d = Math.max(d, gap - Math.abs(parts.trunk - Math.min(...parts.arms)));
     }
     d = Math.max(d, hemY - y);       // gấu
     // lỗ cổ tròn quanh cổ (không cắt phẳng → vai áo phủ kín tới chân cổ)
@@ -269,7 +301,7 @@ function topGeometry(M, o) {
   };
   const g = surfaceNets(field, [-0.43, P - 0.2, -0.27], [0.43, P + 0.64, 0.25], 0.0095);
   relax(g, 1, 0.4);
-  skinTop(g, M, o);
+  skinTop(g, M, o, garmentParts);
 
   return perTriangleUV(g, (x, y, z, cx, cy, cz) => {
     // Áo raglan dùng một hệ UV cho toàn bộ thân/tay; màu mảng được tính

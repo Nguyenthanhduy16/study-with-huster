@@ -335,23 +335,26 @@ export function linearize(obj) {
 
 export const BODY_GEOMETRY = (buildName) => bodyGeometry(bodyModel(buildName));
 
-// Do not render skin triangles fully covered by trousers. Even matching bone
-// chains can intersect slightly at a bent knee because cloth and skin use
-// different tessellation. Keep exposed ankles/calves and all hand triangles.
-export function setBodyCoverage(rig, bottom) {
+// Do not render skin triangles fully covered by trousers or sleeves. Even
+// matching bone chains intersect slightly because cloth and skin use different
+// tessellation. Restore exposed skin whenever the equipped cut changes.
+export function setBodyCoverage(rig, bottom, top = null) {
   const mesh = rig && rig.bodyMesh; if (!mesh) return;
   const source = rig.uncoveredGeometry || (rig.uncoveredGeometry = mesh.geometry);
   const covered = bottom && !bottom.skirt;
-  const key = covered ? (bottom.length || 'full') : 'none';
+  const sleeve = top && top.sleeve !== 'none' ? (top.sleeve || 'short') : 'none';
+  const topKey = top ? JSON.stringify([sleeve, !!top.tucked, !!top.vneck, top.collar === 'hood']) : 'no-top';
+  const key = `${covered ? (bottom.length || 'full') : 'none'}|${topKey}`;
   if (rig.coverageKey === key) return;
   rig.coverageKey = key;
   const previous = mesh.geometry;
-  if (!covered) mesh.geometry = source;
+  if (!covered && !top) mesh.geometry = source;
   else {
     const G = rig.model.legs.L, P = rig.model.P[1];
-    const hem = bottom.length === 'shorts' ? G.kn[1] + 0.16 : G.an[1] + (bottom.length === 'capri' ? 0.16 : 0.035);
+    const hem = bottom?.length === 'shorts' ? G.kn[1] + 0.16 : G.an[1] + (bottom?.length === 'capri' ? 0.16 : 0.035);
     const { position: p, skinIndex: ids, skinWeight: weights } = source.attributes;
-    const underCloth = i => {
+    const underTrousers = i => {
+      if (!covered) return false;
       if (p.getY(i) < hem + 0.006 || p.getY(i) > P + 0.06) return false;
       for (let k = 0; k < 4; k++) {
         const bone = ids.array[i * 4 + k];
@@ -359,12 +362,41 @@ export function setBodyCoverage(rig, bottom) {
       }
       return true;
     };
+    // Skin and cloth have different triangulation at bending joints. Remove
+    // only skin fully beneath sleeves; exposed forearms/hands remain intact.
+    const sleeveLen = sleeve === 'long' ? DIM.upperArm + DIM.foreArm - 0.025 : 0.15;
+    const underSleeve = i => {
+      if (sleeve === 'none') return false;
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      if (Math.abs(x) < rig.model.shoulderX - 0.10 || y > P + DIM.shoulderY + 0.085) return false;
+      const side = x >= 0 ? 'L' : 'R', A = rig.model.arms[side];
+      const along = segT(x, y, z, A.sh, A.wr) * (DIM.upperArm + DIM.foreArm);
+      if (along > sleeveLen - 0.008) return false;
+      const arm = Math.min(rig.model.arm(side, x, y, z), rig.model.deltoid(side, x, y, z));
+      return arm < rig.model.trunk(x, y, z) + 0.04;
+    };
+    const underTopTorso = i => {
+      if (!top) return false;
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), M = rig.model;
+      // A bare forearm can rest against the waist. Keep arm/head skin even
+      // when it lies inside the torso envelope; sleeves handle their own cut.
+      const dominant = ids.getX(i);
+      if (dominant >= 1 && dominant <= 7) return false;
+      if (y < P + (top.tucked ? 0.035 : -0.095) + 0.008 || y > P + 0.49) return false;
+      // Preserve the actual open neck and V-neck, including a margin at edges.
+      const neckY = P + (top.collar === 'hood' ? 0.475 : 0.488) + 0.02 - 0.03 * Math.max(0, Math.min(1, (z + 0.02) / 0.08));
+      if (Math.hypot(x, (z - 0.004) * 1.08) < 0.064 && y > neckY - 0.036) return false;
+      if (top.vneck && y > P + 0.389 + 1.5 * Math.abs(x) && z > 0.024) return false;
+      return Math.min(M.trunk(x, y, z), M.glute('L', x, y, z), M.glute('R', x, y, z)) < 0.028;
+    };
+    const hidden = new Uint8Array(p.count);
+    for (let i = 0; i < p.count; i++) hidden[i] = underTrousers(i) || underSleeve(i) || underTopTorso(i) ? 1 : 0;
     const kept = [], count = source.index ? source.index.count : p.count;
     for (let t = 0; t < count; t += 3) {
       const a = source.index ? source.index.getX(t) : t;
       const b = source.index ? source.index.getX(t + 1) : t + 1;
       const c = source.index ? source.index.getX(t + 2) : t + 2;
-      if (!(underCloth(a) && underCloth(b) && underCloth(c))) kept.push(a, b, c);
+      if (!(hidden[a] && hidden[b] && hidden[c])) kept.push(a, b, c);
     }
     mesh.geometry = source.clone(); mesh.geometry.setIndex(kept);
     mesh.geometry.userData = { ...source.userData, keep: false };

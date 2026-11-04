@@ -281,7 +281,8 @@ export class AvatarStudio {
 
   _applyRules() {
     const bottom = this.resolveItem(this.state.equipped.bottom);
-    setBodyCoverage(this.rig, bottom ? (bottom.options || {}) : null);
+    const top = this.resolveItem(this.state.equipped.top);
+    setBodyCoverage(this.rig, bottom ? (bottom.options || {}) : null, top ? (top.options || {}) : null);
     const hat = this.slots.hat;
     const hair = this.slots.hair;
     if (hair?.hideUnderHat) for (const m of hair.hideUnderHat) m.visible = !(hat && hat.hideHairTop);
