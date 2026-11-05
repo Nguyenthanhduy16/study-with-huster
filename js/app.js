@@ -564,13 +564,16 @@
         }, h('span.ic', null, E.icon), h('em', null, E.label), h('i', null, String(i + 1)));
         btns.push(b);
       });
-      hub = h('button.po-wheel-hub', { type: 'button', onclick: e => { e.stopPropagation(); hubAction(); } }, h('span.ic'), hubT = h('em'));
+      hub = h('button.po-wheel-hub', { type: 'button', onclick: e => { e.stopPropagation(); if (st && st.openedAt != null && e.timeStamp - st.openedAt < 400) return; hubAction(); } }, h('span.ic'), hubT = h('em'));
       ring.append(svg, ...btns, hub);
       hint = h('div#po-wheel-hint.po-wheel-hint', { role: 'status' });
       root.setAttribute('aria-describedby', 'po-wheel-hint');
       root.append(ring, hint);
       root.addEventListener('click', e => {
         if (!st || st.mode !== 'toggle') return;
+        // chạm nhanh vào ✋ trên điện thoại: trình duyệt phát thêm một 'click' ở đúng chỗ vừa chạm, rơi vào nền vòng
+        // vừa mở ⇒ đừng coi là "bấm ra ngoài" mà đóng ngay
+        if (st.openedAt != null && e.timeStamp - st.openedAt < 400) return;
         const dx = e.clientX - st.cx, dy = e.clientY - st.cy, i = sectorAt(dx, dy, true);
         if (i >= 0) choose(i); else if (Math.hypot(dx, dy) < st.R * 0.38) hubAction(); else close();
       });
@@ -661,7 +664,7 @@
     function release(ts) {
       if (!st || st.mode !== 'hold') return;
       const quick = (ts == null ? performance.now() : ts) - st.t < 320 && !st.moved;
-      if (quick) { st.mode = 'toggle'; hintText(); setSel(-1); hub.focus({ preventScroll: true }); }
+      if (quick) { st.mode = 'toggle'; st.openedAt = ts == null ? performance.now() : ts; hintText(); setSel(-1); hub.focus({ preventScroll: true }); }
       else if (st.sel >= 0) choose(st.sel);
       else close();
     }
@@ -1440,7 +1443,7 @@
     };
     const fb = h('textarea.po-in', { rows: 3, maxlength: 1000, placeholder: 'Góp ý, báo lỗi, ý tưởng cho Học Online Cùng Huster…' });
     const fbKind = h('select.po-in', null, h('option', { value: 'gop_y' }, 'Góp ý'), h('option', { value: 'bao_loi' }, 'Báo lỗi'), h('option', { value: 'bao_cao' }, 'Báo cáo vi phạm'));
-    const q = store.get('quality', 'mid');
+    const q = store.get('quality', U.isTouch ? 'low' : 'mid');
     pane.replaceChildren(...[
       h('div.po-me-card', null, cardThumb(net.me.id, p.display_name, U.maskMssv(p.mssv))),
       h('div.po-me-head', null,
