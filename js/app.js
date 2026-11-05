@@ -532,12 +532,13 @@
   /* =================================================================
      VÒNG HÀNH ĐỘNG NHANH (radial menu) — giữ Q hoặc giữ nút ✋ ở góc phải dưới:
      rê chuột / kéo ngón tay về một ô rồi thả để chọn · bấm nhanh Q / chạm nút: vòng đứng yên, bấm vào ô ·
-     phím 1–8 chọn nhanh, 0 dừng hoạt động, Esc đóng.
+     phím 1–9 chọn nhanh, 0 dừng hoạt động, Esc đóng.
      ================================================================= */
   const Wheel = (() => {
     const ITEMS = [
       { k: 'vay', type: 'emo' }, { k: 'doc', type: 'act' }, { k: 'dien-thoai', type: 'act' }, { k: 'laptop', type: 'act' },
-      { k: 'co-vu', type: 'emo' }, { k: 'thich', type: 'emo' }, { k: 'cui-chao', type: 'emo' }, { k: 'vuon-vai', type: 'emo' }
+      { k: 'co-vu', type: 'emo' }, { k: 'thich', type: 'emo' }, { k: 'cui-chao', type: 'emo' }, { k: 'vuon-vai', type: 'emo' },
+      { k: 'chup-anh', type: 'act' }
     ];
     const N = ITEMS.length, STEP = Math.PI * 2 / N;
     const W = { open: false };
@@ -627,8 +628,8 @@
     }
     function hintText() {
       hint.textContent = st.mode === 'hold'
-        ? (st.src === 'key' ? 'Rê chuột về một ô rồi thả Q · phím 1–8 · Esc để huỷ' : 'Kéo ngón tay về một ô rồi thả')
-        : (U.isTouch ? 'Chạm vào một ô để chọn · chạm ra ngoài để đóng' : 'Bấm vào một ô hoặc phím 1–8 · 0 để dừng · Esc hoặc Q để đóng');
+        ? (st.src === 'key' ? 'Rê chuột về một ô rồi thả Q · phím 1–9 · Esc để huỷ' : 'Kéo ngón tay về một ô rồi thả')
+        : (U.isTouch ? 'Chạm vào một ô để chọn · chạm ra ngoài để đóng' : 'Bấm vào một ô hoặc phím 1–9 · 0 để dừng · Esc hoặc Q để đóng');
     }
     function close() {
       if (!W.open) return;

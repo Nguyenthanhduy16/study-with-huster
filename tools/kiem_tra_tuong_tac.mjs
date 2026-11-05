@@ -40,7 +40,7 @@ const D = dom(), { h, document, U, emit } = D;
 const button = h('button#po-wheel-btn'), modal = h('div#po-modal', { hidden: true }), login = h('div#po-login', { hidden: true }); document.body.append(button, modal, login); button.focus();
 const calls = [], activities = new Map();
 const World = { me: { mode: 'campus' }, actOf: id => activities.get(id), setAct: (id, k) => { activities.set(id, k); calls.push(['act', k]); return true; }, emote: (id, k) => { calls.push(['emote', k]); return true; }, freeze: on => calls.push(['freeze', on]) };
-const AV2 = { ACTS: { doc: { label: 'Đọc sách', icon: '📖' }, 'dien-thoai': { label: 'Bấm điện thoại', icon: '📱' }, laptop: { label: 'Dùng laptop', icon: '💻' } }, EMOTES: Object.fromEntries(['vay', 'co-vu', 'thich', 'cui-chao', 'vuon-vai'].map(k => [k, { label: k, icon: '👋' }])) };
+const AV2 = { ACTS: { doc: { label: 'Đọc sách', icon: '📖' }, 'dien-thoai': { label: 'Bấm điện thoại', icon: '📱' }, laptop: { label: 'Dùng laptop', icon: '💻' }, 'chup-anh': { label: 'Chụp ảnh', icon: '📸' } }, EMOTES: Object.fromEntries(['vay', 'co-vu', 'thich', 'cui-chao', 'vuon-vai'].map(k => [k, { label: k, icon: '👋' }])) };
 const timers = [];
 const context = vm.createContext({ ...D, h, U, $: s => document.querySelector(s), World, AV2, net: { me: { id: 'self' } }, toast() {}, innerWidth: 1024, innerHeight: 768, performance: { now: () => 100 }, requestAnimationFrame: f => f(), setTimeout: f => { timers.push(f); return timers.length; }, clearTimeout() {} }); context.window = context;
 const app = source('js/app.js'), start = app.indexOf('  const Wheel = (() => {'), end = app.indexOf('  function updateMini()', start);
@@ -77,7 +77,7 @@ check('Radial ring and hint fit small landscape screens; every visible sector st
       assert(left >= 0 && top >= 0 && left + diameter <= width && top + diameter <= height, `${width}x${height}: ring clipped`);
       assert(parseFloat(hint.style.top) + 24 <= height, 'hint has space below the ring');
       assert.equal(parseFloat(hint.style.left), width / 2, 'hint stays centered rather than being clipped near pointer');
-      const a = -Math.PI / 2 + i * Math.PI / 4;
+      const a = -Math.PI / 2 + i * 2 * Math.PI / context.Wheel.items.length;   // số ô theo vòng thật (9 ô khi có Chụp ảnh)
       emit('pointermove', { clientX: cx + Math.cos(a) * R * .68, clientY: cy + Math.sin(a) * R * .68 });
       emit('keyup', { code: 'KeyQ', timeStamp: 1000 });
       assert.equal(calls.at(-1)[1], context.Wheel.items[i].k, 'release selects the displayed sector');

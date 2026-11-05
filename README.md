@@ -8,7 +8,7 @@ Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn th
 
 ## Đợt 3 — tiếp tục từ mã đã push (04/11/2026)
 
-- Phòng thay đồ có 89 món, logo và thẻ HUST, tương thích dữ liệu trang phục cũ. Tóc → **Đầu moi** có mái tỉa, hai bên sát và gáy mullet; đổi màu được. Nhãn đồng phục dùng HUST, bỏ tên Phương Thảo khỏi giao diện.
+- Phòng thay đồ có 90 món, logo và thẻ HUST, tương thích dữ liệu trang phục cũ. Tóc → **Tóc xoăn** bồng, lọn xoăn tròn, dài tới ngang cằm; **Đầu moi** có mái tỉa, hai bên sát và gáy mullet; đổi màu được. Nhãn đồng phục dùng HUST, bỏ tên Phương Thảo khỏi giao diện.
 - Sửa quần bị kéo theo chân đối diện và da xuyên qua khi bước/ngồi; tự khôi phục phần da lộ ra khi đổi quần ngắn/váy. Laptop cầm tay và laptop trong vòng hành động có logo quả táo phía sau.
 - Sửa áo khi vung tay: tính cả vùng vai/cơ delta, chuyển tiếp trọng số liên tục và che da bên trong áo; khôi phục da khi đổi kiểu cổ, gấu, tay dài/ngắn hoặc bỏ áo.
 - Tên ứng dụng và tiêu đề tab là **Học Online Cùng Huster**. Màn đăng nhập chỉ cần hồ sơ/nhân vật rồi bấm **Học ngay**; luôn bắt đầu ở sân trước thư viện, bỏ lựa chọn điểm vào và nhận câu hỏi tự động.
@@ -19,7 +19,7 @@ Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn th
 - Di chuyển WASD đồng thời kéo chuột trái/phải; điện thoại dùng cần điều khiển và ngón tay xoay cảnh riêng. Gõ chat, mở vòng hành động, mất focus đều giải phóng phím di chuyển.
 - Bấm ghế để đi tới rồi ngồi, hoặc nhấn **E** cạnh ghế trống; hiệu chỉnh mặt ngồi và hướng theo loại ghế. Không dịch chuyển tới ghế khi sai tầng hoặc không tìm được đường; kiểm tra ghế lại lúc tới nơi.
 - Bỏ nút dịch chuyển ở thanh dưới. Tới khu khác qua cửa/thang máy/cầu thang; tìm người ở tầng khác chỉ hướng dẫn đường đi.
-- **Giữ Q** hoặc giữ nút ✋ để chọn hành động; chạm nhanh để giữ vòng mở. Có vẫy tay, đọc sách, điện thoại, laptop; **1–8** chọn nhanh, **0** dừng, **Esc** đóng. Hỗ trợ Tab/mũi tên/Enter.
+- **Giữ Q** hoặc giữ nút ✋ để chọn hành động; chạm nhanh để giữ vòng mở. Có vẫy tay, đọc sách, điện thoại, laptop, chụp ảnh (giơ điện thoại ngang tầm mắt); **1–9** chọn nhanh, **0** dừng, **Esc** đóng. Hỗ trợ Tab/mũi tên/Enter.
 - Chat hiện trên đầu người gửi; kiểm duyệt xoá cả tin và bong bóng. Trạng thái ghế/hoạt động gửi nhanh, kênh cũ không ảnh hưởng khu mới, piano dọn nốt đang chờ khi đổi khu.
 - Lỗi tải cảnh/WebGL có thông báo và nút tải lại, không kẹt ở màn chờ.
 

@@ -321,7 +321,7 @@
       if (Number.isInteger(p.m.seat) && p.m.seat >= -1 && p.m.seat < 10000) m.seat = p.m.seat;
       if (fin(p.m.sts)) m.sts = p.m.sts;
       if (typeof p.m.st === 'string' && p.m.st.length < 30) m.st = p.m.st;
-      if (p.m.act === null || (p.m.act && [null, '', 'doc', 'dien-thoai', 'laptop'].includes(p.m.act.k) && fin(p.m.act.t))) m.act = p.m.act;
+      if (p.m.act === null || (p.m.act && [null, '', 'doc', 'dien-thoai', 'laptop', 'chup-anh'].includes(p.m.act.k) && fin(p.m.act.t))) m.act = p.m.act;
       if (Array.isArray(p.m.p) && p.m.p.length === 4 && p.m.p.every(fin)) m.p = p.m.p;
       const old = liveMeta.get(p.u);
       if (old && old.at > p.t) return;

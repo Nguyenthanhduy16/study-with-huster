@@ -151,6 +151,44 @@ function hairGeometry(M, style, hatOn) {
     g.translate(-H.bone[0], -H.bone[1], -H.bone[2]);
     return g;
   }
+  if (style === 'xoan') {
+    // Tóc xoăn bồng: khối dày quanh đầu, phồng hai bên tai và sau gáy (dài tới ngang cằm, thu dần về cuối),
+    // vài lọn mái xoăn rủ lệch trước trán (vẫn lộ một phần trán), chừa khuôn mặt; bề mặt gợn thành các lọn xoăn tròn
+    // (hoạ tiết 3D, rẻ hơn nhiều so với hàng trăm khối cầu).
+    const curls = (x, y, z) => {
+      const a = 78;
+      const c = Math.sin(x * a + 1.3) * Math.sin(y * a * 0.95 + 0.7) * Math.sin(z * a + 2.1)
+        + 0.5 * Math.sin(x * a * 1.9 + z * 31) * Math.sin(y * a * 1.8 - 0.4) * Math.cos(z * a * 1.7 + x * 20);
+      return Math.max(0, c);                     // các "hạt" tròn tách nhau ⇒ thấy rõ từng lọn
+    };
+    const field = (x, y, z) => {
+      const rx = x - C[0], ry = y - C[1], rz = z - C[2];
+      const puff = hatOn ? 0.012 : 0.03 + 0.012 * smooth(0.0, 0.09, ry);           // đỉnh đầu bồng nhất
+      let d = M.headSDF(x, y, z, puff, { features: false });
+      if (!hatOn) d = smin(d, ellipsoid(x, y, z, [C[0], C[1] + 0.05, C[2] - 0.012], [0.118, 0.085, 0.124]), 0.04);   // vòm tóc
+      for (const s of [-1, 1]) {
+        d = smin(d, ellipsoid(x, y, z, [C[0] + s * 0.086, C[1] - 0.02, C[2] - 0.02], [0.058, 0.075, 0.08]), 0.04);  // phồng ngang tai
+        d = smin(d, ellipsoid(x, y, z, [C[0] + s * 0.07, C[1] - 0.105, C[2] - 0.035], [0.042, 0.06, 0.06]), 0.04);   // thu dần xuống cằm
+      }
+      d = smin(d, ellipsoid(x, y, z, [C[0], C[1] - 0.06, C[2] - 0.075], [0.112, 0.105, 0.068]), 0.05);         // sau gáy
+      // chừa khuôn mặt: từ giữa trán trở xuống, giữa hai thái dương
+      const face = Math.max(0.022 - rz, Math.abs(rx) - 0.07, ry - 0.062);
+      d = Math.max(d, -face);
+      if (!hatOn) {                                                                                                   // lọn mái xoăn rủ lệch
+        d = smin(d, ellipsoid(x, y, z, [C[0] - 0.048, C[1] + 0.05, C[2] + 0.09], [0.034, 0.03, 0.026]), 0.022);
+        d = smin(d, ellipsoid(x, y, z, [C[0] + 0.008, C[1] + 0.066, C[2] + 0.094], [0.028, 0.024, 0.024]), 0.02);
+        d = smin(d, ellipsoid(x, y, z, [C[0] + 0.055, C[1] + 0.04, C[2] + 0.084], [0.028, 0.034, 0.026]), 0.022);
+      }
+      d = Math.max(d, -0.165 - ry);                                                                                   // dài tới ngang cằm
+      if (!hatOn || ry < 0.02) d -= 0.016 * curls(x, y, z) * smooth(-0.165, -0.12, ry);                               // lọn xoăn
+      // khoét lại mặt từ lông mày trở xuống sau khi thêm lọn xoăn: không lọn nào lấn vào má / mắt
+      return Math.max(d, -Math.max(0.03 - rz, Math.abs(rx) - 0.064, ry - 0.028));
+    };
+    const g = surfaceNets(field, [C[0] - 0.2, C[1] - 0.185, C[2] - 0.21], [C[0] + 0.2, C[1] + 0.2, C[2] + 0.17], 0.0062);
+    relax(g, 1, 0.15);                           // giữ gợn lọn xoăn, không làm mượt thành mũ bảo hiểm
+    g.translate(-H.bone[0], -H.bone[1], -H.bone[2]);
+    return g;
+  }
   const tight = style === 'cua' || style === 'buoc' || style === 'bui';
   const longish = style === 'bob' || style === 'dai';
   const field = (x, y, z) => {
@@ -202,7 +240,7 @@ export function buildHair(ctx) {
   const hatOn = !!ctx.hatOn;
   const M = rig.model;
   const geo = cached(`hair|${M.name}|${style}|${hatOn}`, () => hairGeometry(M, style, hatOn));
-  const mat = new THREE.MeshStandardMaterial({ color: item.colors.main, roughness: style === 'moi' ? 0.88 : 0.62, flatShading: true });
+  const mat = new THREE.MeshStandardMaterial({ color: item.colors.main, roughness: style === 'moi' || style === 'xoan' ? 0.88 : 0.62, flatShading: true });
   const hair = new THREE.Mesh(geo, mat);
   const g = new THREE.Group();
   g.add(hair);

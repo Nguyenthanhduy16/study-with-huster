@@ -397,7 +397,7 @@ canvas.po-idcard { width: 170px; max-width: 45%; height: auto; border-radius: 8p
 .po-actions .po-btn.ghost.po-ctx kbd, .po-actions .po-btn.line.po-ctx kbd { background: var(--accent-soft); border-color: var(--line); }
 
 /* ---------- vòng hành động nhanh (giữ Q / nút ✋) ---------- */
-.po-wheel-btn { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; border-radius: 50%;
+.po-wheel-btn { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: calc(68px + env(safe-area-inset-bottom, 0px));   /* chừa góc dưới phải cho huy hiệu "Powered by Netlify" của hosting */ width: 58px; height: 58px; border-radius: 50%;
   border: 1px solid var(--line); background: var(--panel); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: var(--shadow); cursor: pointer; z-index: 7;
   display: grid; place-items: center; font-size: 26px; touch-action: none; user-select: none; -webkit-user-select: none; transition: transform .15s; }
 .po-wheel-btn:hover { transform: scale(1.06); }
@@ -501,7 +501,7 @@ body.po-wheel-on .po-wheel-btn { background: var(--accent); color: var(--accent-
   .po-tabs button span { font-size: 10px; }
   .po-joy { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: 104px; height: 104px; }
   .po-joy i { width: 42px; height: 42px; }
-  .po-wheel-btn { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); width: 54px; height: 54px; }
+  .po-wheel-btn { bottom: calc(62px + env(safe-area-inset-bottom, 0px)); width: 54px; height: 54px; }   /* trên huy hiệu Netlify ở góc dưới phải */
   .po-mini, .po-mini-btn { top: calc(56px + env(safe-area-inset-top, 0px)); bottom: auto; left: auto; right: max(10px, env(safe-area-inset-right, 0px)); }
   .po-mini canvas { width: 120px; height: 96px; }
   .po-focusring { top: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); }
