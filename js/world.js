@@ -1124,10 +1124,14 @@
   let autoDrive = false;
   const TURN = 2.6;      // rad/s ở độ nhạy 1 khi giữ ←/→
 
+  let othersT = 0;
   function others3D(dt, camera) {
     const list = [];
+    /* thời gian thật giữa hai khung hình (dt của khung hình bị chặn 0,05 s; vị trí đoán thì theo đồng hồ thật) */
+    const tNow = performance.now(), rdt = othersT ? Math.min(0.25, Math.max(0.001, (tNow - othersT) / 1000)) : dt; othersT = tNow;
     for (const o of others.values()) {
       if (o.seat < 0) {
+        const dt = rdt;
         /* đoán vị trí hiện tại = gói gần nhất + vận tốc × thời gian (tối đa 2,5 s; quá lâu không có gói thì đứng chờ).
            Nhân vật đi theo vận tốc nhận được (không trễ sau vị trí thật) và chỉ được kéo nhẹ về chỗ đoán,
            nên gói mới tới không làm giật; bước chân và hướng mặt lấy theo vận tốc nên không rung. */
@@ -1139,6 +1143,8 @@
         const k = Math.min(1, dt * (going ? 3 : 6)); o.x += (tx - o.x) * k; o.z += (tz - o.z) * k; o.y += (o.ty - o.y) * Math.min(1, dt * 8);
         const meas = Math.min(9, Math.hypot(o.x - ox, o.z - oz) / Math.max(dt, 1e-3));
         o.speed = (o.speed || 0) + (meas - (o.speed || 0)) * Math.min(1, dt * 8);
+        // bước chân không nhanh hơn vận tốc thật nhận được: những lần kéo nhẹ về chỗ đoán không biến thành chạy
+        if (going) o.speed = Math.min(o.speed, Math.hypot(o.vx, o.vz) * 1.15 + 0.2);
         if (going && Math.hypot(o.vx, o.vz) > 0.3) o.tyaw = Math.atan2(o.vx, o.vz);
         else if (o.speed > 0.3 && meas > 0.3) o.tyaw = Math.atan2(o.x - ox, o.z - oz);
         // xoay người dần, tối đa ~4 rad/s: gói mới đổi hướng không làm nhân vật quay giật
@@ -1246,11 +1252,18 @@
      (đi vòng / kéo chuột đổi hướng) — đi thẳng thì vẫn thưa, rẽ thì gửi dày hơn (cách nhau ≥ 250 ms).
      Vận tốc gửi đi được làm mượt (~0,15 s) thay vì vận tốc của đúng một khung hình.
      Một khung hình đứng yên (vướng va chạm, cầu thang) không tính là dừng: phải đứng yên liên tục ≥ 0,25 s. */
-  let lastPosCall = 0, svx = 0, svz = 0, stillSince = 0, sent = null;
+  /* Vận tốc gửi đi tính theo THỜI GIAN THẬT (quãng đường thật / thời gian thật). me.vx tính theo dt của khung hình,
+     mà dt bị chặn ở 0,05 s: máy chậm (điện thoại, tab bận) thì nhân vật thật đi chậm hơn me.vx ⇒ người xem đoán
+     vượt lên trước rồi bị kéo lùi (giật, trông như chạy nhanh). */
+  let lastPosCall = 0, lastPX = 0, lastPZ = 0, svx = 0, svz = 0, stillSince = 0, sent = null;
   function sendPos(now, movingNow) {
-    const dt = Math.min(0.1, Math.max(0, (now - (lastPosCall || now)) / 1000)); lastPosCall = now;
-    if (!wasMoving) { svx = me.vx; svz = me.vz; }
-    else { const a = Math.min(1, dt / 0.15); svx += (me.vx - svx) * a; svz += (me.vz - svz) * a; }
+    const dt = lastPosCall ? Math.min(0.5, Math.max(0, (now - lastPosCall) / 1000)) : 0; lastPosCall = now;
+    let rvx = me.vx, rvz = me.vz;
+    if (dt > 0.001) { rvx = (me.x - lastPX) / dt; rvz = (me.z - lastPZ) / dt; }
+    const rv = Math.hypot(rvx, rvz); if (rv > 9) { rvx *= 9 / rv; rvz *= 9 / rv; }      // đổi khu / ngồi ghế: không tính là vận tốc
+    lastPX = me.x; lastPZ = me.z;
+    if (!wasMoving) { svx = rvx; svz = rvz; }
+    else { const a = Math.min(1, dt / 0.15); svx += (rvx - svx) * a; svz += (rvz - svz) * a; }
     if (movingNow) stillSince = 0; else if (!stillSince) stillSince = now;
     const moving = movingNow || (wasMoving && now - stillSince < 250);
     const POS_MS = APP.posIntervalMs || 1200;
