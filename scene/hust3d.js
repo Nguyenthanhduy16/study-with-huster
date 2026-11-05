@@ -1500,20 +1500,47 @@ function plant(x,y,z,s=1){const g=new THREE.Group();
     const lf=new THREE.Mesh(sph,greens[i%4]);lf.scale.set(.075,Lf,.022);lf.position.y=Lf;lf.castShadow=true;inner.add(lf);piv.add(inner);g.add(piv);}
   g.position.set(x,y,z);g.scale.setScalar(s);scene.add(g);if(y<1)cols.push([x,z,.35*s]);}
 
-/* ---------- far end: info desk in a ring of white curved partitions ---------- */
-mk(cyl(1.45,1.5,.98,48),M.white,DESK.x,PY+.49,DESK.z);
-mk(cyl(1.56,1.56,.05,48),mat('#ffffff',{roughness:.3}),DESK.x,PY+1.0,DESK.z);
-mk(cyl(.9,.9,1.0,32),mat('#e6e7ea'),DESK.x,PY+.5,DESK.z);
-mk(cyl(.24,.3,2.0,20),M.white,DESK.x,PY+1.95,DESK.z);
-mk(cyl(1.9,1.75,.16,56),M.white,DESK.x,PY+2.95,DESK.z);
-{const r=new THREE.Mesh(new THREE.RingGeometry(1.0,1.15,56),M.led);r.rotation.x=PI/2;r.position.set(DESK.x,PY+2.86,DESK.z);scene.add(r);}
-cols.push([DESK.x,DESK.z,1.8]);
-for(const s of [-1,1]){const th0=s*.72,th1=s*2.72;
-  arcRun(DESK.x,DESK.z,3.7,th0,th1,14,.24,2.4,PY+1.2,M.white,{col:true});
-  arcRun(DESK.x,DESK.z,3.7,th0,th1,14,.28,.05,PY+2.42,mat('#e7e8ec'),{cast:false});
-  const th=s*1.55,x=DESK.x+3.88*Math.sin(th),z=DESK.z+3.88*Math.cos(th);
-  const sc=mk(box(1.2,.75,.05),mat('#262b40'),x,PY+1.45,z);sc.rotation.y=th;
-  const f=new THREE.Mesh(new THREE.PlaneGeometry(1.1,.68),new THREE.MeshBasicMaterial({map:chartTex}));f.position.set(DESK.x+3.91*Math.sin(th),PY+1.45,DESK.z+3.91*Math.cos(th));f.rotation.y=th;scene.add(f);}
+/* ---------- far end: khu trưng bày tròn (theo ảnh thật tầng 6): bàn tròn có màn cảm ứng đặt nghiêng, cột "phễu"
+   loe từ mặt bàn lên tấm trần tròn viền đèn LED, vòng nan bao quanh; vách cong trắng có gờ thấp và tivi treo mặt trong ---------- */
+const uiTex=canvasTex(256,160,(g,w,h)=>{g.fillStyle='#f4f7fc';g.fillRect(0,0,w,h);g.fillStyle='#2f5fd0';g.fillRect(0,0,w,22);
+  g.fillStyle='#ffffff';g.fillRect(8,7,46,8);g.fillStyle='#d23b3b';g.fillRect(w-30,6,22,10);
+  [[10,32,70,52,'#7fa9ee'],[88,32,70,52,'#9cc3f5'],[166,32,80,52,'#5b86d8']].forEach(([x,y,a,b,c])=>{g.fillStyle=c;g.fillRect(x,y,a,b);});
+  g.fillStyle='#b9c3d6';for(let k=0;k<5;k++)g.fillRect(10,96+k*12,k%2?150:210,5);});
+{const X=DESK.x,Z=DESK.z,Y=PY,scrM=new THREE.MeshBasicMaterial({map:uiTex});
+ // sàn: đĩa sáng dưới bàn + vòng trắng mảnh
+ mk(cyl(2.3,2.3,.014,64),mat('#eceef1'),X,Y+.013,Z,scene,false);
+ {const r=new THREE.Mesh(new THREE.RingGeometry(2.3,2.4,72),mat('#ffffff'));r.rotation.x=-PI/2;r.position.set(X,Y+.016,Z);r.receiveShadow=true;scene.add(r);}
+ // bàn tròn: chân thụt vào, mặt bàn dày
+ mk(cyl(1.05,1.15,.84,48),M.white,X,Y+.42,Z);
+ mk(cyl(1.62,1.56,.16,64),mat('#fbfbfa',{roughness:.3}),X,Y+.92,Z);
+ // năm màn cảm ứng đặt nghiêng quanh mặt bàn, quay ra ngoài
+ for(let k=0;k<5;k++){const th=k*2*PI/5+.31,g=new THREE.Group();g.position.set(X+1.24*Math.sin(th),Y+1.0,Z+1.24*Math.cos(th));g.rotation.y=th;scene.add(g);
+   mk(box(.44,.18,.24),M.white,0,.09,-.03,g);
+   const pnl=new THREE.Group();pnl.position.set(0,.24,.02);pnl.rotation.x=-.78;g.add(pnl);
+   mk(box(.64,.42,.035),M.black,0,0,0,pnl);
+   const sc=new THREE.Mesh(new THREE.PlaneGeometry(.58,.36),scrM);sc.position.z=.019;pnl.add(sc);}
+ // cột "phễu": thon ở mặt bàn, loe dần lên tấm trần
+ {const pts=[];for(let k=0;k<=24;k++){const t=k/24;pts.push(new THREE.Vector2(.26+1.02*Math.pow(t,2.4),t*1.98));}
+  const f=mk(new THREE.LatheGeometry(pts,40),M.white,X,Y+1.0,Z);f.material=M.white;}
+ // tấm trần tròn + viền đèn LED quanh mép + vòng đèn bên dưới
+ mk(cyl(2.42,2.42,.2,72),M.white,X,Y+3.08,Z);
+ mk(cyl(2.44,2.44,.07,72),M.led,X,Y+2.96,Z,scene,false);
+ {const r=new THREE.Mesh(new THREE.RingGeometry(1.55,1.7,64),M.led);r.rotation.x=PI/2;r.position.set(X,Y+2.97,Z);scene.add(r);}
+ // vòng nan bao quanh (như bánh xe): vòng trắng mảnh + 10 nan nối vào tấm trần, mặt dưới vòng có dải đèn
+ arcRun(X,Z,3.05,0,2*PI,48,.2,.12,Y+2.92,M.white,{cast:false});
+ arcRun(X,Z,3.05,0,2*PI,48,.1,.02,Y+2.855,M.led,{cast:false});
+ for(let k=0;k<10;k++){const th=k*2*PI/10,o=mk(box(.08,.08,.66),M.white,X+2.74*Math.sin(th),Y+2.92,Z+2.74*Math.cos(th),scene,false);o.rotation.y=th;}
+ cols.push([X,Z,1.8]);
+ for(const sg of [-1,1]){const th0=sg*.72,th1=sg*2.72;
+   arcRun(X,Z,3.7,th0,th1,14,.24,2.4,Y+1.2,M.white,{col:true});                        // vách cong
+   arcRun(X,Z,3.7,th0,th1,14,.28,.05,Y+2.42,mat('#e7e8ec'),{cast:false});               // nẹp đỉnh vách
+   arcRun(X,Z,3.46,th0+.04,th1-.04,14,.26,.78,Y+.39,mat('#f0f1f3'),{col:true});          // gờ thấp chạy dọc mặt trong
+   for(const th of [sg*1.3,sg*2.12]){                                                    // tivi treo mặt trong vách
+     const x=X+3.55*Math.sin(th),z=Z+3.55*Math.cos(th);
+     const fr=mk(box(1.12,.68,.05),mat('#1d2742'),x,Y+1.72,z);fr.rotation.y=th+PI;
+     const sc=new THREE.Mesh(new THREE.PlaneGeometry(1.04,.6),scrM);sc.position.set(X+3.52*Math.sin(th),Y+1.72,Z+3.52*Math.cos(th));sc.rotation.y=th+PI;scene.add(sc);}}
+ // ghế khối trắng bên trong vòng vách
+ for(const th of [1.4,-1.4,2.18,-2.18])cube(X+2.72*Math.sin(th),Z+2.72*Math.cos(th),th);}
 /* white counter in front of the ring */
 {const c=mk(box(1.7,.95,.7),M.white,0,PY+.475,-5.7);mk(box(1.8,.05,.8),mat('#ffffff',{roughness:.3}),0,PY+.97,-5.7);cols.push([-.5,-5.7,.6],[.5,-5.7,.6]);}
 /* kiosks and a separate curved partition */
@@ -1605,7 +1632,7 @@ for(const [z0,z1] of [[-6.8,-1.4],[1.2,6.2]]){const cz=(z0+z1)/2,len=z1-z0;mk(bo
   mk(box(.1,.72,.1),M.metal,-13.9,.36,z0+.3);mk(box(.1,.72,.1),M.metal,-13.9,.36,z1-.3);tables++;
   for(let z=z0+.5;z<z1-.2;z+=1.0){place('chairL',-13.1,0,z,-PI/2+(R()-.5)*.2);place('chairN',-14.7,0,z,PI/2+(R()-.5)*.2);seats+=2;}
   cols.push(...Array.from({length:Math.ceil(len)},(_,i)=>[-13.9,z0+.5+i,.95]));}
-mk(box(.6,.45,3.0),mat('#d9dbe0'),13.8,.225,5.3);mk(box(.62,.06,3.02),M.wood,13.8,.47,5.3);cols.push([13.8,4.3,.6],[13.8,6.3,.6]);
+mk(box(.6,.45,3.0),mat('#d9dbe0'),13.8,.225,5.3);mk(box(.62,.06,3.02),M.wood,13.8,.47,5.3);cols.push([13.8,4.3,.6],[13.8,6.3,.6]);seats+=3;for(const dz of [-1,0,1])__S("bench6",13.75,0,5.3+dz,-PI/2);   /* ghế dài ở lối ra thang máy tầng 6: ngồi được (3 chỗ, quay ra sảnh) */
 
 /* planters and the floor sign by the near stairs */
 function planter(q,len){const r=PR+.95,p=atQ(r,q),ry=ryOf(p);const b=mk(box(len,.5,.66),mat('#eef0f4'),p.x,.25,p.z);b.rotation.y=ry;

@@ -41,7 +41,10 @@ try {
   await p.fill('#f-name', 'Thử Thang Máy'); await p.fill('#f-mssv', '20230001');
   await p.click('.po-login-card button[type=submit]');
   await p.waitForSelector('#po-hud:not([hidden])', { timeout: T });
-  await p.waitForFunction(() => World.me.space === 'A', null, { timeout: T });
+  // game luôn bắt đầu ở sân trước thư viện: bước vào sảnh trước
+  await p.waitForFunction(() => World.me.mode === 'campus' || World.me.space === 'A', null, { timeout: T });
+  await p.evaluate(() => World.me.space !== 'A' && World.go('lib_a', { entrance: true }));
+  await p.waitForFunction(() => World.me.space === 'A' && World.me.zone === 'lib_a', null, { timeout: T });
   await p.evaluate(() => World.me.mode === 'seat' && World.standUp());
   await p.waitForFunction(() => World.me.mode === 'walk', null, { timeout: T });
 
