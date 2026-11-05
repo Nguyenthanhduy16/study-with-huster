@@ -1255,13 +1255,21 @@
   /* Vận tốc gửi đi tính theo THỜI GIAN THẬT (quãng đường thật / thời gian thật). me.vx tính theo dt của khung hình,
      mà dt bị chặn ở 0,05 s: máy chậm (điện thoại, tab bận) thì nhân vật thật đi chậm hơn me.vx ⇒ người xem đoán
      vượt lên trước rồi bị kéo lùi (giật, trông như chạy nhanh). */
-  let lastPosCall = 0, lastPX = 0, lastPZ = 0, svx = 0, svz = 0, stillSince = 0, sent = null;
+  let lastPosCall = 0, svx = 0, svz = 0, stillSince = 0, sent = null;
+  const posHist = [];          // [thời điểm, x, z] trong ~0,4 s gần nhất
   function sendPos(now, movingNow) {
     const dt = lastPosCall ? Math.min(0.5, Math.max(0, (now - lastPosCall) / 1000)) : 0; lastPosCall = now;
-    let rvx = me.vx, rvz = me.vz;
-    if (dt > 0.001) { rvx = (me.x - lastPX) / dt; rvz = (me.z - lastPZ) / dt; }
-    const rv = Math.hypot(rvx, rvz); if (rv > 9) { rvx *= 9 / rv; rvz *= 9 / rv; }      // đổi khu / ngồi ghế: không tính là vận tốc
-    lastPX = me.x; lastPZ = me.z;
+    // vận tốc thật đo trên một khoảng ≥ 0,2 s (một khung hình đơn lẻ có thể rất ngắn ⇒ vận tốc vọt lên)
+    const prev = posHist[posHist.length - 1];
+    if (prev && Math.hypot(me.x - prev[1], me.z - prev[2]) > 3) posHist.length = 0;    // đổi khu / ngồi ghế: không phải đi bộ
+    posHist.push([now, me.x, me.z]);
+    while (posHist.length > 2 && now - posHist[1][0] >= 200) posHist.shift();
+    while (posHist.length > 1 && now - posHist[0][0] > 400) posHist.shift();
+    const h0 = posHist[0], span = (now - h0[0]) / 1000;
+    let rvx = 0, rvz = 0;
+    if (span >= 0.03) { rvx = (me.x - h0[1]) / span; rvz = (me.z - h0[2]) / span; }
+    const rv = Math.hypot(rvx, rvz), vmax = 7 * (opt.speed || 1);
+    if (rv > vmax) { rvx *= vmax / rv; rvz *= vmax / rv; }
     if (!wasMoving) { svx = rvx; svz = rvz; }
     else { const a = Math.min(1, dt / 0.15); svx += (rvx - svx) * a; svz += (rvz - svz) * a; }
     if (movingNow) stillSince = 0; else if (!stillSince) stillSince = now;
