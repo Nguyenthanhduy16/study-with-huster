@@ -55,6 +55,7 @@ export const ITEMS = [
   { id: 'toc-mai-lech', slot: 'hair', name: 'Mái lệch', colors: { main: '#2b201a' }, palette: HAIR_COLORS, options: { style: 'mai-lech' } },
   { id: 'toc-cua', slot: 'hair', name: 'Đầu cua', colors: { main: '#1c1714' }, palette: HAIR_COLORS, options: { style: 'cua' } },
   { id: 'toc-dau-moi', slot: 'hair', name: 'Đầu moi', colors: { main: '#1c1714' }, palette: HAIR_COLORS, options: { style: 'moi' } },
+  { id: 'toc-xoan', slot: 'hair', name: 'Tóc xoăn', colors: { main: '#141110' }, palette: HAIR_COLORS, options: { style: 'xoan' } },
   { id: 'toc-bob', slot: 'hair', name: 'Tóc bob', colors: { main: '#3b2a20' }, palette: HAIR_COLORS, options: { style: 'bob' } },
   { id: 'toc-dai', slot: 'hair', name: 'Tóc dài', colors: { main: '#1c1714' }, palette: HAIR_COLORS, options: { style: 'dai' } },
   { id: 'toc-buoc', slot: 'hair', name: 'Buộc đuôi ngựa', colors: { main: '#2b201a', accent: '#d24b6a' }, palette: HAIR_COLORS, options: { style: 'buoc' } },

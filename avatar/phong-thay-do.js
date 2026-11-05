@@ -1699,6 +1699,38 @@
       g2.translate(-H.bone[0], -H.bone[1], -H.bone[2]);
       return g2;
     }
+    if (style === "xoan") {
+      const curls = (x, y, z) => {
+        const a = 78;
+        const c = Math.sin(x * a + 1.3) * Math.sin(y * a * 0.95 + 0.7) * Math.sin(z * a + 2.1) + 0.5 * Math.sin(x * a * 1.9 + z * 31) * Math.sin(y * a * 1.8 - 0.4) * Math.cos(z * a * 1.7 + x * 20);
+        return Math.max(0, c);
+      };
+      const field2 = (x, y, z) => {
+        const rx = x - C[0], ry = y - C[1], rz = z - C[2];
+        const puff = hatOn ? 0.012 : 0.03 + 0.012 * smooth(0, 0.09, ry);
+        let d = M.headSDF(x, y, z, puff, { features: false });
+        if (!hatOn) d = smin(d, ellipsoid(x, y, z, [C[0], C[1] + 0.05, C[2] - 0.012], [0.118, 0.085, 0.124]), 0.04);
+        for (const s of [-1, 1]) {
+          d = smin(d, ellipsoid(x, y, z, [C[0] + s * 0.086, C[1] - 0.02, C[2] - 0.02], [0.058, 0.075, 0.08]), 0.04);
+          d = smin(d, ellipsoid(x, y, z, [C[0] + s * 0.07, C[1] - 0.105, C[2] - 0.035], [0.042, 0.06, 0.06]), 0.04);
+        }
+        d = smin(d, ellipsoid(x, y, z, [C[0], C[1] - 0.06, C[2] - 0.075], [0.112, 0.105, 0.068]), 0.05);
+        const face = Math.max(0.022 - rz, Math.abs(rx) - 0.07, ry - 0.062);
+        d = Math.max(d, -face);
+        if (!hatOn) {
+          d = smin(d, ellipsoid(x, y, z, [C[0] - 0.048, C[1] + 0.05, C[2] + 0.09], [0.034, 0.03, 0.026]), 0.022);
+          d = smin(d, ellipsoid(x, y, z, [C[0] + 8e-3, C[1] + 0.066, C[2] + 0.094], [0.028, 0.024, 0.024]), 0.02);
+          d = smin(d, ellipsoid(x, y, z, [C[0] + 0.055, C[1] + 0.04, C[2] + 0.084], [0.028, 0.034, 0.026]), 0.022);
+        }
+        d = Math.max(d, -0.165 - ry);
+        if (!hatOn || ry < 0.02) d -= 0.016 * curls(x, y, z) * smooth(-0.165, -0.12, ry);
+        return Math.max(d, -Math.max(0.03 - rz, Math.abs(rx) - 0.064, ry - 0.028));
+      };
+      const g2 = surfaceNets(field2, [C[0] - 0.2, C[1] - 0.185, C[2] - 0.21], [C[0] + 0.2, C[1] + 0.2, C[2] + 0.17], 62e-4);
+      relax(g2, 1, 0.15);
+      g2.translate(-H.bone[0], -H.bone[1], -H.bone[2]);
+      return g2;
+    }
     const tight = style === "cua" || style === "buoc" || style === "bui";
     const longish = style === "bob" || style === "dai";
     const field = (x, y, z) => {
@@ -1747,7 +1779,7 @@
     const hatOn = !!ctx.hatOn;
     const M = rig.model;
     const geo = cached(`hair|${M.name}|${style}|${hatOn}`, () => hairGeometry(M, style, hatOn));
-    const mat = new THREE4.MeshStandardMaterial({ color: item.colors.main, roughness: style === "moi" ? 0.88 : 0.62, flatShading: true });
+    const mat = new THREE4.MeshStandardMaterial({ color: item.colors.main, roughness: style === "moi" || style === "xoan" ? 0.88 : 0.62, flatShading: true });
     const hair = new THREE4.Mesh(geo, mat);
     const g = new THREE4.Group();
     g.add(hair);
@@ -3722,6 +3754,7 @@
     { id: "toc-mai-lech", slot: "hair", name: "Mái lệch", colors: { main: "#2b201a" }, palette: HAIR_COLORS, options: { style: "mai-lech" } },
     { id: "toc-cua", slot: "hair", name: "Đầu cua", colors: { main: "#1c1714" }, palette: HAIR_COLORS, options: { style: "cua" } },
     { id: "toc-dau-moi", slot: "hair", name: "Đầu moi", colors: { main: "#1c1714" }, palette: HAIR_COLORS, options: { style: "moi" } },
+    { id: "toc-xoan", slot: "hair", name: "Tóc xoăn", colors: { main: "#141110" }, palette: HAIR_COLORS, options: { style: "xoan" } },
     { id: "toc-bob", slot: "hair", name: "Tóc bob", colors: { main: "#3b2a20" }, palette: HAIR_COLORS, options: { style: "bob" } },
     { id: "toc-dai", slot: "hair", name: "Tóc dài", colors: { main: "#1c1714" }, palette: HAIR_COLORS, options: { style: "dai" } },
     { id: "toc-buoc", slot: "hair", name: "Buộc đuôi ngựa", colors: { main: "#2b201a", accent: "#d24b6a" }, palette: HAIR_COLORS, options: { style: "buoc" } },

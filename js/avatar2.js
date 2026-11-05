@@ -84,7 +84,8 @@
   const ACTS = {
     'doc': { icon: '📖', label: 'Đọc sách' },
     'dien-thoai': { icon: '📱', label: 'Bấm điện thoại' },
-    'laptop': { icon: '💻', label: 'Dùng laptop' }
+    'laptop': { icon: '💻', label: 'Dùng laptop' },
+    'chup-anh': { icon: '📸', label: 'Chụp ảnh' }
   };
   /* ---- đạo cụ dựng bằng khối đơn giản (đơn vị: mét của bộ xương, gắn vào xương thân) ---- */
   const PROP_MAT = {};
@@ -106,6 +107,14 @@
     } else if (kind === 'dien-thoai') {
       add(box(0.072, 0.009, 0.15), pmat('#22252c', { roughness: 0.35 }), 0, 0, 0);
       add(box(0.064, 0.002, 0.136), pmat('#7fc4ff', { emissive: '#3b8fe0', emissiveIntensity: 0.9, roughness: 0.2 }), 0, 0.0055, 0);
+    } else if (kind === 'chup-anh') {        // điện thoại cầm ngang, màn hình quay về phía mặt (−Z), ống kính + đèn flash ở mặt sau (+Z)
+      add(box(0.15, 0.072, 0.009), pmat('#22252c', { roughness: 0.35 }), 0, 0, 0);
+      add(box(0.136, 0.062, 0.002), pmat('#bfe3ff', { emissive: '#5aa6ea', emissiveIntensity: 0.8, roughness: 0.2 }), 0, 0, -0.0055);
+      add(box(0.034, 0.03, 0.004), pmat('#15171c', { roughness: 0.3 }), 0.05, 0.012, 0.0062);
+      const lens = pmat('#3a4a6a', { metalness: 0.6, roughness: 0.15 });
+      add(box(0.012, 0.012, 0.004), lens, 0.042, 0.018, 0.0085); add(box(0.012, 0.012, 0.004), lens, 0.042, 0.004, 0.0085);
+      const flash = add(box(0.008, 0.008, 0.003), pmat('#ffffff', { emissive: '#fff6d0', emissiveIntensity: 2.2 }), 0.058, 0.02, 0.0085);
+      flash.name = 'act-flash'; flash.visible = false;
     } else if (kind === 'laptop') {          // phía người dùng = −Z, bản lề ở +Z
       const al = pmat('#b9bec8', { metalness: 0.4, roughness: 0.4 });
       add(box(0.32, 0.018, 0.22), al, 0, 0, 0);
@@ -137,6 +146,12 @@
       desk: { pos: [-0.03, 0.2, 0.28], rot: [-0.8, 0, 0.1], R: [-0.015, -0.02, 0.0], L: [0.04, -0.02, 0.03], head: 0.48, tap: 'L' },
       lap: { pos: [-0.03, 0.2, 0.28], rot: [-0.8, 0, 0.1], R: [-0.015, -0.02, 0.0], L: [0.04, -0.02, 0.03], head: 0.48, tap: 'L' },
       lie: { pos: [-0.03, 0.46, 0.3], rot: [-1.0, 0, 0.1], R: [-0.015, -0.02, 0.0], L: [0.04, -0.02, 0.03], head: 0.15, tap: 'L' }
+    },
+    'chup-anh': {                            // giơ máy lên ngang tầm mắt, tay duỗi về trước, hai tay kẹp hai cạnh máy (cổ tay ở ngoài mép)
+      stand: { pos: [0, 0.56, 0.44], rot: [0.08, 0, 0], L: [0.118, -0.012, -0.03], R: [-0.118, -0.012, -0.03], head: -0.04 },
+      desk: { pos: [0, 0.56, 0.44], rot: [0.08, 0, 0], L: [0.118, -0.012, -0.03], R: [-0.118, -0.012, -0.03], head: -0.04 },
+      lap: { pos: [0, 0.56, 0.44], rot: [0.08, 0, 0], L: [0.118, -0.012, -0.03], R: [-0.118, -0.012, -0.03], head: -0.04 },
+      lie: { pos: [0, 0.66, 0.3], rot: [-0.9, 0, 0], L: [0.118, -0.012, -0.03], R: [-0.118, -0.012, -0.03], head: 0.1 }
     },
     'laptop': {
       stand: { pos: [0.02, 0.17, 0.28], rot: [-0.05, 0.1, 0], L: [0.03, -0.035, 0.02], R: [-0.06, 0.03, -0.1], head: 0.34, tap: 'R' },
@@ -318,7 +333,7 @@
       K.linearize(g); g.traverse(o => { o.userData.avatar = this; });
       this.rig.joints.wristR.add(g); this.heldObj = g;
     }
-    /* ---- hoạt động kéo dài: 'doc' (đọc sách) | 'dien-thoai' (bấm điện thoại) | 'laptop' (dùng laptop) | null (dừng) ---- */
+    /* ---- hoạt động kéo dài: 'doc' (đọc sách) | 'dien-thoai' (bấm điện thoại) | 'laptop' (dùng laptop) | 'chup-anh' (giơ máy chụp ảnh) | null (dừng) ---- */
     setAct(kind) {
       kind = ACTS[kind] ? kind : null;
       if (kind === this.act) return;
@@ -350,6 +365,9 @@
       const o = this.propObj || _o;
       o.position.set(P.pos[0], P.pos[1], P.pos[2]); o.rotation.set(P.rot[0], P.rot[1], P.rot[2]); o.updateMatrix();
       if (this.propObj) { const s = 0.4 + 0.6 * Math.min(1, w * 1.5); this.propObj.scale.setScalar(s); }
+      if (kind === 'chup-anh' && this.propObj) {          // chụp: cứ ~2,8 s đèn flash loé lên một lần
+        const fl = this.propObj.getObjectByName('act-flash'); if (fl) fl.visible = this.act === 'chup-anh' && ((t * 0.36 + (this.actSeed || 0) * 0.13) % 1) < 0.045;
+      }
       for (const side of ['L', 'R']) {
         const h = P[side]; if (!h) continue;
         let dy = 0, dx = 0;
