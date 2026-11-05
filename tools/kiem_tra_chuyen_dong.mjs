@@ -55,7 +55,7 @@ try {
 
   if (args.dump) fs.writeFileSync(args.dump, JSON.stringify({ ra, rb }));   // --dump=tep.json: lưu số liệu để xem kỹ
   const ta = ra.map(r => r[0]);
-  const truth = t => { let i = ta.findIndex(x => x >= t); if (i <= 0) return ra[Math.max(0, i)].slice(1, 3); const a = ra[i - 1], b = ra[i], f = (t - a[0]) / Math.max(1, b[0] - a[0]); return [a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; };
+  const truth = t => { const i = ta.findIndex(x => x >= t); if (i < 0) return ra.at(-1).slice(1, 3); if (i === 0) return ra[0].slice(1, 3); const a = ra[i - 1], b = ra[i], f = (t - a[0]) / Math.max(1, b[0] - a[0]); return [a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; };
   const speeds = r => { const out = []; for (let i = 0; i < r.length; i++) { let j = i; while (j < r.length && r[j][0] - r[i][0] < 500) j++; if (j >= r.length) break; out.push(Math.hypot(r[j][1] - r[i][1], r[j][2] - r[i][2]) / ((r[j][0] - r[i][0]) / 1000)); } return out; };
   const fps = (ra.length - 1) / ((ra.at(-1)[0] - ra[0][0]) / 1000);
   const errs = rb.slice(3).map(([t, x, z]) => { const [tx, tz] = truth(t); return Math.hypot(x - tx, z - tz); });

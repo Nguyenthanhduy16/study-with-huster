@@ -1256,15 +1256,15 @@
      mà dt bị chặn ở 0,05 s: máy chậm (điện thoại, tab bận) thì nhân vật thật đi chậm hơn me.vx ⇒ người xem đoán
      vượt lên trước rồi bị kéo lùi (giật, trông như chạy nhanh). */
   let lastPosCall = 0, svx = 0, svz = 0, stillSince = 0, sent = null;
-  const posHist = [];          // [thời điểm, x, z] trong ~0,4 s gần nhất
+  const posHist = [];          // [thời điểm, x, z] từ mẫu đã cũ ≥ 0,2 s tới hiện tại
   function sendPos(now, movingNow) {
     const dt = lastPosCall ? Math.min(0.5, Math.max(0, (now - lastPosCall) / 1000)) : 0; lastPosCall = now;
     // vận tốc thật đo trên một khoảng ≥ 0,2 s (một khung hình đơn lẻ có thể rất ngắn ⇒ vận tốc vọt lên)
     const prev = posHist[posHist.length - 1];
     if (prev && Math.hypot(me.x - prev[1], me.z - prev[2]) > 3) posHist.length = 0;    // đổi khu / ngồi ghế: không phải đi bộ
     posHist.push([now, me.x, me.z]);
+    // giữ mẫu mới nhất đã cũ ≥ 0,2 s làm điểm đầu (khung hình thưa, ví dụ 2–3 fps, vẫn còn mẫu trước để đo)
     while (posHist.length > 2 && now - posHist[1][0] >= 200) posHist.shift();
-    while (posHist.length > 1 && now - posHist[0][0] > 400) posHist.shift();
     const h0 = posHist[0], span = (now - h0[0]) / 1000;
     let rvx = 0, rvz = 0;
     if (span >= 0.03) { rvx = (me.x - h0[1]) / span; rvz = (me.z - h0[2]) / span; }
