@@ -1235,11 +1235,13 @@ end $$;
 create or replace function admin_reset(pw text, p_scope text, p_confirm text) returns jsonb language plpgsql security definer set search_path = public, extensions as $$
 begin
   if not _admin_ok(pw) then return _deny(); end if;
+  -- Supabase bật pg-safeupdate cho lệnh gọi qua API: DELETE/UPDATE không có WHERE bị chặn
+  -- ("DELETE requires a WHERE clause") ⇒ xoá cả bảng phải ghi rõ "where true".
   if p_confirm <> 'XOA DU LIEU' then return jsonb_build_object('ok', false, 'error', 'Gõ đúng "XOA DU LIEU" để xác nhận.'); end if;
-  if p_scope in ('stats', 'all') then delete from answers; delete from rounds; delete from daily_stats; delete from events; update questions set use_count = 0; end if;
-  if p_scope in ('content', 'all') then delete from messages; delete from qa_reports; delete from qa_answers; delete from qa_questions;
-    delete from cheers; delete from feedback; delete from notices; end if;
-  if p_scope = 'all' then delete from profiles; end if;
+  if p_scope in ('stats', 'all') then delete from answers where true; delete from rounds where true; delete from daily_stats where true; delete from events where true; update questions set use_count = 0 where true; end if;
+  if p_scope in ('content', 'all') then delete from messages where true; delete from qa_reports where true; delete from qa_answers where true; delete from qa_questions where true;
+    delete from cheers where true; delete from feedback where true; delete from notices where true; end if;
+  if p_scope = 'all' then delete from profiles where true; end if;
   perform _alog('xoa_du_lieu', jsonb_build_object('scope', p_scope));
   return jsonb_build_object('ok', true);
 end $$;
