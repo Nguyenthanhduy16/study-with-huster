@@ -715,7 +715,7 @@ const LIFTS=liftZ.map((z,i)=>{const l={i,z,floor:[1,2,1][i],phase:'idle',door:0,
   const pl=(w,h,mm,px,py,pz,rx,ry)=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mm);p.position.set(px,py,pz);p.rotation.set(rx,ry,0);p.receiveShadow=true;cab.add(p);return p;};
   pl(2*CW,CHT,cabWall,CX1,CHT/2,z,0,-PI/2);pl(CX1-CX0,CHT,cabWall,(CX0+CX1)/2,CHT/2,z-CW,0,0);pl(CX1-CX0,CHT,cabWall,(CX0+CX1)/2,CHT/2,z+CW,0,PI);
   pl(CX1-CX0,2*CW,mat('#3a3d45',{roughness:.35}),(CX0+CX1)/2,.01,z,-PI/2,0);pl(CX1-CX0,2*CW,mat('#e9eaee'),(CX0+CX1)/2,CHT,z,PI/2,0);pl(1.1,1.0,M.down,(CX0+CX1)/2,CHT-.01,z,PI/2,0);
-  mk(box(.05,.05,1.7),M.steel,CX1-.08,.95,z,cab,false);mk(box(1.6,.05,.05),M.steel,(CX0+CX1)/2+.1,.95,z-CW+.07,cab,false);
+  /* cửa cabin đi theo cabin: hai tấm cố định hai bên + ô trên cửa + hai cánh thu vào mép khi mở (đồng bộ cửa tầng) — khi cabin chạy, mặt trước kín hoàn toàn, không còn khe nhìn ra ngoài */{const fm=doorMat;for(const sg of [-1,1])mk(box(.03,CHT,CW-OW+.02),fm,CX0+.012,CHT/2,z+sg*(OW+(CW-OW)/2),cab,false);mk(box(.03,CHT-DH+.02,2*CW),fm,CX0+.012,DH+(CHT-DH)/2,z,cab,false);const gL=new THREE.BoxGeometry(.03,DH,OW);gL.translate(0,0,OW/2);const gR=new THREE.BoxGeometry(.03,DH,OW);gR.translate(0,0,-OW/2);l.cd={L:mk(gL,fm,CX0+.04,DH/2,z-OW,cab,false),R:mk(gR,fm,CX0+.04,DH/2,z+OW,cab,false)};}mk(box(.05,.05,1.7),M.steel,CX1-.08,.95,z,cab,false);mk(box(1.6,.05,.05),M.steel,(CX0+CX1)/2+.1,.95,z-CW+.07,cab,false);
   const ip=mk(box(.26,.55,.03),mat('#2a2d33',{roughness:.3}),CX0+.32,1.25,z+CW-.02,cab,false);
   for(const [dy,c] of [[.12,'#7fb6ff'],[-.02,'#7fb6ff'],[-.16,'#ffd27a']]){const bt=mk(cyl(.035,.035,.02,14),mat('#ffffff',{emissive:c,emissiveIntensity:.8}),0,dy,-.02,ip,false);bt.rotation.x=PI/2;}
   pl(1.3,1.2,mat('#e3e8ee',{roughness:.15,metalness:.25}),CX1-.01,1.55,z,0,-PI/2);
@@ -1027,7 +1027,8 @@ function updateLifts(dt){const p=camera.position,lvl=levelOf(base);
           l.target=null;l.phase='idle';l.floor=4;l.y=LBASE[4];l.cab.position.y=l.y;l.door=0;l.hold=0;l.key='';
           if(ride)ctx.handoff(ME,tf,l.i,pose);}}}
     else if(l.phase==='idle'){l.hold-=dt;l.door=Math.min(1,Math.max(0,l.door+((want||l.hold>0)?1:-1)*dt*1.3));}
-    for(const fl of FLOORS){const o=(fl===l.floor&&l.phase==='idle')?l.door*.68:0,d=l.doors[fl];d.L.position.z=l.z-OW/2-o;d.R.position.z=l.z+OW/2+o;}
+    for(const fl of FLOORS){const o=(fl===l.floor&&(l.phase==='idle'||l.phase==='closing'))?l.door*.68:0,d=l.doors[fl];d.L.position.z=l.z-OW/2-o;d.R.position.z=l.z+OW/2+o;}
+    if(l.cd){const k=Math.max(.002,1-(l.phase==='idle'||l.phase==='closing'?l.door:0));l.cd.L.scale.z=k;l.cd.R.scale.z=k;}
     const key=l.phase+l.floor+l.target;if(key!==l.key){l.key=key;dispDraw(l);}}
     const near=mode==='walk'&&p.z>10.2&&Math.abs(p.x)<2.8;fOpen+=((near?1:0)-fOpen)*Math.min(1,dt*4);fdoors.forEach(f=>f.d.position.x=f.s*(.78+fOpen*1.4));
   updatePanel();}
@@ -1428,7 +1429,7 @@ const LIFTS=liftZ.map((z,i)=>{
   pl(CX1-CX0,2*CW,mat('#3a3d45',{roughness:.35}),(CX0+CX1)/2,.01,z,-PI/2,0);
   pl(CX1-CX0,2*CW,mat('#e9eaee'),(CX0+CX1)/2,CHT,z,PI/2,0);
   pl(1.1,1.0,M.panel,(CX0+CX1)/2,CHT-.01,z,PI/2,0);
-  mk(box(.05,.05,1.7),M.steel,CX1-.08,.95,z,cab,false);
+  /* cửa cabin đi theo cabin: hai tấm cố định hai bên + ô trên cửa + hai cánh thu vào mép khi mở (đồng bộ cửa tầng) — khi cabin chạy, mặt trước kín hoàn toàn, không còn khe nhìn ra ngoài */{const fm=doorMat;for(const sg of [-1,1])mk(box(.03,CHT,CW-OW+.02),fm,CX0+.012,CHT/2,z+sg*(OW+(CW-OW)/2),cab,false);mk(box(.03,CHT-DH+.02,2*CW),fm,CX0+.012,DH+(CHT-DH)/2,z,cab,false);const gL=new THREE.BoxGeometry(.03,DH,OW);gL.translate(0,0,OW/2);const gR=new THREE.BoxGeometry(.03,DH,OW);gR.translate(0,0,-OW/2);l.cd={L:mk(gL,fm,CX0+.04,DH/2,z-OW,cab,false),R:mk(gR,fm,CX0+.04,DH/2,z+OW,cab,false)};}mk(box(.05,.05,1.7),M.steel,CX1-.08,.95,z,cab,false);
   mk(box(1.6,.05,.05),M.steel,(CX0+CX1)/2+.1,.95,z-CW+.07,cab,false);
   const ip=mk(box(.26,.55,.03),mat('#2a2d33',{roughness:.3}),CX0+.32,1.25,z+CW-.02,cab,false);
   for(const [dy,c] of [[.12,'#7fb6ff'],[-.02,'#7fb6ff'],[-.16,'#ffd27a']]){const bt=mk(cyl(.035,.035,.02,14),mat('#ffffff',{emissive:c,emissiveIntensity:.8}),0,dy,-.02,ip,false);bt.rotation.x=PI/2;}
@@ -1766,7 +1767,8 @@ function updateLifts(dt){const p=camera.position;
           l.target=null;l.phase='idle';l.floor=6;l.y=0;l.cab.position.y=0;l.door=0;l.hold=0;l.key='';
           if(ride)ctx.handoff(ME,tf,l.i,pose);}}}
     else if(l.phase==='idle'){l.hold-=dt;l.door=Math.min(1,Math.max(0,l.door+((want||l.hold>0)?1:-1)*dt*1.3));}
-    for(const fl of OWN){const o=(fl===l.floor&&l.phase==='idle')?l.door*.68:0,d=l.doors[fl];d.L.position.z=l.z-OW/2-o;d.R.position.z=l.z+OW/2+o;}
+    for(const fl of OWN){const o=(fl===l.floor&&(l.phase==='idle'||l.phase==='closing'))?l.door*.68:0,d=l.doors[fl];d.L.position.z=l.z-OW/2-o;d.R.position.z=l.z+OW/2+o;}
+    if(l.cd){const k=Math.max(.002,1-(l.phase==='idle'||l.phase==='closing'?l.door:0));l.cd.L.scale.z=k;l.cd.R.scale.z=k;}
     const key=l.phase+l.floor+l.target;if(key!==l.key){l.key=key;dispDraw(l);}}
   updatePanel();}
 const lp=$('#liftpanel'),lpBtns=[...lp.querySelectorAll('[data-floor]')];let lpKey='';
