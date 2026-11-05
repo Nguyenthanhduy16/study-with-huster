@@ -43,7 +43,12 @@ input.po-in:focus, textarea.po-in:focus, select.po-in:focus { border-color: var(
 textarea.po-in { resize: vertical; min-height: 70px; }
 
 /* ---------- màn chờ ---------- */
-.po-splash { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: radial-gradient(circle at 50% 30%, #2b3a7e, #121733 70%); color: #fff; transition: opacity .6s; }
+/* màn chờ: ảnh chính diện Thư viện Tạ Quang Bửu (chụp sẵn từ cảnh 3D vì lúc này cảnh chưa tải xong) + lớp phủ cho chữ dễ đọc */
+.po-splash { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; color: #fff; transition: opacity .6s;
+  background: radial-gradient(ellipse at 50% 55%, rgba(18,23,51,.55), rgba(18,23,51,.25) 60%, rgba(18,23,51,.45)), url(../scene/exterior/man-hinh-cho.jpg) center 40% / cover no-repeat, radial-gradient(circle at 50% 30%, #2b3a7e, #121733 70%); }
+.po-splash-in { text-shadow: 0 1px 6px rgba(0,0,0,.45); background: rgba(18,23,51,.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.14); border-radius: 22px; box-shadow: 0 18px 50px rgba(0,0,0,.35); max-width: calc(100vw - 32px); }
+.po-splash-in p { opacity: .92; }
+.po-splash-in .po-bar { box-shadow: 0 1px 6px rgba(0,0,0,.35); }
 .po-splash.out { opacity: 0; pointer-events: none; }
 .po-splash-in { text-align: center; padding: 24px; }
 .po-splash h1 { font-size: 28px; margin: 14px 0 6px; color: #fff; }
@@ -524,4 +529,13 @@ body.po-wheel-on .po-wheel-btn { background: var(--accent); color: var(--accent-
 @media (min-width: 861px) and (max-width: 1400px) {
   .po-ibtn em { display: none; }
   .po-top-r { flex-wrap: nowrap; }
+}
+
+/* màn chờ trên ảnh nền: thẻ chữ nằm phần dưới (trên mặt đường) để thấy trọn thư viện phía sau (đặt cuối file để ghi đè quy tắc gốc) */
+.po-splash { align-items: end; padding-bottom: max(10vh, calc(24px + env(safe-area-inset-bottom, 0px))); }
+@media (max-width: 600px) {
+  .po-splash-in { padding: 16px 22px; }
+  .po-splash-in .po-logo { width: 48px; height: 48px; }
+  .po-splash h1 { font-size: 22px; margin: 10px 0 4px; }
+  .po-splash p { margin-bottom: 12px; }
 }
