@@ -3,7 +3,7 @@
    MÁY CHỦ SUPABASE GIẢ LẬP + MÁY CHỦ WEB TĨNH (chỉ để kiểm thử, không dùng thật)
    Chạy:  node tools/fake-supabase-server.mjs [--port=8741] [--root=.] [--admin=admin-thu] [--csp] [--offline]
           --csp     : gửi kèm Content-Security-Policy lấy từ netlify.toml (kiểm tra CSP không chặn gì)
-          --offline : không thay config.js / supabase.js ⇒ chạy đúng chế độ ngoại tuyến như khi chưa điền Supabase
+          --offline : config.js giao với SUPABASE_URL/KEY để trống, không thay supabase.js ⇒ chạy đúng chế độ ngoại tuyến như khi chưa điền Supabase
    Rồi mở  http://localhost:8741/?nguoi=1  và  http://localhost:8741/?nguoi=2  (hai "người" khác nhau)
    hoặc mở trên hai trình duyệt / hai máy trong cùng mạng LAN.
 
@@ -316,6 +316,13 @@ const server = http.createServer(async (req, res) => {
     const src = fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8')
       .replace(/^window\.SUPABASE_URL\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_URL = location.origin + '/fake';")
       .replace(/^window\.SUPABASE_ANON_KEY\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_ANON_KEY = 'fake-anon-key';");
+    res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-store' }); return res.end(src);
+  }
+  if (p === '/config.js' && args.offline) {
+    // --offline = chạy như khi CHƯA điền Supabase (config.js trong repo đã có địa chỉ dự án thật)
+    const src = fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8')
+      .replace(/^window\.SUPABASE_URL\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_URL = '';")
+      .replace(/^window\.SUPABASE_ANON_KEY\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_ANON_KEY = '';");
     res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-store' }); return res.end(src);
   }
   if (p === '/vendor/supabase/supabase.js' && !args.offline) { res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-store' }); return res.end(fs.readFileSync(SHIM)); }
