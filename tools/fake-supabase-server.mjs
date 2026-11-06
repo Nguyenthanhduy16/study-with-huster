@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* =====================================================================
    MÁY CHỦ SUPABASE GIẢ LẬP + MÁY CHỦ WEB TĨNH (chỉ để kiểm thử, không dùng thật)
-   Chạy:  node tools/fake-supabase-server.mjs [--port=8741] [--root=.] [--admin=admin-thu] [--csp] [--offline]
+   Chạy:  node tools/fake-supabase-server.mjs [--port=8741] [--root=.] [--admin=admin-thu] [--csp] [--offline] [--realtime=ws://localhost:8790]
           --csp     : gửi kèm Content-Security-Policy lấy từ netlify.toml (kiểm tra CSP không chặn gì)
           --offline : config.js giao với SUPABASE_URL/KEY để trống, không thay supabase.js ⇒ chạy đúng chế độ ngoại tuyến như khi chưa điền Supabase
    Rồi mở  http://localhost:8741/?nguoi=1  và  http://localhost:8741/?nguoi=2  (hai "người" khác nhau)
@@ -43,6 +43,9 @@ const SHIM = path.join(HERE, 'fake-supabase.js');
 /* --csp: gửi kèm Content-Security-Policy y như netlify.toml để kiểm tra CSP không chặn gì */
 let CSP = null;
 if (args.csp) { const m = /Content-Security-Policy\s*=\s*"([^"]+)"/.exec(fs.readFileSync(path.join(ROOT, 'netlify.toml'), 'utf8')); CSP = m && m[1]; }
+/* --realtime=ws://…: config.js trỏ REALTIME_URL tới server realtime đang chạy thử (server/server.js); CSP cho phép địa chỉ đó */
+const RT = typeof args.realtime === 'string' ? args.realtime : '';
+if (CSP && RT) CSP = CSP.replace("connect-src 'self'", "connect-src 'self' " + RT.replace(/^(wss?:\/\/[^/]+).*$/, '$1'));
 const htmlHeaders = () => (CSP ? { 'content-security-policy': CSP } : {});
 
 /* ---------- cấu hình mặc định lấy từ config.js ---------- */
@@ -260,6 +263,8 @@ const server = http.createServer(async (req, res) => {
     }
     const body = await readBody(req);
     if (p === '/fake/auth/anon') return json(res, { uid: crypto.randomUUID() });
+    /* như GET /auth/v1/user của Supabase: server realtime hỏi để kiểm tra vé (ở đây vé = mã người dùng) */
+    if (p === '/fake/auth/v1/user') { const u = uidOf(req); return u && /^[0-9a-f-]{36}$/.test(u) ? json(res, { id: u }) : json(res, { msg: 'invalid JWT' }, 401); }
     if (p.startsWith('/fake/rpc/')) {
       const name = p.slice(10), f = RPC[name];
       if (!f) return json(res, { error: { message: 'Could not find the function public.' + name, code: 'PGRST202' } });
@@ -315,7 +320,8 @@ const server = http.createServer(async (req, res) => {
   if (p === '/config.js' && !args.offline) {
     const src = fs.readFileSync(path.join(ROOT, 'config.js'), 'utf8')
       .replace(/^window\.SUPABASE_URL\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_URL = location.origin + '/fake';")
-      .replace(/^window\.SUPABASE_ANON_KEY\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_ANON_KEY = 'fake-anon-key';");
+      .replace(/^window\.SUPABASE_ANON_KEY\s*=\s*['"][^'"]*['"]\s*;/m, "window.SUPABASE_ANON_KEY = 'fake-anon-key';")
+      .replace(/^window\.REALTIME_URL\s*=\s*['"][^'"]*['"]\s*;/m, "window.REALTIME_URL = " + JSON.stringify(RT) + ";");
     res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'no-store' }); return res.end(src);
   }
   if (p === '/config.js' && args.offline) {

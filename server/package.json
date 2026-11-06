@@ -1,0 +1,11 @@
+{
+  "name": "study-with-huster-realtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Server realtime (vị trí, cử chỉ, hiện diện, đàn piano) cho Học Online Cùng Huster — chạy trên Railway",
+  "type": "module",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "8.18.3" }
+}
