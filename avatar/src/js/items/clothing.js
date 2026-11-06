@@ -24,6 +24,27 @@ function cached(key, make) {
   return geoCache.get(key);
 }
 
+// ---------------------------------------------------------- tính hình khối ở luồng nền (Web Worker)
+// Hình khối áo/quần/tóc tính bằng SDF tốn 30–300 ms cho mỗi tổ hợp dáng người × kiểu đồ (lần đầu). Web chính hỏi
+// geometryJobs() những hình khối còn thiếu, gửi cho luồng nền (avatar/avatar-geo-worker.js) tính rồi adoptGeometry()
+// nhận về; lúc dựng nhân vật mọi hình khối đã có sẵn ⇒ không đứng hình. Khoá phải trùng khoá các builder dùng.
+const topKeyOpts = (o) => ({ sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck, sportsCollar: o.sportsCollar, bomber: o.bomber, waistFit: o.waistFit });
+const bottomKeyOpts = (o) => ({ skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff, track: o.track });
+/** hình khối còn thiếu cho một bộ đồ: [{ key, kind, build, args }] (args gửi được qua postMessage) */
+export function geometryJobs(build, { hair, top, bottom, hatOn } = {}) {
+  const jobs = [], add = (key, kind, args) => { if (!geoCache.has(key)) jobs.push({ key, kind, build, args }); };
+  if (hair) {
+    const style = hair.options?.style || 'ngan';
+    add(`hair|${build}|${style}|${!!hatOn}`, 'hair', { style, hatOn: !!hatOn });
+    if (style === 'moi') add(`hair|${build}|moi-nape`, 'hair', { style: 'moi-nape', hatOn: false });
+  }
+  if (top) { const o = top.options || {}; add(`top|${build}|${JSON.stringify(topKeyOpts(o))}`, 'top', { o }); }
+  if (bottom) { const o = bottom.options || {}; add(`bottom|${build}|${JSON.stringify(bottomKeyOpts(o))}`, 'bottom', { o }); }
+  return jobs;
+}
+/** nhận hình khối luồng nền đã tính (không ghi đè nếu trong lúc chờ đã tự tính) */
+export function adoptGeometry(key, geo) { if (!geoCache.has(key)) { geo.userData.keep = true; geoCache.set(key, geo); } }
+
 /**
  * Gán UV cho từng tam giác (lưới không index).
  * uvOf trả [u, v, chuKỳ, gốc, kẹp] — chuKỳ/gốc dùng để vá đường nối vòng quanh.
@@ -109,7 +130,8 @@ function skinTop(geo, M, options, garmentParts = null) {
 // ---------------------------------------------------------- TÓC
 // Tóc = đầu nới dày ra, cắt theo đường chân tóc, cộng thêm mái / búi / đuôi.
 // Gắn cứng vào xương đầu.
-function hairGeometry(M, style, hatOn) {
+// xuất cho luồng nền (avatar/src/geo-worker.js)
+export function hairGeometry(M, style, hatOn) {
   const H = M.head;
   const C = H.cranium.c;
   if (style === 'moi' || style === 'moi-nape') {
@@ -262,7 +284,8 @@ export function buildHair(ctx) {
 }
 
 // ---------------------------------------------------------- ÁO
-function topGeometry(M, o) {
+// xuất cho luồng nền (avatar/src/geo-worker.js)
+export function topGeometry(M, o) {
   const P = M.P[1];
   const jacket = (o.collar === 'hood' && o.zipper) || o.collar === 'stand';
   const base = jacket ? 0.017 : (o.collar === 'hood' || (o.sleeve === 'long' && o.cuffs && !o.placket) ? 0.017 : 0.014);
@@ -425,7 +448,7 @@ export function buildTop(ctx) {
   const trim = item.colors.trim || '#ffffff';
   const printColor = item.colors.print || '#ffffff';
 
-  const keyOpts = { sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck, sportsCollar: o.sportsCollar, bomber: o.bomber, waistFit: o.waistFit };
+  const keyOpts = topKeyOpts(o);
   let geo = cached(`top|${M.name}|${JSON.stringify(keyOpts)}`, () => topGeometry(M, o));
   if (o.sportsCollar || o.bomber) {
     // Chỉ nhân bản hình học cho áo phối màu; đổi màu không sửa lưới dùng chung.
@@ -572,7 +595,8 @@ function skinBottom(geo, M, options) {
   return geo;
 }
 
-function bottomGeometry(M, o) {
+// xuất cho luồng nền (avatar/src/geo-worker.js)
+export function bottomGeometry(M, o) {
   const P = M.P[1];
   const fitT = { slim: 0.008, regular: 0.013, wide: 0.02 }[o.fit || 'regular'];
   const waistTop = P + 0.078;
@@ -736,7 +760,7 @@ export function buildBottom(ctx) {
   const o = item.options || {};
   const M = rig.model;
   const main = item.colors.main, accent = item.colors.accent || shade(main, 0.4);
-  const keyOpts = { skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff, track: o.track };
+  const keyOpts = bottomKeyOpts(o);
   const geo = cached(`bottom|${M.name}|${JSON.stringify(keyOpts)}`, () => bottomGeometry(M, o));
   const plain = o.track
     ? trackPantsCanvas(main, accent, imgs, o, M, item.colors.print || accent)

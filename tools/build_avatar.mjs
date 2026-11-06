@@ -1,6 +1,7 @@
-// Đóng gói "Phòng thay đồ" (ES module, viết cho three bản mới) thành 2 file chạy với three r128 toàn cục:
+// Đóng gói "Phòng thay đồ" (ES module, viết cho three bản mới) thành 3 file chạy với three r128 toàn cục:
 //   avatar/avatar-kit.js      → window.AvatarKit (dùng trong web chính để dựng nhân vật)
 //   avatar/phong-thay-do.js   → giao diện phòng thay đồ (phong-thay-do.html)
+//   avatar/avatar-geo-worker.js → luồng nền (Web Worker) tính hình khối áo/quần/tóc cho web chính
 // Cách chạy (cần Node 18+):  npm i esbuild@0.21.5  &&  node tools/build_avatar.mjs
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
@@ -30,4 +31,7 @@ const banner = `/* Tự sinh bởi tools/build_avatar.mjs — đừng sửa tay,
 const common = { bundle: true, format: 'iife', target: 'es2018', plugins: [threeGlobal], banner: { js: banner }, legalComments: 'none', charset: 'utf8' };
 await build({ ...common, entryPoints: [path.join(root, 'avatar/src/kit.js')], globalName: 'AvatarKit', outfile: path.join(root, 'avatar/avatar-kit.js') });
 await build({ ...common, entryPoints: [path.join(root, 'avatar/src/js/main.js')], outfile: path.join(root, 'avatar/phong-thay-do.js') });
-console.log('Đã đóng gói avatar/avatar-kit.js và avatar/phong-thay-do.js');
+// luồng nền tính hình khối: không có window/document ⇒ trỏ window về self và tự nạp three r128 trước
+await build({ ...common, entryPoints: [path.join(root, 'avatar/src/geo-worker.js')], outfile: path.join(root, 'avatar/avatar-geo-worker.js'),
+  banner: { js: "self.window = self; importScripts('../scene/vendor/three.min.js');\n" + banner } });
+console.log('Đã đóng gói avatar/avatar-kit.js, avatar/phong-thay-do.js và avatar/avatar-geo-worker.js');

@@ -1578,6 +1578,8 @@
     }
     return geoCache.get(key);
   }
+  var topKeyOpts = (o) => ({ sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck, sportsCollar: o.sportsCollar, bomber: o.bomber, waistFit: o.waistFit });
+  var bottomKeyOpts = (o) => ({ skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff, track: o.track });
   function perTriangleUV(geo, uvOf) {
     const g = geo.index ? geo.toNonIndexed() : geo;
     const pos = g.attributes.position;
@@ -1953,7 +1955,7 @@
     const main = item.colors.main, accent = item.colors.accent || shade(main, -0.25);
     const trim = item.colors.trim || "#ffffff";
     const printColor = item.colors.print || "#ffffff";
-    const keyOpts = { sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck, sportsCollar: o.sportsCollar, bomber: o.bomber, waistFit: o.waistFit };
+    const keyOpts = topKeyOpts(o);
     let geo = cached(`top|${M.name}|${JSON.stringify(keyOpts)}`, () => topGeometry(M, o));
     if (o.sportsCollar || o.bomber) {
       geo = geo.clone();
@@ -2308,7 +2310,7 @@
     const o = item.options || {};
     const M = rig.model;
     const main = item.colors.main, accent = item.colors.accent || shade(main, 0.4);
-    const keyOpts = { skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff, track: o.track };
+    const keyOpts = bottomKeyOpts(o);
     const geo = cached(`bottom|${M.name}|${JSON.stringify(keyOpts)}`, () => bottomGeometry(M, o));
     const plain = o.track ? trackPantsCanvas(main, accent, imgs, o, M, item.colors.print || accent) : composePlain(main, imgs, { denim: o.denim, sideStripe: o.sideStripe ? accent : null, patternScale: o.patternScale });
     const mat = garmentMaterial(plain, { roughness: o.fleece ? 0.98 : o.denim ? 0.95 : 0.88 });

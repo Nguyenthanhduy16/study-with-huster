@@ -9,10 +9,11 @@
 //     (cấu hình cũ "Tổ Ong" → nhận diện mới, chỉ nhận logo có sẵn trong tủ đồ), giữ màu cố định
 //     của món `fixedColors` (dây đeo + vỏ thẻ đỏ).
 // =============================================================
-import { buildRig, attachSkinned, linearize, setBodyCoverage, DIM } from './js/rig.js';
+import { buildRig, attachSkinned, linearize, setBodyCoverage, DIM, bodyGeometryJob, adoptBodyGeometry } from './js/rig.js';
 import { BUILDERS as RAW_BUILDERS } from './js/items/index.js';
 import { loadImage, loadImageSet, cachedImage, drawEmblem as rawDrawEmblem, drawStudentCard as rawDrawStudentCard } from './js/textures.js';
 import CATALOG from './data/catalog.js';
+import { geometryJobs as rawGeometryJobs, adoptGeometry as rawAdoptGeometry } from './js/items/clothing.js';
 export { createLaptopLogo } from './js/items/laptop-logo.js';
 
 export const SLOT_ORDER = ['hair', 'top', 'bottom', 'footwear', 'hat', 'bag', 'card', 'eyewear', 'mask', 'audio', 'handheld'];
@@ -114,3 +115,22 @@ export function normalizeState(s) {
 }
 
 export { buildRig, linearize, setBodyCoverage, loadImage, loadImageSet, cachedImage, CATALOG, DIM };
+
+// ---------- hình khối áo/quần/tóc tính ở luồng nền (avatar/avatar-geo-worker.js) ----------
+/** hình khối còn thiếu để dựng nhân vật `state` (đã chuẩn hoá): [{ key, kind, build, args }] */
+export function geometryJobs(state) {
+  if (!state || !state.equipped) return [];
+  const eq = state.equipped, it = (slot) => { const x = eq[slot] && ITEMS.get(eq[slot]); return x && x.slot === slot ? x : null; };
+  const b = state.body ? state.body.build : undefined, build = b === undefined ? 'vua' : b;
+  const body = bodyGeometryJob(build);
+  return (body ? [body] : []).concat(rawGeometryJobs(build, { hair: it('hair'), top: it('top'), bottom: it('bottom'), hatOn: !!eq.hat }));
+}
+/** dựng lại BufferGeometry từ mảng luồng nền gửi về rồi đưa vào bộ nhớ đệm hình khối */
+export function adoptGeometry(key, data) {
+  const THREE = window.THREE, g = new THREE.BufferGeometry();
+  for (const [name, a] of Object.entries(data.attrs)) g.setAttribute(name, new THREE.BufferAttribute(a.array, a.itemSize, a.normalized));
+  if (data.index) g.setIndex(new THREE.BufferAttribute(data.index.array, 1));
+  for (const gr of data.groups || []) g.addGroup(gr.start, gr.count, gr.materialIndex);
+  if (data.bs) g.boundingSphere = new THREE.Sphere(new THREE.Vector3(data.bs[0], data.bs[1], data.bs[2]), data.bs[3]);
+  if (key.startsWith('body|')) adoptBodyGeometry(key.slice(5), g); else rawAdoptGeometry(key, g);
+}
