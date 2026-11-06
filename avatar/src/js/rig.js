@@ -334,6 +334,11 @@ export function linearize(obj) {
 }
 
 export const BODY_GEOMETRY = (buildName) => bodyGeometry(bodyModel(buildName));
+// luồng nền (avatar/src/geo-worker.js) tính sẵn thân người cho web chính, như hình khối áo/quần/tóc
+export function bodyGeometryJob(buildName) {
+  return bodyGeoCache.has(buildName) ? null : { key: 'body|' + buildName, kind: 'body', build: buildName, args: {} };
+}
+export function adoptBodyGeometry(buildName, g) { if (!bodyGeoCache.has(buildName)) { g.userData.keep = true; bodyGeoCache.set(buildName, g); } }
 
 // Do not render skin triangles fully covered by trousers or sleeves. Even
 // matching bone chains intersect slightly because cloth and skin use different

@@ -57,11 +57,13 @@ var AvatarKit = (() => {
     CATALOG: () => catalog_default,
     DIM: () => DIM,
     SLOT_ORDER: () => SLOT_ORDER,
+    adoptGeometry: () => adoptGeometry2,
     buildRig: () => buildRig,
     cachedImage: () => cachedImage,
     createLaptopLogo: () => createLaptopLogo,
     drawEmblem: () => drawEmblem2,
     drawStudentCard: () => drawStudentCard2,
+    geometryJobs: () => geometryJobs2,
     isReady: () => isReady,
     linearize: () => linearize,
     loadImage: () => loadImage,
@@ -573,6 +575,15 @@ var AvatarKit = (() => {
       }
     });
     return obj;
+  }
+  function bodyGeometryJob(buildName) {
+    return bodyGeoCache.has(buildName) ? null : { key: "body|" + buildName, kind: "body", build: buildName, args: {} };
+  }
+  function adoptBodyGeometry(buildName, g) {
+    if (!bodyGeoCache.has(buildName)) {
+      g.userData.keep = true;
+      bodyGeoCache.set(buildName, g);
+    }
   }
   function setBodyCoverage(rig, bottom, top = null) {
     const mesh = rig && rig.bodyMesh;
@@ -1589,6 +1600,34 @@ var AvatarKit = (() => {
     }
     return geoCache.get(key);
   }
+  var topKeyOpts = (o) => ({ sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck, sportsCollar: o.sportsCollar, bomber: o.bomber, waistFit: o.waistFit });
+  var bottomKeyOpts = (o) => ({ skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff, track: o.track });
+  function geometryJobs(build, { hair, top, bottom, hatOn } = {}) {
+    var _a;
+    const jobs = [], add2 = (key, kind, args) => {
+      if (!geoCache.has(key)) jobs.push({ key, kind, build, args });
+    };
+    if (hair) {
+      const style = ((_a = hair.options) == null ? void 0 : _a.style) || "ngan";
+      add2(`hair|${build}|${style}|${!!hatOn}`, "hair", { style, hatOn: !!hatOn });
+      if (style === "moi") add2(`hair|${build}|moi-nape`, "hair", { style: "moi-nape", hatOn: false });
+    }
+    if (top) {
+      const o = top.options || {};
+      add2(`top|${build}|${JSON.stringify(topKeyOpts(o))}`, "top", { o });
+    }
+    if (bottom) {
+      const o = bottom.options || {};
+      add2(`bottom|${build}|${JSON.stringify(bottomKeyOpts(o))}`, "bottom", { o });
+    }
+    return jobs;
+  }
+  function adoptGeometry(key, geo) {
+    if (!geoCache.has(key)) {
+      geo.userData.keep = true;
+      geoCache.set(key, geo);
+    }
+  }
   function perTriangleUV(geo, uvOf) {
     const g = geo.index ? geo.toNonIndexed() : geo;
     const pos = g.attributes.position;
@@ -1964,7 +2003,7 @@ var AvatarKit = (() => {
     const main = item.colors.main, accent = item.colors.accent || shade(main, -0.25);
     const trim = item.colors.trim || "#ffffff";
     const printColor = item.colors.print || "#ffffff";
-    const keyOpts = { sleeve: o.sleeve, collar: o.collar, tucked: o.tucked, zipper: o.zipper, cuffs: o.cuffs, placket: !!o.placket, vneck: o.vneck, sportsCollar: o.sportsCollar, bomber: o.bomber, waistFit: o.waistFit };
+    const keyOpts = topKeyOpts(o);
     let geo = cached(`top|${M.name}|${JSON.stringify(keyOpts)}`, () => topGeometry(M, o));
     if (o.sportsCollar || o.bomber) {
       geo = geo.clone();
@@ -2319,7 +2358,7 @@ var AvatarKit = (() => {
     const o = item.options || {};
     const M = rig.model;
     const main = item.colors.main, accent = item.colors.accent || shade(main, 0.4);
-    const keyOpts = { skirt: o.skirt, skirtLen: o.skirtLen, pleats: o.pleats, fit: o.fit, length: o.length, cuff: o.cuff, track: o.track };
+    const keyOpts = bottomKeyOpts(o);
     const geo = cached(`bottom|${M.name}|${JSON.stringify(keyOpts)}`, () => bottomGeometry(M, o));
     const plain = o.track ? trackPantsCanvas(main, accent, imgs, o, M, item.colors.print || accent) : composePlain(main, imgs, { denim: o.denim, sideStripe: o.sideStripe ? accent : null, patternScale: o.patternScale });
     const mat = garmentMaterial(plain, { roughness: o.fleece ? 0.98 : o.denim ? 0.95 : 0.88 });
@@ -4350,6 +4389,25 @@ var AvatarKit = (() => {
     const out = { body: Object.assign({}, d.body, s.body || {}), equipped, overrides };
     if (s.emblem) out.emblem = normEmblem(s.emblem);
     return out;
+  }
+  function geometryJobs2(state) {
+    if (!state || !state.equipped) return [];
+    const eq = state.equipped, it = (slot) => {
+      const x = eq[slot] && ITEMS2.get(eq[slot]);
+      return x && x.slot === slot ? x : null;
+    };
+    const b = state.body ? state.body.build : void 0, build = b === void 0 ? "vua" : b;
+    const body = bodyGeometryJob(build);
+    return (body ? [body] : []).concat(geometryJobs(build, { hair: it("hair"), top: it("top"), bottom: it("bottom"), hatOn: !!eq.hat }));
+  }
+  function adoptGeometry2(key, data) {
+    const THREE7 = window.THREE, g = new THREE7.BufferGeometry();
+    for (const [name, a] of Object.entries(data.attrs)) g.setAttribute(name, new THREE7.BufferAttribute(a.array, a.itemSize, a.normalized));
+    if (data.index) g.setIndex(new THREE7.BufferAttribute(data.index.array, 1));
+    for (const gr of data.groups || []) g.addGroup(gr.start, gr.count, gr.materialIndex);
+    if (data.bs) g.boundingSphere = new THREE7.Sphere(new THREE7.Vector3(data.bs[0], data.bs[1], data.bs[2]), data.bs[3]);
+    if (key.startsWith("body|")) adoptBodyGeometry(key.slice(5), g);
+    else adoptGeometry(key, g);
   }
   return __toCommonJS(kit_exports);
 })();

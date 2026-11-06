@@ -65,14 +65,62 @@
   const emblemCache = new Map();
   function emblemCanvas(em) { const k = JSON.stringify(em); if (!emblemCache.has(k)) emblemCache.set(k, K.drawEmblem(em)); return emblemCache.get(k); }
 
+  /* ---- luồng nền tính hình khối áo/quần/tóc (avatar/avatar-geo-worker.js) ----
+     Lần đầu gặp một tổ hợp dáng người × kiểu đồ, tính hình khối (SDF) tốn 30–300 ms và trước đây chặn luồng chính ⇒
+     vào chỗ đông người (sảnh thư viện) bị khựng liên tục nhiều giây. Giờ tính ở luồng nền; nhân vật hiện dạng tạm
+     tới khi đủ hình khối. Không có Worker / luồng nền lỗi / quá 30 s ⇒ dựng như cũ (tự tính ở luồng chính). */
+  const GW = (() => {
+    const pending = new Map(), waiters = new Map();
+    let workers = null, seq = 0, rr = 0, broken = typeof Worker !== 'function' || typeof K.geometryJobs !== 'function';
+    function settle(id) { const w = waiters.get(id); if (!w) return; waiters.delete(id); pending.delete(w.key); w.done(); }
+    function fail() { broken = true; for (const id of [...waiters.keys()]) settle(id); }
+    function pool() {
+      if (workers || broken) return workers;
+      try {
+        const n = Math.max(1, Math.min(2, (navigator.hardwareConcurrency || 2) - 1));
+        workers = Array.from({ length: n }, () => {
+          const w = new Worker('avatar/avatar-geo-worker.js');
+          w.onmessage = e => { const m = e.data || {}, wt = waiters.get(m.id); if (!wt) return; if (m.ok) { try { K.adoptGeometry(wt.key, m.data); } catch (err) { console.error(err); } } settle(m.id); };
+          w.onerror = ev => { if (ev && ev.preventDefault) ev.preventDefault(); fail(); };
+          return w;
+        });
+      } catch (_) { broken = true; workers = null; }
+      return workers;
+    }
+    /* Promise khi mọi hình khối của `state` đã có; null nếu không thiếu gì (hoặc không dùng được luồng nền) */
+    function need(state) {
+      if (broken) return null;
+      let jobs; try { jobs = K.geometryJobs(state); } catch (_) { return null; }
+      if (!jobs.length) return null;
+      const ws = pool(); if (!ws) return null;
+      return Promise.all(jobs.map(j => {
+        if (pending.has(j.key)) return pending.get(j.key);
+        const p = new Promise(done => {
+          const id = ++seq; waiters.set(id, { key: j.key, done });
+          ws[rr++ % ws.length].postMessage({ id, kind: j.kind, build: j.build, args: j.args });
+          setTimeout(() => settle(id), 30000);
+        });
+        pending.set(j.key, p); return p;
+      }));
+    }
+    return { need, get broken() { return broken; } };
+  })();
+
   /* ---- hàng đợi dựng: mỗi lần một nhân vật để không giật khung hình ---- */
   const queue = []; let busy = false;
-  function enqueue(fn) { queue.push(fn); if (!busy) pump(); }
+  function enqueue(fn, av) { queue.push({ fn, av }); if (!busy) pump(); }
   function pump() {
     if (K.isReady && !K.isReady()) { busy = true; K.ready.then(pump, pump); return; }   // chờ ảnh logo/huy hiệu của tủ đồ tải xong
-    const fn = queue.shift(); if (!fn) { busy = false; return; }
+    const job = queue.shift(); if (!job) { busy = false; return; }
     busy = true;
-    setTimeout(() => { try { fn(); } catch (e) { console.error(e); } pump(); }, 30);
+    // còn thiếu hình khối: nhờ luồng nền tính, dựng người kế tiếp trong lúc chờ; xong thì đưa lại lên đầu hàng
+    const wait = job.av && !job.av.disposed && job.av.state ? GW.need(job.av.state) : null;
+    if (wait) { wait.then(() => { queue.unshift(job); if (!busy) pump(); }); setTimeout(pump, 0); return; }
+    // mỗi khung hình tối đa một nhân vật mới: vật liệu/ảnh vải của nó được đưa lên card đồ hoạ ở khung kế tiếp,
+    // không dồn nhiều nhân vật vào một khung (khi hình khối đã sẵn, việc dựng rất nhanh nên dễ bị dồn)
+    const run = () => { try { job.fn(); } catch (e) { console.error(e); } pump(); };
+    if (typeof requestAnimationFrame === 'function' && !document.hidden) requestAnimationFrame(() => setTimeout(run, 0));
+    else setTimeout(run, 30);
   }
 
   const EMOTES_HIDDEN = { 'choc': { d: 1.2 }, 'an': { d: 2.2 } };
@@ -214,7 +262,7 @@
     setStyle(state) {
       this.state = normState(state);
       const token = this.token = (this.token || 0) + 1;
-      enqueue(() => { if (token === this.token && !this.disposed) this.build(); });
+      enqueue(() => { if (token === this.token && !this.disposed) this.build(); }, this);
     }
     setCard(name, mssv) {
       if (name === this.name && mssv === this.mssv) return;
@@ -505,5 +553,5 @@
     };
   }
 
-  window.AV2 = { Avatar, Preview, normState, randomState, seeded, cardImage, EMOTES, ACTS, catalog: CAT };
+  window.AV2 = { Avatar, Preview, normState, randomState, seeded, cardImage, EMOTES, ACTS, catalog: CAT, geoWorker: GW };
 })();
