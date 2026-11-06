@@ -21,7 +21,7 @@ window.SUPABASE_ANON_KEY = 'sb_publishable_sGGAPT1XzACXxsVbtfyW2Q_CYpC5KSP';   /
    Điền địa chỉ wss:// của server/server.js ⇒ vị trí, cử chỉ, ai đang online, đàn piano đi qua server này
    (giảm tải Realtime của Supabase). Để trống ⇒ dùng Supabase Realtime như trước.
    Ví dụ: window.REALTIME_URL = 'wss://study-with-huster-realtime.up.railway.app'; */
-window.REALTIME_URL = '';
+window.REALTIME_URL = 'wss://study-with-huster-production.up.railway.app';
 
 /* 2) THÔNG TIN CHUNG */
 window.APP = {

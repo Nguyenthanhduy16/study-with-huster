@@ -56,6 +56,7 @@ function client(base, who) {
   context.window = context; vm.createContext(context);
   for (const file of ['config.js', 'js/util.js', 'tools/fake-supabase.js', 'js/net.js']) vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, { filename: file });
   context.SUPABASE_URL = base + '/fake'; context.SUPABASE_ANON_KEY = 'fake-anon-key';
+  context.REALTIME_URL = '';   // bài này thử đường Supabase Realtime; đường Railway: realtime-server.test.mjs và kiem_tra_nhieu_nguoi.mjs --railway
   const net = context.createNet(), events = {}, latest = { presence: [] };
   for (const name of ['presence', 'pos', 'emote', 'message', 'message-hidden', 'piano', 'cheer']) {
     events[name] = []; net.ev.on(name, value => { events[name].push(value); latest[name] = value; });

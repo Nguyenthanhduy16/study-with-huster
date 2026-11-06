@@ -159,12 +159,12 @@ function onMessage(c, raw) {
 
 /* ---------- HTTP (kiểm tra sức khoẻ cho Railway) + WebSocket ---------- */
 const server = http.createServer((req, res) => {
-  if (req.url === '/health') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('ok'); }
+  if (req.url === '/health') { res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('ok'); }
   if (req.url === '/stats') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify({ conns: stats.conns, users: byUser.size, channels: channels.size, online: (presence.get('presence-global') || new Map()).size, msgsIn: stats.msgsIn, msgsOut: stats.msgsOut, dropped: stats.dropped, uptimeS: Math.round((Date.now() - stats.started) / 1000) }));
   }
-  res.writeHead(404, { 'content-type': 'text/plain' }); res.end('Học Online Cùng Huster — realtime server');
+  res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); res.end('Học Online Cùng Huster — realtime server');
 });
 const wss = new WebSocketServer({ server, maxPayload: MAX_MSG * 2, perMessageDeflate: false });
 wss.on('connection', (ws, req) => {
