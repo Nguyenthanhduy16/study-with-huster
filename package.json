@@ -14,6 +14,7 @@
     "test:ui": "node tools/kiem_tra_giao_dien_render.mjs --port=3102",
     "test:mobile": "node tools/kiem_tra_mobile.mjs",
     "test:motion": "node tools/kiem_tra_chuyen_dong.mjs",
+    "test:railway": "node tools/kiem_tra_nhieu_nguoi.mjs --railway",
     "build:cloudflare": "node tools/build-cloudflare.mjs"
   }
 }

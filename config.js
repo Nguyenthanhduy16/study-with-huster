@@ -17,6 +17,12 @@
 window.SUPABASE_URL = 'https://gxiryzkmntbgbfrigwdc.supabase.co';
 window.SUPABASE_ANON_KEY = 'sb_publishable_sGGAPT1XzACXxsVbtfyW2Q_CYpC5KSP';   // khoá publishable (công khai)
 
+/* 1b) SERVER REALTIME TRÊN RAILWAY (tuỳ chọn — xem docs/HUONG_DAN_RAILWAY.md)
+   Điền địa chỉ wss:// của server/server.js ⇒ vị trí, cử chỉ, ai đang online, đàn piano đi qua server này
+   (giảm tải Realtime của Supabase). Để trống ⇒ dùng Supabase Realtime như trước.
+   Ví dụ: window.REALTIME_URL = 'wss://study-with-huster-realtime.up.railway.app'; */
+window.REALTIME_URL = '';
+
 /* 2) THÔNG TIN CHUNG */
 window.APP = {
   name: 'Học Online Cùng Huster',

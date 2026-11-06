@@ -6,14 +6,15 @@
   command = ""
 
 # ---------- Bảo mật: áp dụng cho mọi trang ----------
-# CSP chỉ cho phép: file của chính trang web, Supabase (https + wss *.supabase.co) và thời tiết Open-Meteo.
-# Nếu dùng tên miền riêng cho Supabase (custom domain), thêm tên miền đó vào connect-src.
+# CSP chỉ cho phép: file của chính trang web, Supabase (https + wss *.supabase.co), server realtime trên Railway
+# (wss *.up.railway.app) và thời tiết Open-Meteo.
+# Nếu dùng tên miền riêng cho Supabase hoặc cho server Railway, thêm tên miền đó (wss://…) vào connect-src.
 # 'unsafe-inline' cần cho các đoạn <script>/<style> nhỏ viết thẳng trong index.html/admin.html.
 # 'wasm-unsafe-eval' chỉ cho phép WebAssembly (bộ giải nén Draco của mô hình sân), không cho eval JavaScript.
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co wss://*.up.railway.app https://api.open-meteo.com data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "SAMEORIGIN"
     Referrer-Policy = "strict-origin-when-cross-origin"

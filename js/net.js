@@ -202,6 +202,89 @@
   /* =================================================================
      CHẾ ĐỘ TRỰC TUYẾN — SUPABASE
      ================================================================= */
+  /* =====================================================================
+     REALTIME QUA SERVER RAILWAY (server/server.js) — cùng giao diện với kênh Supabase mà SupaNet dùng:
+     channel(name).on('broadcast'|'presence', …).subscribe(cb) · send · track · untrack · presenceState · removeChannel.
+     Một WebSocket cho mọi kênh; tự nối lại (chờ tăng dần, tối đa 15 s); vé đăng nhập lấy từ Supabase mỗi lần nối.
+     ===================================================================== */
+  function RailRT(url, getToken) {
+    const chans = new Map();
+    let ws = null, ready = false, tries = 0, timer = null, connecting = false;
+    const raw = o => { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(o)); return true; } return false; };
+    function connect() {
+      if (connecting || (ws && ws.readyState <= 1)) return;
+      clearTimeout(timer); timer = null; connecting = true;
+      let sock;
+      try { sock = ws = new WebSocket(url); } catch (e) { connecting = false; console.warn('[rt] không mở được', e); return later(); }
+      sock.onopen = async () => {
+        connecting = false;
+        let token = null; try { token = await getToken(); } catch (_) { }
+        if (ws !== sock) return;
+        if (!token) { sock.close(); return; }
+        raw({ t: 'auth', token });
+      };
+      sock.onmessage = e => {
+        if (ws !== sock) return;
+        let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+        if (m.t === 'ready') { ready = true; tries = 0; for (const c of chans.values()) raw({ t: 'join', ch: c.name }); return; }
+        if (m.t === 'err') { console.warn('[rt]', m.m); return; }
+        const c = chans.get(m.ch); if (!c) return;
+        if (m.t === 'joined') { c.state = 'joined'; c._status && c._status('SUBSCRIBED'); }
+        else if (m.t === 'bc') { for (const f of c._bc[m.ev] || []) f({ payload: m.p }); }
+        else if (m.t === 'pstate') { c._pres = new Map(Object.entries(m.s || {})); c._sync(); }
+        else if (m.t === 'pset') { c._pres.set(m.k, { u: m.u, m: m.m }); c._sync(); }
+        else if (m.t === 'pdel') { if (c._pres.delete(m.k)) c._sync(); }
+      };
+      sock.onclose = ev => {
+        connecting = false;
+        if (ws !== sock) return;
+        ws = null; const was = ready; ready = false;
+        for (const c of chans.values()) {
+          const joined = c.state === 'joined'; c.state = 'joining';
+          if (c._pres.size) { c._pres.clear(); c._sync(); }
+          if (joined || !was) c._status && c._status('CHANNEL_ERROR', new Error('mất kết nối realtime (' + ev.code + ')'));
+        }
+        if (chans.size) later();
+      };
+      sock.onerror = () => { };
+    }
+    function later() {
+      if (timer) return;
+      const d = Math.min(15000, 1000 * Math.pow(2, Math.min(tries++, 4))) * (0.75 + Math.random() * 0.5);
+      timer = setTimeout(() => { timer = null; connect(); }, d);
+    }
+    function channel(name) {
+      const c = {
+        name, state: 'closed', _bc: {}, _ps: [], _status: null, _pres: new Map(),
+        _sync() { for (const f of c._ps) f(); },
+        on(type, filter, cb) { if (type === 'broadcast') (c._bc[filter.event] = c._bc[filter.event] || []).push(cb); else if (type === 'presence') c._ps.push(cb); return c; },
+        subscribe(cb) {
+          c._status = cb || null; c.state = 'joining';
+          const old = chans.get(name); if (old && old !== c) old.state = 'closed';
+          chans.set(name, c);
+          if (ready) raw({ t: 'join', ch: name }); else connect();
+          return c;
+        },
+        send(msg) { return Promise.resolve(ready && c.state === 'joined' && raw({ t: 'bc', ch: name, ev: msg.event, p: msg.payload }) ? 'ok' : 'error'); },
+        track(p) { return Promise.resolve(ready && c.state === 'joined' && raw({ t: 'track', ch: name, p }) ? 'ok' : 'error'); },
+        untrack() { raw({ t: 'untrack', ch: name }); return Promise.resolve('ok'); },
+        presenceState() {
+          const out = {};
+          for (const [k, v] of c._pres) (out[v.u] = out[v.u] || []).push(Object.assign({}, v.m, { presence_ref: k }));
+          return out;
+        }
+      };
+      return c;
+    }
+    function removeChannel(c) {
+      if (chans.get(c.name) === c) { chans.delete(c.name); raw({ t: 'leave', ch: c.name }); }
+      c.state = 'closed'; c._pres.clear();
+      if (c._status) c._status('CLOSED');
+      return Promise.resolve('ok');
+    }
+    return { channel, removeChannel, isConnected: () => ready, wake() { if (!ws && chans.size) { tries = 0; connect(); } } };
+  }
+
   function SupaNet(url, key) {
     const ev = U.emitter();
     const sb = window.supabase.createClient(url, key, {
@@ -209,6 +292,10 @@
       realtime: { params: { eventsPerSecond: 10 }, heartbeatIntervalMs: 25000 }
     });
     const me = { id: null };
+    /* kênh hiện diện + kênh khu: qua server Railway nếu config.js có REALTIME_URL, không thì qua Supabase Realtime */
+    const RT_URL = String(window.REALTIME_URL || '').trim();
+    const rtc = RT_URL ? RailRT(RT_URL, async () => { const s = (await sb.auth.getSession()).data.session; return s && s.access_token; }) : sb;
+    const rtConnected = () => rtc === sb ? !(sb.realtime && sb.realtime.isConnected && !sb.realtime.isConnected()) : rtc.isConnected();
     let cfg = null, presCh = null, zoneCh = null, msgCh = null, dbCh = null, presMeta = {}, status = 'connecting';
     let curZone = null;
     /* số đếm tin realtime của máy này (xem trong Console: __potaNet.rt) — để ước lượng lưu lượng */
@@ -269,6 +356,7 @@
     let hiddenAt = 0;
     function wake() {
       try { if (!sb.realtime.conn) sb.realtime.connect(); } catch (_) { }
+      if (rtc !== sb) rtc.wake();
       if (presCh && chOk.pres === true) scheduleTrack();
       recompute();
     }
@@ -394,7 +482,7 @@
     }
 
     const net = {
-      mode: 'online', ev, me, sb, rt,
+      mode: 'online', ev, me, sb, rt, rtMode: RT_URL ? 'railway' : 'supabase',
       async init() {
         let session = null;
         try { session = (await sb.auth.getSession()).data.session; } catch (_) { }
@@ -472,7 +560,7 @@
         join(meta) {
           presMeta = Object.assign({}, meta);
           if (presCh) { scheduleTrack(); return; }          // gọi lại lần hai: chỉ cập nhật
-          presCh = sb.channel('presence-global', { config: { presence: { key: me.id } } });
+          presCh = rtc.channel('presence-global', { config: { presence: { key: me.id } } });
           presCh.on('presence', { event: 'sync' }, () => { cnt(rt.recv, 'presence'); emitPresence(); });
           /* (lại) vào kênh xong — kể cả sau khi mất mạng — luôn gửi lại hiện diện của mình */
           presCh.subscribe(watch('pres', () => doTrack(true)));
@@ -492,7 +580,7 @@
         if (curZone === z) return;
         net.leaveZone(); curZone = z;
         recentPeers.clear(); lastPos = null;
-        const channel = zoneCh = sb.channel('zone-' + z, { config: { broadcast: { self: false, ack: false } } });
+        const channel = zoneCh = rtc.channel('zone-' + z, { config: { broadcast: { self: false, ack: false } } });
         const active = () => zoneCh === channel && curZone === z;
         channel.on('broadcast', { event: 'pos' }, ({ payload }) => { if (!active()) return; cnt(rt.recv, 'pos'); if (okPos(payload)) { heard(payload.u); ev.emit('pos', payload); } })
           .on('broadcast', { event: 'meta' }, ({ payload }) => { if (!active()) return; cnt(rt.recv, 'meta'); receiveMeta(payload); })
@@ -516,7 +604,7 @@
         clearTimeout(posTimer); posTimer = null;
         // removeChannel resolves asynchronously: ignore CLOSED/error callbacks from the old generation.
         for (const name of ['zone', 'msg']) { chGen[name] = (chGen[name] || 0) + 1; delete chOk[name]; }
-        if (zoneCh) sb.removeChannel(zoneCh).catch(() => { }); if (msgCh) sb.removeChannel(msgCh).catch(() => { });
+        if (zoneCh) rtc.removeChannel(zoneCh).catch(() => { }); if (msgCh) sb.removeChannel(msgCh).catch(() => { });
         zoneCh = msgCh = null; curZone = null; liveMeta.clear(); recompute();
       },
       sendPos(p) {
@@ -533,7 +621,7 @@
       sendEmote(k) { if (zonePeers()) zoneSend('emo', { u: me.id, k }); },
       /* [piano-net] gói nốt đàn (js/piano-net.js gom ≤ 25 gói/giây). Chỉ gửi khi kênh đã vào xong — nếu không
          supabase-js sẽ chuyển sang gửi qua HTTP từng gói. */
-      sendPiano(b) { if (curZone === 'lib_b' && b && Array.isArray(b.e) && b.e.length <= 64 && fin(b.t) && !(sb.realtime && sb.realtime.isConnected && !sb.realtime.isConnected())) return zoneSend('pno', Object.assign({}, b, { u: me.id })); return false; },
+      sendPiano(b) { if (curZone === 'lib_b' && b && Array.isArray(b.e) && b.e.length <= 64 && fin(b.t) && rtConnected()) return zoneSend('pno', Object.assign({}, b, { u: me.id })); return false; },
       status: () => status
     };
     return net;

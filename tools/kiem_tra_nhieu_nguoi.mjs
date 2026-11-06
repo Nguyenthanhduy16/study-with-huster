@@ -47,7 +47,15 @@ async function shot(p, name) {
 const rpc = (name, body) => fetch(BASE + '/fake/rpc/' + name, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
 
 /* --csp: trang được gửi kèm đúng Content-Security-Policy của netlify.toml; vi phạm CSP hiện thành lỗi Console và làm bài thử LỖI */
-const srv = spawn(process.execPath, [path.join(HERE, 'fake-supabase-server.mjs'), '--port=' + PORT, '--csp'], { stdio: ['ignore', 'pipe', 'inherit'] });
+/* --railway: vị trí/cử chỉ/hiện diện/đàn đi qua server realtime thật (server/server.js, cần npm --prefix server ci) */
+const RAILWAY = !!args.railway, RT_PORT = PORT + 1;
+let rtProc = null;
+async function startRealtime() {
+  rtProc = spawn(process.execPath, [path.join(HERE, '..', 'server', 'server.js')], { env: { ...process.env, PORT: String(RT_PORT), SUPABASE_URL: BASE + '/fake', SUPABASE_ANON_KEY: 'fake-anon-key', ALLOWED_ORIGINS: BASE }, stdio: ['ignore', 'pipe', 'inherit'] });
+  await new Promise(r => rtProc.stdout.once('data', r));
+}
+if (RAILWAY) await startRealtime();
+const srv = spawn(process.execPath, [path.join(HERE, 'fake-supabase-server.mjs'), '--port=' + PORT, '--csp', ...(RAILWAY ? ['--realtime=ws://localhost:' + RT_PORT] : [])], { stdio: ['ignore', 'pipe', 'inherit'] });
 await new Promise((res, rej) => { srv.stdout.once('data', res); srv.once('exit', c => rej(new Error('máy chủ giả lập dừng: ' + c))); });
 /* WebGL trong Chromium không GPU: bắt buộc dùng SwiftShader (dựng hình bằng CPU) — thiếu các cờ này thì cảnh 3D không tạo được context. */
 const browser = await chromium.launch({ headless: !args.headed, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -138,11 +146,20 @@ try {
   await shot(C, '2-C-thu-vien.png');
 
   /* ---------- 7. mất kết nối rồi tự nối lại ---------- */
+  if (RAILWAY) {
+    ok((await A.page.evaluate(() => __potaNet.rtMode)) === 'railway', 'realtime đi qua server Railway');
+    rtProc.kill(); await sleep(3000);
+    ok(await until(() => B.page.evaluate(() => __potaNet.status() !== 'online'), 8000), 'server Railway khởi động lại: máy khách báo đang kết nối lại');
+    await startRealtime();
+    ok(await until(async () => (await Promise.all(people.map(p => p.page.evaluate(() => __potaNet.status())))).every(s => s === 'online'), 40000), 'cả 3 máy tự nối lại server Railway');
+    ok(await until(async () => (await A.page.textContent('#po-online b')) === '3' && (await seesAvatar(A, B)), 30000), 'sau khi nối lại: A lại thấy 3 người và nhân vật của B');
+  } else {
   await ctl({ op: 'kill', uid: B.uid, blockMs: 5000 });
   ok(await until(() => B.page.evaluate(() => __potaNet.status() !== 'online' && /kết nối|mạng/i.test(document.querySelector('#po-net').textContent)), 8000), 'B mất kết nối: góc trên báo "Đang kết nối lại…"');
   ok(await until(async () => (await A.page.textContent('#po-online b')) === '2', 10000), 'A thấy B tạm rời (2 người)');
   ok(await until(() => B.page.evaluate(() => __potaNet.status() === 'online'), 30000), 'B tự nối lại sau khi mạng có lại');
   ok(await until(async () => (await A.page.textContent('#po-online b')) === '3' && (await seesAvatar(A, B)), 20000), 'B quay lại: A lại thấy 3 người và nhân vật của B');
+  }
 
   /* ---------- 8. rời phòng ---------- */
   await C.ctx.close(); C.closed = true;
@@ -158,7 +175,7 @@ try {
 } finally {
   const errs = errors.filter(e => !/open-meteo|ERR_NAME|ERR_INTERNET|ERR_CONNECTION|net::ERR_TUNNEL|Failed to load resource/i.test(e));
   ok(errs.length === 0, 'không có lỗi JavaScript trong Console' + (errs.length ? ':\n        ' + errs.slice(0, 15).join('\n        ') : ''));
-  srv.kill(); await Promise.race([browser.close(), sleep(15000)]);
+  srv.kill(); if (rtProc) rtProc.kill(); await Promise.race([browser.close(), sleep(15000)]);
   console.log((failed ? `\n${failed} mục LỖI` : '\nTẤT CẢ ĐẠT') + ` (${Math.round((Date.now() - T0) / 1000)} giây)`);
   process.exit(failed ? 1 : 0);
 }
