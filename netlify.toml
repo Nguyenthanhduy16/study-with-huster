@@ -9,10 +9,11 @@
 # CSP chỉ cho phép: file của chính trang web, Supabase (https + wss *.supabase.co) và thời tiết Open-Meteo.
 # Nếu dùng tên miền riêng cho Supabase (custom domain), thêm tên miền đó vào connect-src.
 # 'unsafe-inline' cần cho các đoạn <script>/<style> nhỏ viết thẳng trong index.html/admin.html.
+# 'wasm-unsafe-eval' chỉ cho phép WebAssembly (bộ giải nén Draco của mô hình sân), không cho eval JavaScript.
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "SAMEORIGIN"
     Referrer-Policy = "strict-origin-when-cross-origin"
@@ -55,6 +56,22 @@
   [headers.values]
     Content-Type = "model/gltf-binary"
     Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+# Ảnh logo/huy hiệu của tủ đồ và bộ giải nén Draco: ít khi đổi — giữ 7 ngày (đổi nội dung thì nên đổi tên file).
+[[headers]]
+  for = "/avatar/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=2592000"
+[[headers]]
+  for = "/scene/vendor/draco/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
+
+# Bản nén Draco của mô hình sân (web tải bản này; bản .glb gốc chỉ dùng khi trình duyệt không giải nén được).
+[[headers]]
+  for = "/scene/exterior/thu-vien-ta-quang-buu.draco.glb"
+  [headers.values]
+    Content-Type = "model/gltf-binary"
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=2592000"
 [[headers]]
   for = "/scene/exterior/luoi-di-chuyen.json"
   [headers.values]

@@ -104,10 +104,28 @@
      SÂN THƯ VIỆN (GLB)
      ------------------------------------------------------------------ */
   const EXT = { root: null, grid: null, mixer: null, door: null, doorT: 0, hands: {}, nightMats: [], seats: [], mango: [] };
+  /* Sân thư viện: bản nén Draco (~1,2 MB thay vì 9,9 MB — giảm băng thông hosting); giải nén bằng WebAssembly ở luồng nền.
+     Trình duyệt không chạy được WebAssembly (cũ / CSP chặn), giải nén lỗi, hoặc tải xong 20 s vẫn chưa giải nén
+     xong ⇒ tải bản gốc chưa nén như trước. */
+  function wasmOk() {
+    try { return typeof WebAssembly === 'object' && new WebAssembly.Module(Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0)) instanceof WebAssembly.Module; }
+    catch (_) { return false; }
+  }
   function loadExterior() {
     return new Promise((res, rej) => {
       SceneAPI.status('Đang tải sân thư viện…');
-      new THREE.GLTFLoader().load(ROOT + 'scene/exterior/thu-vien-ta-quang-buu.glb', g => res(g), undefined, e => rej(e));
+      const plain = () => new THREE.GLTFLoader().load(ROOT + 'scene/exterior/thu-vien-ta-quang-buu.glb', g => res(g), undefined, e => rej(e));
+      if (!THREE.DRACOLoader || !wasmOk()) return plain();
+      const draco = new THREE.DRACOLoader();
+      draco.setDecoderPath(ROOT + 'scene/vendor/draco/'); draco.setDecoderConfig({ type: 'wasm' });
+      const L = new THREE.GLTFLoader(); L.setDRACOLoader(draco);
+      let done = false, timer = null;
+      const finish = () => { done = true; clearTimeout(timer); setTimeout(() => { try { draco.dispose(); } catch (_) { } }, 0); };
+      const fallback = e => { if (done) return; finish(); console.warn('[cảnh] không giải nén được bản Draco, tải bản gốc', e || ''); plain(); };
+      L.load(ROOT + 'scene/exterior/thu-vien-ta-quang-buu.draco.glb',
+        g => { if (done) return; finish(); res(g); },
+        ev => { if (ev && ev.lengthComputable && ev.loaded >= ev.total && !timer) timer = setTimeout(() => fallback('quá 20 s'), 20000); },
+        e => fallback(e));
     });
   }
   async function loadGrid(root) {
