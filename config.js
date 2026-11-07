@@ -37,7 +37,11 @@ window.APP = {
   maxAvatars: { desktop: 40, mobile: 16 },   // số nhân vật vẽ cùng lúc (gần nhất trước) — giảm nếu máy yếu
   // Tiết kiệm lượt tin realtime (gói Supabase miễn phí: ~100 tin/giây cho cả dự án)
   posIntervalMs: 1200,       // khi đang đi, tối đa ~1 lần gửi vị trí mỗi 1,2 giây (người xem tự ngoại suy)
-  presenceGapMs: 8000        // cập nhật trạng thái hiện diện tối đa 1 lần / 8 giây
+  presenceGapMs: 8000,       // cập nhật trạng thái hiện diện tối đa 1 lần / 8 giây
+  // Đàn piano tầng 6: mỗi lượt chơi tối đa pianoLimitMin phút rồi tự đứng dậy nhường đàn;
+  // sau đó chờ pianoCooldownMin phút mới được ngồi lại
+  pianoLimitMin: 5,
+  pianoCooldownMin: 1
 };
 
 /* 3) KHU VỰC (zone). Mỗi khu là một "phòng" để đếm người, nhắn tin, xếp ghế.
