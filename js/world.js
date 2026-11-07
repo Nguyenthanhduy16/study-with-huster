@@ -251,6 +251,7 @@
     const space = sp(), s = space && space.seats[idx]; if (!s) return false;
     // Ghế có thể vừa được người khác chọn trong lúc mình đang đi tới.
     if (occupiedSeats().has(idx)) { ev.emit('toast', 'Ghế này vừa có bạn ngồi. Hãy chọn ghế trống khác.'); return false; }
+    if (s.kind === 'piano' && Piano.blocked()) return false;
     route = null;
     if (space.kind === 'room') space.stopWalk();
     me.seat = idx; me.seatTs = Date.now();
@@ -303,6 +304,7 @@
   /* bấm vào một ghế: đứng dậy (nếu đang ngồi), đi tới rồi ngồi */
   function goSit(idx) {
     const space = sp(), s = space && space.seats[idx]; if (!s) return false;
+    if (s.kind === 'piano' && Piano.blocked()) return false;
     if (occupiedSeats().has(idx)) { ev.emit('toast', 'Ghế này có bạn ngồi rồi.'); return false; }
     if (idx === me.seat) return false;
     if ((me.mode === 'seat' || me.mode === 'piano') && !standUp()) return false;
@@ -971,8 +973,50 @@
      MỖI KHUNG HÌNH
      ------------------------------------------------------------------ */
   let saved = null;      // vị trí mắt của bộ đi bộ trong mô hình (trả lại sau khi vẽ)
+  /* ------------------------------------------------------------------
+     ĐÀN PIANO: mỗi lượt tối đa APP.pianoLimitMin phút (đếm ngược trên màn hình), hết giờ tự đứng dậy nhường đàn;
+     sau đó chờ APP.pianoCooldownMin phút mới ngồi lại (lưu trong trình duyệt nên tải lại trang vẫn tính).
+     Theo dõi ở vòng lặp khung hình nên mọi đường vào/ra đàn (bấm đàn, nút, phím E, đứng dậy, đổi khu) đều tính.
+     ------------------------------------------------------------------ */
+  const Piano = (() => {
+    const LIMIT = () => Math.max(0.05, +((window.APP || {}).pianoLimitMin ?? 5)) * 60e3;
+    const COOLDOWN = () => Math.max(0, +((window.APP || {}).pianoCooldownMin ?? 1)) * 60e3;
+    let start = 0, warned = false, kicked = false, chip = null, shown = '';
+    const mins = ms => { const m = ms / 60e3; return (Number.isInteger(m) ? m : +m.toFixed(1)) + ' phút'; };
+    const clock = ms => { const t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+    const wait = () => Math.max(0, (+U.store.get('piano:end', 0) || 0) + COOLDOWN() - Date.now());
+    /* còn trong thời gian chờ ⇒ báo và trả về true (không cho ngồi) */
+    function blocked() {
+      const w = wait(); if (!w) return false;
+      ev.emit('toast', `🎹 Bạn vừa chơi đàn xong. Chờ ${Math.ceil(w / 1000)} giây nữa để các bạn khác cũng được chơi nhé.`);
+      return true;
+    }
+    function show(left) {
+      const text = left == null ? '' : '🎹 Còn ' + clock(left);
+      if (text === shown) return; shown = text;
+      if (!text) { if (chip) chip.hidden = true; return; }
+      if (!chip) { chip = U.h('div.po-piano-timer.po-card', { role: 'status', 'aria-live': 'polite' }); document.body.appendChild(chip); }
+      chip.hidden = false; chip.textContent = text; chip.classList.toggle('warn', left <= 60e3);
+    }
+    function tick() {
+      const playing = me.mode === 'piano' && me.special === 'piano';
+      if (playing && !start) { start = Date.now(); warned = kicked = false; }
+      if (!playing) { if (start) { start = 0; U.store.set('piano:end', Date.now()); } show(null); return; }
+      const left = LIMIT() - (Date.now() - start);
+      show(left);
+      if (!warned && left <= 60e3 && LIMIT() > 90e3) { warned = true; ev.emit('toast', '🎹 Còn 1 phút chơi đàn.'); }
+      if (left <= 0 && !kicked) {
+        kicked = true;
+        ev.emit('toast', `🎹 Hết ${mins(LIMIT())} chơi đàn — nhường đàn cho bạn khác nhé. Bạn có thể chơi lại sau ${mins(COOLDOWN())}.`);
+        if (!standUp()) { const space = sp(); if (space && space.stopWalk) space.stopWalk(); }   // không tìm được chỗ đứng: để mô hình tự đưa ra khỏi đàn
+      }
+    }
+    return { tick, blocked, wait };
+  })();
+
   function frame(dt, now, camera) {
     if (!S) return;
+    Piano.tick();
     if (observe) { /* camera tự do do OrbitControls điều khiển */ }
     else if (me.mode === 'idle') {
       idleT += dt * 0.035;
@@ -1049,6 +1093,7 @@
         space.stopWalk(); space.walkNow(me.x, space.floorOf(me.y + 0.1), me.z, Math.PI - me.yaw);
         ev.emit('toast', 'Ghế đàn đã có bạn sử dụng.'); return;
       }
+      if (Piano.wait()) { space.stopWalk(); space.walkNow(me.x, space.floorOf(me.y + 0.1), me.z, Math.PI - me.yaw); Piano.blocked(); return; }
       me.seat = i; me.seatTs = Date.now(); me.special = 'piano'; setMode('piano'); placeSeated(me.avatar, space.seats[i]); ev.emit('seat-changed', i); sendRest(); return;
     }
     if (me.mode === 'piano') {
