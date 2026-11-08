@@ -298,7 +298,7 @@
     const seatsA = [];
     for (const s of log) {
       if (s.tag === 'r401') { v.set(s.x, s.y, s.z).applyMatrix4(mA); expand(Object.assign({}, s, { x: v.x, y: v.y, z: v.z }), seatsA, floorA); seatsA[seatsA.length - 1].room = '401'; }
-      else if (s.tag === 'r419' || s.tag === 'r402' || s.tag === 'r411') { expand(s, seatsA, floorA); seatsA[seatsA.length - 1].room = s.tag.slice(1); }
+      else if (/^r4(19|02|11|04|18)$/.test(s.tag)) { expand(s, seatsA, floorA); seatsA[seatsA.length - 1].room = s.tag.slice(1); }
       else if (s.tag === 'A') expand(s, seatsA, floorA);
     }
     /* tầng 6–7(–10) của module B: "mặt sàn" luôn tính bằng ĐỘ CAO (m) như module A; mô hình dùng số tầng 6/7/10 */
@@ -369,7 +369,7 @@
         doorHit(ray, base) { if (base > 0.5) return false; const o = ray.ray.origin, d = ray.ray.direction; if (Math.abs(d.z) < 1e-3) return false; const t = (12.95 - o.z) / d.z; if (t < 0 || t > 60) return false; const x = o.x + d.x * t, y = o.y + d.y * t; return Math.abs(x) < 2.6 && y > -0.2 && y < 3.2; },
         exitPoint: { x: 0, z: 12.35 },
         floorOf: y => Math.max(0, Math.min(3, Math.round(y / FH))) * FH,
-        place(x, y, z) { const fl = Math.round(y / FH) + 1; return fl === 4 && z < -13 ? 'Phòng 401' : fl === 4 && z > 13 ? 'Phòng 411' : fl === 4 && x < -19.5 ? 'Phòng 402' : fl === 4 && x > 19.5 && (x > 22 || Math.abs(z) > 3.7) ? 'Phòng 419' : 'Tầng ' + fl; },
+        place(x, y, z) { const fl = Math.round(y / FH) + 1; return fl === 4 && z < -13 ? 'Phòng 401' : fl === 4 && z > 13 ? (x > 15.1 ? 'Phòng 418' : x < -15.1 ? 'Phòng 404' : 'Phòng 411') : fl === 4 && x < -19.5 ? 'Phòng 402' : fl === 4 && x > 19.5 && (x > 22 || Math.abs(z) > 3.7) ? 'Phòng 419' : 'Tầng ' + fl; },
         walkNow(x, y, z, yaw) { A.api.walkNow(V(x, y + 1.6, z), yaw); }
       }),
       B: roomSpace(B, seatsB, {
