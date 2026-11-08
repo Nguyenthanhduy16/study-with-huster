@@ -2,6 +2,12 @@
 
 Đây là tình trạng mã nguồn sau phiên tiếp tục. Kiểm thử tự động không thay thế kiểm tra hình ảnh WebGL và Supabase thật.
 
+## Tầng 5 thư viện (08/11/2026)
+
+- **Đã làm:** thêm tầng 5 vào khối A (giống tầng 4, đổi số phòng theo sơ đồ): phòng 518 đi vào/ngồi được (162 chỗ, như phòng 401); mặt tiền có biển 509 (T–TJ), 511, 525, 526 (TK–Z), Phòng học nhóm; thang máy dừng tầng 5; khối tầng 6–7–10 nâng lên 4,5 m. Chi tiết trong README mục "Tầng 5 thư viện" và docs/HOP_DONG_CANH.md.
+- **Đã kiểm tra:** `npm run check`, `npm test` (65 đạt, 0 lỗi); `npm run test:tang5` trên Chromium + SwiftShader: 15/15 đạt (thang máy 1 → 5, hành lang tầng 5, lưới đi bộ khớp tầng 4 ở 98,7% ô, tên vị trí, ngồi/đứng phòng 518, thang máy 5 ⇄ 6, không lỗi JavaScript); xem ảnh chụp các mặt tường bằng mắt.
+- **Chưa làm:** bên trong 509, 511, 525, 526 và phòng học nhóm (hiện là mặt tiền); chưa có ảnh thật bên trong các phòng tầng 5 để dựng nội thất riêng; chưa đo FPS trên máy thật (thêm một tầng + một phòng lớn làm cảnh nặng hơn).
+
 ## Hoàn thiện và gộp hai nhánh WIP (04/11/2026)
 
 Hai nhánh `wip/ghe-ngoi-render` (63bcecb) và `wip/giao-dien-render` (3762e4b) được ghép trên nền `main` 3845f67. Giữ bản vá thang máy A ⇄ B và các thay đổi SQL/Supabase đã vào PR #2. Xung đột package.json được giải quyết bằng cách giữ cả lệnh kiểm tra thang máy và render ghế.

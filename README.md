@@ -6,6 +6,24 @@ Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn th
 - Bật nhiều người thật bằng Supabase: mục 2 cùng file.
 - Thay mô hình 3D, cập nhật Phòng thay đồ hay sân thượng: `docs/HOP_DONG_CANH.md`.
 
+## Tầng 5 thư viện (08/11/2026)
+
+Dựng theo sơ đồ "Tầng 5 - Tòa nhà Thư viện Tạ Quang Bửu", thiết kế giống tầng 4, chỉ đổi số phòng bên ngoài cho đúng:
+
+| Vị trí (theo sơ đồ) | Trong cảnh |
+|---|---|
+| Phía sau giếng trời: **518** | Phòng đọc lớn dựng giống phòng 401 (cùng bàn ghế, giá sách, quầy, 162 chỗ ngồi), biển "PHÒNG 518". Đi vào, ngồi được. |
+| Góc sau trái: **511** · Giữa trái: **509** (phòng đọc chuyên ngành T – TJ) | Cửa gỗ có biển 511; phòng kính có biển "509 · Phòng đọc T – TJ". |
+| Góc sau phải: **525** · Giữa phải: **526** (phòng đọc chuyên ngành TK – Z) | Cửa gỗ có biển 525; phòng kính có biển "526 · Phòng đọc TK – Z" (cửa thang máy vẫn ở giữa tường phải). |
+| Phía trước: **Phòng học nhóm** | Phòng kính giữa hai cửa sổ, biển xanh "Phòng học nhóm". |
+| Hành lang | Bàn tròn, chậu cây như tầng 4 (không có máy cà phê). |
+
+- Thang máy chạy tầng 1 · 2 · 3 · 4 · **5** · 6 · 7 · 10 (bảng bấm, phím số 5 trong cabin, ô "Đến tầng"). Khối tầng 6–7–10 được nâng lên đúng một tầng (4,5 m) để nằm trên tầng 5.
+- Bản đồ nhỏ, tên vị trí ("Tầng 5", "Phòng 518"), chỉ đường tới bạn ở tầng 5, khu "Thư viện · Tầng 1–5".
+- 509, 511, 525, 526 và phòng học nhóm là mặt tiền (cửa/kính + biển số), chưa đi vào bên trong được.
+- Nguồn tham khảo: sơ đồ tầng 5 do bạn gửi; tài liệu hướng dẫn thư viện của ĐHBK (phòng 509 T–TJ, 526 TK–Z là phòng đọc chuyên ngành). Không tìm được ảnh chụp bên trong các phòng tầng 5 nên nội thất phòng 518 giữ như phòng 401.
+- Kiểm tra: `npm run test:tang5` (Chromium + WebGL phần mềm) — đi thang máy 1 → 5, hành lang và lưới đi bộ tầng 5, tên vị trí, ngồi/đứng ở phòng 518, thang máy 5 ⇄ 6, ảnh chụp các mặt tường.
+
 ## Đợt 3 — tiếp tục từ mã đã push (04/11/2026)
 
 - Phòng thay đồ có 90 món, logo và thẻ HUST, tương thích dữ liệu trang phục cũ. Tóc → **Tóc xoăn** bồng, lọn xoăn tròn, dài tới ngang cằm; **Đầu moi** có mái tỉa, hai bên sát và gáy mullet; đổi màu được. Nhãn đồng phục dùng HUST, bỏ tên Phương Thảo khỏi giao diện.
@@ -95,7 +113,7 @@ Hai nhánh WIP về ghế và giao diện đã được tích hợp trên nền 
 | Vào phòng | Họ tên + MSSV (2021–2026, 8–9 số), chọn nhận câu hỏi GT + ĐS, chọn vào thư viện hay sân trước, chọn nhân vật trong Phòng thay đồ, tuỳ chọn ẩn khỏi xếp hạng / ẩn trạng thái. Có màn chào lần đầu giới thiệu mục đích, tính năng và 3 bước. |
 | Chống tên bậy | 1) Kiểm tra định dạng (chỉ chữ, 2–6 chữ, tự viết hoa). 2) Lọc từ cấm có dấu / không dấu / teencode / số thay chữ. 3) Tên không giống mẫu tên tiếng Việt thì hiện "Bạn học 1234" tới khi QTV duyệt. 4) QTV đổi tên, ẩn, khoá ngay. Kiểm tra cả ở trình duyệt và trên máy chủ. |
 | Thế giới 3D | Sân trước thư viện (file GLB): đồng hồ mặt tiền chạy theo giờ Hà Nội, cửa kính tự mở khi tới gần, đèn bật buổi tối. Bước qua cửa chính là vào sảnh; đi ra cửa là ra sân. Trong thư viện đi bộ khắp các tầng, đi thang máy 1–4 ⇄ 6–7 ⇄ 10. Ở mỗi khu chỉ thấy người cùng khu. |
-| Khu vực | Sân trước thư viện · Thư viện tầng 1–4 (có phòng 401) · Tầng 6–7 · Sân thượng tầng 10. |
+| Khu vực | Sân trước thư viện · Thư viện tầng 1–5 (có phòng 401, 518) · Tầng 6–7 · Sân thượng tầng 10. |
 | Hiển thị tạo động lực | Số người đang học, giờ học của bạn, sao, chuỗi ngày. Bảng xếp hạng giờ học / sao / chuỗi theo hôm nay và cả đợt. Dòng "Hôm nay cả phòng đã học X giờ". Thông báo khi ai đó học đủ mỗi giờ. |
 | Câu hỏi chung | Mặc định mỗi 5 phút, 45 giây trả lời (QTV chỉnh được). Máy chủ chọn câu cân bằng môn → chương → dạng, không lặp trong 20 vòng. Chấm trên máy chủ, đáp án không lộ khi vòng còn mở. Mỗi người 1 lần, đúng +1 ⭐. Sau giờ hiện đáp án, lời giải, tỉ lệ A/B/C/D, số người đúng; bảng kết quả giữ tới khi tự đóng. Vào giữa vòng thì chờ vòng sau; đang Tập trung thì không bật lên. |
 | Nhắn tin | 3 kênh (Cả khu · Gần tôi · Nhắn riêng), mẫu câu + tin tự do, gợi ý @tên, bong bóng trên đầu khoảng 5 giây, giãn cách 10 giây, lọc từ, nút báo cáo (3 báo cáo thì tự ẩn). |

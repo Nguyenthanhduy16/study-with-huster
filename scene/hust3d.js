@@ -1,7 +1,7 @@
 /* Lớp cảnh tự sinh từ hust-3d/index.html bởi tools/patch_scene.py — đừng sửa tay */
 window.__S=(n,x,y,z,ry)=>(window.__SEATLOG=window.__SEATLOG||[]).push({tag:window.__SEATTAG,n:n,x:x,y:y,z:z,ry:ry});
 
-function buildRoom401(renderer,group){
+function buildRoom401(renderer,group,opt){/*[tang5] opt:{num,title} — dùng lại cho phòng 518 tầng 5*/opt=opt||{};const RNUM=opt.num||'401',RTITLE=opt.title||'Phòng 401 · Phòng học tự do';
 const scene=group;
 /* ---------- helpers ---------- */
 let seed=20261103;
@@ -85,7 +85,7 @@ const signCanvas=document.createElement('canvas');signCanvas.width=640;signCanva
 const signTex=new THREE.CanvasTexture(signCanvas);signTex.encoding=THREE.sRGBEncoding;
 function drawSign(){const g=signCanvas.getContext('2d');g.fillStyle='#1f50b5';g.fillRect(0,0,640,340);
   g.strokeStyle='#ffffff';g.lineWidth=10;g.strokeRect(20,20,600,300);g.fillStyle='#ffffff';g.textAlign='center';g.textBaseline='middle';
-  g.font='700 70px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('PHÒNG',320,108);g.font='800 132px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('401',320,222);signTex.needsUpdate=true;}
+  g.font='700 70px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('PHÒNG',320,108);g.font='800 132px "Be Vietnam Pro", system-ui, sans-serif';g.fillText(RNUM,320,222);/*[tang5]*/signTex.needsUpdate=true;}
 drawSign();
 if(document.fonts&&document.fonts.load){Promise.all([document.fonts.load('700 70px "Be Vietnam Pro"'),document.fonts.load('800 132px "Be Vietnam Pro"')]).then(()=>{drawSign();drawTV();}).catch(()=>{});}
 
@@ -315,7 +315,7 @@ function bandGeo(ro,ri,h){const o=halfStad(ro),inn=halfStad(ri).reverse();const 
 const tvTex=canvasTex(640,360,(g,w,h)=>{const gr=g.createLinearGradient(0,0,w,h);gr.addColorStop(0,'#14306e');gr.addColorStop(1,'#2a63c4');g.fillStyle=gr;g.fillRect(0,0,w,h);
   g.fillStyle='rgba(255,255,255,.12)';g.fillRect(0,h-70,w,70);g.fillStyle='#ffffff';g.textAlign='left';g.textBaseline='middle';
   g.font='800 40px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('THƯ VIỆN TẠ QUANG BỬU',36,64);
-  g.font='600 30px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('Phòng 401 · Phòng học tự do',36,124);
+  g.font='600 30px "Be Vietnam Pro", system-ui, sans-serif';g.fillText(RTITLE,36,124);/*[tang5]*/
   g.font='500 26px "Be Vietnam Pro", system-ui, sans-serif';g.fillStyle='#cfe0ff';g.fillText('Mở cửa 7:30 – 21:00 · Thứ Hai – Thứ Bảy',36,176);g.fillText('Giữ trật tự · Để điện thoại ở chế độ im lặng',36,216);
   g.fillStyle='#ffd27a';g.font='600 26px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('Mượn – trả sách tại phòng mượn sách tầng 1',36,h-35);});
 function drawTV(){const u=tvTex.userData;if(u&&u.canvas){u.draw(u.canvas.getContext('2d'),u.canvas.width,u.canvas.height);tvTex.needsUpdate=true;}}
@@ -431,10 +431,10 @@ function arcRun(cx,cz,r,th0,th1,segs,depth,h,y,m,list){const L2=r*Math.abs(th1-t
 
 /* ---------- dimensions ----------
    The atrium is a stadium lying along x: straight runs at z = ±r for |x| ≤ L, half-circles at both ends.
-   Four floors (tầng 1–4) ring the void; the top is closed by an oval ceiling with a sun painting. */
-const XW=19.5,ZB=-13,ZF=13,FH=4.5,MZ=FH,SB=FH-.4,NF=4,CH=NF*FH,L=7,FR=7.5;
-const liftZ=[-2.9,0,2.9], OW=.7, DH=2.45, STACK=4*FH+1.4, LBASE={1:0,2:FH,3:2*FH,4:3*FH,6:STACK,7:STACK+5.25,10:STACK+10.8}, FLOORS=[1,2,3,4], ROOMZ=-25.5;
-const cols3=[],cols4=[],LCOL={1:colsG,2:colsM,3:cols3,4:cols4};
+   Five floors (tầng 1–5) ring the void; the top is closed by an oval ceiling with a sun painting. */
+const XW=19.5,ZB=-13,ZF=13,FH=4.5,MZ=FH,SB=FH-.4,NF=5/*[tang5] trước: 4*/,CH=NF*FH,L=7,FR=7.5;
+const liftZ=[-2.9,0,2.9], OW=.7, DH=2.45, STACK=5*FH+1.4/*[tang5]*/, LBASE={1:0,2:FH,3:2*FH,4:3*FH,5:4*FH,6:STACK,7:STACK+5.25,10:STACK+10.8}, FLOORS=[1,2,3,4,5], ROOMZ=-25.5;
+const cols3=[],cols4=[],cols5=[],LCOL={1:colsG,2:colsM,3:cols3,4:cols4,5:cols5};/*[tang5]*/
 const STR={ri:5.0,ro:7.0,rm:6.0,a0:1.0,a1:-PI/2,N:32};   // two stairs hugging the inside of the void ends
 const LAND={x0:L-2.4,x1:L+.05,z0:-7.9,z1:-4.95};          // landing at the top of each stair (mirrored for the left one)
 
@@ -460,7 +460,7 @@ function stadFlat(r,y,m,down,parent=scene,uvFit){const sh=new THREE.Shape(stadPt
 function slabRect(y,m,down,parent=scene){const f=down?1:-1;const sh=new THREE.Shape([new THREE.Vector2(-XW,ZB*f),new THREE.Vector2(XW,ZB*f),new THREE.Vector2(XW,ZF*f),new THREE.Vector2(-XW,ZF*f)]);
   sh.holes.push(new THREE.Path(stadPts(FR,!down)));const mesh=new THREE.Mesh(new THREE.ShapeGeometry(sh),m);mesh.rotation.x=down?PI/2:-PI/2;mesh.position.y=y;mesh.receiveShadow=true;mesh.castShadow=!down;parent.add(mesh);return mesh;}
 /* groups for the floors above tầng 2, hidden in the bird's-eye views */
-const UP=[null,null,null,new THREE.Group(),new THREE.Group()],TOP=new THREE.Group();scene.add(UP[3],UP[4],TOP);
+const UP=[null,null,null,new THREE.Group(),new THREE.Group(),new THREE.Group()],TOP=new THREE.Group();scene.add(UP[3],UP[4],UP[5],TOP);/*[tang5]*/
 const grp=lv=>lv>=3?UP[lv]:scene;
 
 /* ---------- textures ---------- */
@@ -531,7 +531,7 @@ const kioskTex=canvasTex(160,320,(g,w,h)=>{const gr=g.createLinearGradient(0,0,0
   g.fillStyle='#ffffff';g.fillRect(16,18,w-32,26);g.fillStyle='rgba(255,255,255,.75)';for(let i=0;i<9;i++)g.fillRect(16,64+i*26,(w-32)*(.5+R()*.5),9);});
 const boardTex=canvasTex(200,280,(g,w,h)=>{g.fillStyle='#ffffff';g.fillRect(0,0,w,h);g.fillStyle='#d32f2f';g.fillRect(0,0,w,46);g.fillStyle='#c6ccda';for(let i=0;i<8;i++)g.fillRect(18,66+i*24,w-36-(i%3)*20,9);});
 const liftSignTex=canvasTex(1024,256,(g,w,h)=>{g.fillStyle='#2b3350';g.fillRect(0,0,w,h);g.fillStyle='#ffffff';g.textAlign='center';g.textBaseline='middle';
-  g.font='700 84px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('THANG MÁY',w/2,h*.38);g.font='500 46px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('Tầng 1 · 2 · 3 · 4 · 6 · 7',w/2,h*.75);});
+  g.font='700 84px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('THANG MÁY',w/2,h*.38);g.font='500 46px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('Tầng 1 · 2 · 3 · 4 · 5 · 6 · 7',w/2,h*.75);/*[tang5]*/});
 const allText=[hustTex,libTex,plaqueTex,liftSignTex,bannerTex];
 function redrawText(){for(const t of allText){const c=t.userData.canvas;t.userData.draw(c.getContext('2d'),c.width,c.height);t.needsUpdate=true;}}
 if(document.fonts&&document.fonts.load){Promise.all(['800 74px','600 30px','700 28px','700 84px','800 64px','500 36px'].map(f=>document.fonts.load(f+' "Be Vietnam Pro"'))).then(redrawText).catch(()=>{});}
@@ -566,6 +566,26 @@ function onWall(side,u,y,w,h,m,parent=scene,off=.02){const o=new THREE.Mesh(new 
 const winM=new THREE.MeshStandardMaterial({map:winTex,roughness:.2}),gdM=new THREE.MeshStandardMaterial({map:glassDoorTex,roughness:.2}),
   doorM=new THREE.MeshStandardMaterial({map:doorTex,roughness:.5}),noteM=new THREE.MeshStandardMaterial({map:noticeTex,roughness:.7}),roomM=new THREE.MeshStandardMaterial({map:roomGlassTex,roughness:.25});
 const BRM={x0:-26,x1:-XW,z0:-5,z1:5,h:3.4,open:4.5};
+/* [tang5] TẦNG 5 — bố trí theo sơ đồ "Tầng 5 - Tòa nhà Thư viện Tạ Quang Bửu": phía sau (−z) là phòng 518 (dựng giống phòng 401),
+   góc sau trái 511, giữa trái 509 (phòng đọc chuyên ngành T–TJ), góc sau phải 525, giữa phải 526 (phòng đọc chuyên ngành TK–Z),
+   phía trước (+z, trên sảnh chính) là phòng học nhóm. Các phòng bên ngoài là mặt tiền (cửa/kính + biển số), không đi vào được. */
+function plateTex(num,sub,bg){return canvasTex(512,224,(g,w,h)=>{g.fillStyle=bg||'#1f50b5';g.fillRect(0,0,w,h);g.strokeStyle='#ffffff';g.lineWidth=8;g.strokeRect(12,12,w-24,h-24);
+  g.fillStyle='#ffffff';g.textAlign='center';g.textBaseline='middle';
+  if(sub){g.font='800 92px "Be Vietnam Pro", system-ui, sans-serif';g.fillText(num,w/2,h*.4);g.font='600 30px "Be Vietnam Pro", system-ui, sans-serif';g.fillText(sub,w/2,h*.76);}
+  else{g.font='800 64px "Be Vietnam Pro", system-ui, sans-serif';g.fillText(num,w/2,h/2+2);}});}
+const plates5=[];
+function plate5(side,u,y,w,num,sub,par,bg){const t=plateTex(num,sub,bg);plates5.push(t);allText.push(t);return onWall(side,u,y,w,w*224/512,new THREE.MeshStandardMaterial({map:t,roughness:.5}),par,.03);}
+function floor5Walls(W,y0,par){
+  /* trái: 511 (cửa gỗ, góc sau) · 509 (phòng kính lớn) */
+  W('left',-9.6,1.2,2.3,doorM);plate5('left',-9.6,y0+2.75,1.1,'511',null,par);
+  W('left',2,7,2.6,roomM);plate5('left',2,y0+3.2,1.9,'509','Phòng đọc T – TJ',par);
+  /* phải (cửa thang máy ở giữa): 525 (cửa gỗ, góc sau) · 526 (phòng kính, phía trước) */
+  W('right',-8,1.2,2.3,doorM);plate5('right',-8,y0+2.75,1.1,'525',null,par);
+  W('right',8.6,6,2.6,roomM);plate5('right',8.6,y0+3.2,1.9,'526','Phòng đọc TK – Z',par);
+  /* trước: phòng học nhóm (kính) giữa hai cửa sổ */
+  W('front',0,7.4,2.6,roomM);plate5('front',0,y0+3.2,2.6,'Phòng học nhóm',null,par,'#1f6b4a');
+  /* sau: biển phòng 518 trên vách kính */
+  plate5('back',-12,y0+3.83,1.2,'518',null,par);}
 for(let lv=1;lv<=NF;lv++){const y0=(lv-1)*FH,par=grp(lv);
   /* right wall: doorways for the three lifts on every floor */
   {let z=ZB;for(const lz of liftZ){onWall('right',(z+lz-OW)/2,y0+FH/2,lz-OW-z,FH,wallMat,par,0);onWall('right',lz,y0+(DH+FH)/2,2*OW,FH-DH,wallMat,par,0);z=lz+OW;}
@@ -594,8 +614,9 @@ for(let lv=1;lv<=NF;lv++){const y0=(lv-1)*FH,par=grp(lv);
   }else{
     for(const x of [-14,-6,6,14])W('front',x,3.2,1.7,winM,y0+2.0);
     if(lv<4){W('back',-15.5,1.2,2.3,doorM);W('back',-6,4.8,2.6,roomM);W('back',15.5,1.2,2.3,doorM);}
+    if(lv===5)floor5Walls(W,y0,par);else{/*[tang5]*/
     W('left',-6,6,2.6,roomM);W('left',6,1.2,2.3,doorM);W('left',10,2.4,1.6,winM,y0+2);
-    W('right',-8,1.2,2.3,doorM);W('right',9,2.4,1.6,winM,y0+2);}
+    W('right',-8,1.2,2.3,doorM);W('right',9,2.4,1.6,winM,y0+2);}}
   /* lift sign above the doors */
   panel(4.0,.9,new THREE.MeshBasicMaterial({map:liftSignTex}),XW-.02,y0+3.5,0,-PI/2,par);
 }
@@ -640,7 +661,7 @@ const COLS=[[-6.5,-8.5],[6.5,-8.5],[-6.5,8.5],[6.5,8.5],[-L-6.1,-5.9],[L+6.1,-5.
 for(const [x,z] of COLS){for(let lv=1;lv<=NF;lv++){const y0=(lv-1)*FH,par=grp(lv),h=lv===1?FH-.4:FH-.4;
     mk(cyl(.48,.48,h,32),M.column,x,y0+h/2,z,par);mk(cyl(.62,.5,.2,32),mat('#efe6d8'),x,y0+h-.1,z,par);
     if(lv===1){mk(box(1.2,1.0,1.2),M.slate,x,.5,z);}else mk(box(1.0,.16,1.0),mat('#d8d3ca'),x,y0+.08,z,par);}
-  colsG.push([x-.62,x+.62,z-.62,z+.62]);colsM.push([x,z,.55]);cols3.push([x,z,.55]);cols4.push([x,z,.55]);}
+  colsG.push([x-.62,x+.62,z-.62,z+.62]);colsM.push([x,z,.55]);cols3.push([x,z,.55]);cols4.push([x,z,.55]);cols5.push([x,z,.55]);/*[tang5]*/}
 
 /* ---------- the two grand staircases, curving along the inside of each end of the void ---------- */
 const stairs=[{m:1},{m:-1}];
@@ -688,7 +709,7 @@ const plankWallTex=canvasTex(1024,512,(g,w,h)=>{g.fillStyle='#a8572a';g.fillRect
   colsG.push([-6.7,6.7,z-.2,z+.35],[-.95,.95,z,z+.7]);
   mk(box(.2,SB,ZB-z),M.wall,-6.5,SB/2,(ZB+z)/2);mk(box(.2,SB,ZB-z),M.wall,6.5,SB/2,(ZB+z)/2);}
 
-/* ---------- elevators: three cars in the right wall, serving tầng 1–4 (and linking to tầng 6–7) ---------- */
+/* ---------- elevators: three cars in the right wall, serving tầng 1–5 (and linking to tầng 6–7) ---------- */
 const cabTex=canvasTex(256,256,(g,w,h)=>{const gr=g.createLinearGradient(0,0,w,0);gr.addColorStop(0,'#aeb3bc');gr.addColorStop(.5,'#dadde2');gr.addColorStop(1,'#aab0b9');
   g.fillStyle=gr;g.fillRect(0,0,w,h);for(let i=0;i<260;i++){g.fillStyle=`rgba(255,255,255,${R()*.14})`;g.fillRect(R()*w,0,1,h);}g.fillStyle='rgba(90,96,108,.6)';g.fillRect(w/3-1,0,2,h);g.fillRect(2*w/3-1,0,2,h);});
 const leafTex=canvasTex(128,384,(g,w,h)=>{const gr=g.createLinearGradient(0,0,w,0);gr.addColorStop(0,'#b8bdc6');gr.addColorStop(.5,'#e0e3e8');gr.addColorStop(1,'#b3b8c1');
@@ -710,7 +731,7 @@ const LIFTS=liftZ.map((z,i)=>{const l={i,z,floor:[1,2,1][i],phase:'idle',door:0,
   /* the shaft face seen from inside the car, open at every landing */
   const sp=(w,h,y,zz)=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),shaftMat);p.position.set(XW+.03,y,zz);p.rotation.y=PI/2;scene.add(p);};
   sp(.28,STACK,STACK/2,z-OW-.14);sp(.28,STACK,STACK/2,z+OW+.14);
-  for(const fl of FLOORS){const b=LBASE[fl],top=fl<4?LBASE[fl+1]:STACK;sp(2*OW,top-b-DH,(b+DH+top)/2,z);}
+  for(const fl of FLOORS){const b=LBASE[fl],top=fl<NF?LBASE[fl+1]:STACK;/*[tang5]*/sp(2*OW,top-b-DH,(b+DH+top)/2,z);}
   const cab=new THREE.Group();cab.position.y=l.y;scene.add(cab);l.cab=cab;
   const pl=(w,h,mm,px,py,pz,rx,ry)=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mm);p.position.set(px,py,pz);p.rotation.set(rx,ry,0);p.receiveShadow=true;cab.add(p);return p;};
   pl(2*CW,CHT,cabWall,CX1,CHT/2,z,0,-PI/2);pl(CX1-CX0,CHT,cabWall,(CX0+CX1)/2,CHT/2,z-CW,0,0);pl(CX1-CX0,CHT,cabWall,(CX0+CX1)/2,CHT/2,z+CW,0,PI);
@@ -863,6 +884,9 @@ function roundSet(par,list,x,y,z,top,n,cols){mk(cyl(.62,.62,.04,36),mat(top,{rou
   for(const z of [-2.6,2.6])roundSet(UP[3],cols3,-17.2,y,z,'#3a3e48',3,['#9cb0c6']);}
 {const y=3*FH;for(const [x,z] of [[-18.6,11.8],[18.6,11.8],[-18.6,-11.8],[18.6,-11.8],[0,12.2]])plant(x,y,z,1.9,cols4,UP[4]);
   for(const [x,z] of [[-15,10.3],[-9.5,10.3],[9.5,10.3],[15,10.3],[-17.2,-3],[-17.2,3]])roundSet(UP[4],cols4,x,y,z,'#f2f2f0',4,['#9cb0c6','#2c3759']);}
+/* [tang5] hành lang tầng 5: bàn tròn và chậu cây như tầng 4 (bàn bên trái lùi về trước, chừa cửa phòng 511) */
+{const y=4*FH;for(const [x,z] of [[-18.6,11.8],[18.6,11.8],[-18.6,-11.8],[18.6,-11.8],[0,12.2]])plant(x,y,z,1.9,cols5,UP[5]);
+  for(const [x,z] of [[-15,10.3],[-9.5,10.3],[9.5,10.3],[15,10.3],[-16.2,-4.4],[-16.2,6.2]])roundSet(UP[5],cols5,x,y,z,'#f2f2f0',4,['#9cb0c6','#2c3759']);}
 /* coffee and drinks vending machine on the tầng 4 corridor, outside room 401 */
 const coffeeTex=canvasTex(256,512,(g,w,h)=>{g.fillStyle='#2b1d17';g.fillRect(0,0,w,h);const gr=g.createLinearGradient(0,0,0,h*.5);gr.addColorStop(0,'#6b3f26');gr.addColorStop(1,'#3a2418');g.fillStyle=gr;g.fillRect(12,12,w-24,h*.48);
   g.fillStyle='#f6e7d2';g.beginPath();g.ellipse(w*.42,h*.3,52,14,0,0,7);g.fill();g.fillRect(w*.42-52,h*.3,104,70);g.beginPath();g.ellipse(w*.42,h*.3+70,52,14,0,0,7);g.fill();
@@ -909,8 +933,12 @@ const brCols=[];
 /* ---------- room 401 on tầng 4, behind the back wall ---------- */
 const roomG=new THREE.Group();roomG.position.set(0,3*FH,ROOMZ);UP[4].add(roomG);
 window.__SEATTAG="r401";const ROOM=buildRoom401(renderer,roomG);window.__SEATTAG="A";
+/* [tang5] phòng 518 trên tầng 5: cùng thiết kế phòng 401, ngay phía trên */
+const roomG5=new THREE.Group();roomG5.position.set(0,4*FH,ROOMZ);UP[5].add(roomG5);
+window.__SEATTAG="r518";const ROOM5=buildRoom401(renderer,roomG5,{num:'518',title:'Phòng 518 · Phòng đọc tầng 5'});window.__SEATTAG="A";
+const roomOf=lv=>lv===5?ROOM5:ROOM,roomLv=lv=>lv===4||lv===5;
 /* the wing that holds room 401, seen from outside */
-{const wm=mat('#ece4d8'),zb=ROOMZ+ROOM.Z0-.05,len=ZB-zb,cz=(ZB+zb)/2,h=3*FH+ROOM.H+.3;
+{const wm=mat('#ece4d8'),zb=ROOMZ+ROOM.Z0-.05,len=ZB-zb,cz=(ZB+zb)/2,h=4*FH+ROOM.H+.3;/*[tang5] cánh nhà chứa 401 + 518*/
   panel(len,h,wm,21.55,h/2,cz,PI/2);panel(len,h,wm,-21.55,h/2,cz,-PI/2);panel(43.1,h,wm,0,h/2,zb,PI);
   panel(2.05,3*FH,wm,20.5,1.5*FH,ZB,0);panel(2.05,3*FH,wm,-20.5,1.5*FH,ZB,0);}
 
@@ -929,10 +957,10 @@ const DAY={bg:lin('#efe7e2'),hemi:.86,hemiC:lin('#fff6ee'),top:.5,win:lin('#ffff
 const EVE={bg:lin('#17141a'),hemi:.55,hemiC:lin('#ffe2c4'),top:.45,win:lin('#2c3560'),panel:1.7};
 let night=0,nightTarget=0;scene.background=DAY.bg.clone();
 function applyNight(t){const l=(a,b)=>a+(b-a)*t;scene.background.copy(DAY.bg).lerp(EVE.bg,t);hemi.intensity=l(DAY.hemi,EVE.hemi);hemi.color.copy(DAY.hemiC).lerp(EVE.hemiC,t);
-  topLight.intensity=l(DAY.top,EVE.top);winMats.forEach(m=>m.color.copy(DAY.win).lerp(EVE.win,t));M.panel.emissiveIntensity=l(DAY.panel,EVE.panel);M.down.emissiveIntensity=l(.9,1.5);ROOM.applyNight(t);}
+  topLight.intensity=l(DAY.top,EVE.top);winMats.forEach(m=>m.color.copy(DAY.win).lerp(EVE.win,t));M.panel.emissiveIntensity=l(DAY.panel,EVE.panel);M.down.emissiveIntensity=l(.9,1.5);ROOM.applyNight(t);ROOM5.applyNight(t);}
 
 /* ---------- views & camera ---------- */
-const Y4=3*FH;
+const Y4=3*FH,Y5=4*FH;/*[tang5]*/
 const VIEWS={
   overview:{p:V(0,27,34),t:V(0,1,-1),fit:'over'},
   entrance:{p:V(0,2.9,12.6),t:V(0,1.4,0)},
@@ -945,6 +973,7 @@ const VIEWS={
   floor2:{p:V(-17.5,MZ+2.6,10.6),t:V(-6,MZ+.6,9.6)},
   floor4:{p:V(16.5,Y4+2.4,10.8),t:V(2,Y4+.4,9)},
   r401:{p:V(-2,Y4+3.4,-14.6),t:V(4,Y4+.2,-28)},
+  floor5:{p:V(16.5,Y5+2.4,10.8),t:V(2,Y5+.4,9)},r518:{p:V(-2,Y5+3.4,-14.6),t:V(4,Y5+.2,-28)},/*[tang5]*/
   desk401:{p:V(1.2,Y4+2.2,-20.8),t:V(5.95,Y4+1.5,-13.4)},
   lift:{p:V(15.0,1.7,0),t:V(19.5,1.5,0)},
   building:{p:V(44,30,50),t:V(3,13,-5)},
@@ -970,10 +999,10 @@ let mode='orbit',yaw=0,pitch=0,eyeY=1.6,base=0,rider=null;
 const keys={f:0,b:0,l:0,r:0,run:0};
 const touch=matchMedia('(pointer: coarse)').matches;
 const hint=$('#hint'),dpad=$('#dpad');
-const levelOf=y=>Math.max(1,Math.min(4,Math.round(y/FH)+1));
+const levelOf=y=>Math.max(1,Math.min(NF,Math.round(y/FH)+1));/*[tang5]*/
 function where(){const p=camera.position;if(rider)return `Thang máy · tầng ${rider.phase==='moving'?'…':rider.floor}`;
   const f=base/FH;if(Math.abs(f-Math.round(f))>.07)return 'Cầu thang';const lv=levelOf(base);
-  if(lv===4&&p.z<ZB-.1)return 'Phòng 401 · tầng 4';if(lv===1&&p.x<-XW)return 'Phòng mượn sách · tầng 1';return lv===1?'Sảnh tầng 1':`Tầng ${lv}`;}
+  if(lv===4&&p.z<ZB-.1)return 'Phòng 401 · tầng 4';if(lv===5&&p.z<ZB-.1)return 'Phòng 518 · tầng 5';/*[tang5]*/if(lv===1&&p.x<-XW)return 'Phòng mượn sách · tầng 1';return lv===1?'Sảnh tầng 1':`Tầng ${lv}`;}
 let lastWhere='';
 function setHint(){lastWhere=where();hint.textContent=mode==='walk'
   ?(`${lastWhere} · `+(touch?'Giữ nút mũi tên để đi · Vuốt để nhìn quanh · Thang máy ở tường bên phải':'W A S D để đi · Kéo để nhìn · Thang máy ở tường bên phải · Esc để thoát'))
@@ -986,7 +1015,7 @@ const onMezz=(x,z)=>onLanding(x,z)||!inside(x,z,FR+.3);
 function cameraInside(x,z,foot){
   if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(foot))return false;
   const m=.08,lvl=levelOf(foot);
-  if(lvl===4&&z<ZB+1.1)return x>(z>ZB?-XW+m:ROOM.X0+m)&&x<(z>ZB?XW-m:ROOM.X1-m)&&z>ROOMZ+ROOM.Z0+m;
+  if((lvl===4||lvl===5)&&z<ZB+1.1)return x>(z>ZB?-XW+m:ROOM.X0+m)&&x<(z>ZB?XW-m:ROOM.X1-m)&&z>ROOMZ+ROOM.Z0+m;/*[tang5]*/
   if(foot<.3&&x<-XW+m)return x>BRM.x0+m&&z>BRM.z0+m&&z<BRM.z1-m&&!(x>-XW-m&&Math.abs(z)>BRM.open-m);
   if(x<-XW+m||x>XW-m||z<ZB+m||z>ZF-m)return false;
   if(foot>=FH-.3&&inside(x,z,FR+m)){const ax=Math.abs(x);return lvl===2&&ax>LAND.x0+m&&ax<LAND.x1-m&&z>Math.max(LAND.z0,-7.75)+m&&z<LAND.z1-m;}
@@ -998,7 +1027,7 @@ function surface(x,z,cur){const lvl=levelOf(cur),l=liftAt(x,z);
     if(l.phase==='moving'||l.phase==='xfer')return (rider===l&&inCab(l,x,z))?l.y:null;
     if(l.floor!==lvl||Math.abs(cur-LBASE[lvl])>.4)return null;if(inCab(l,x,z))return l.y;if(door)return l.door>.85?l.y:null;return null;}
   if(cur>LBASE[2]+1){const y=LBASE[lvl];
-    if(lvl===4&&z<ZB+1.1){if(Math.abs(x)>(z>ZB?XW-.35:21.2)||z-ROOMZ<ROOM.Z0+.35)return null;return ROOM.hit(x,z-ROOMZ)?null:y;}
+    if(roomLv(lvl)&&z<ZB+1.1){if(Math.abs(x)>(z>ZB?XW-.35:21.2)||z-ROOMZ<ROOM.Z0+.35)return null;return roomOf(lvl).hit(x,z-ROOMZ)?null:y;}/*[tang5]*/
     if(x<-XW+.35||x>XW-.35||z<ZB+.35||z>ZF-.4)return null;
     if(inside(x,z,FR+.3)||hit(LCOL[lvl],x,z))return null;return y;}
   if(cur<.3&&x<-XW+.35){if(x<BRM.x0+.35||z<BRM.z0+.35||z>BRM.z1-.35)return null;if(x>-XW-.35&&Math.abs(z)>BRM.open-.35)return null;return hit(brCols,x,z)?null:0;}
@@ -1024,7 +1053,7 @@ function updateLifts(dt){const p=camera.position,lvl=levelOf(base);
       if(l.t>=1){if(FLOORS.includes(l.target)){l.floor=l.target;l.target=null;l.phase='idle';l.hold=2.5;}
         else{/* the car has climbed into tầng 6–10: hand the ride over to that part of the building */
           const tf=l.target,ride=rider===l,pose={x:camera.position.x,z:camera.position.z,yaw,pitch};
-          l.target=null;l.phase='idle';l.floor=4;l.y=LBASE[4];l.cab.position.y=l.y;l.door=0;l.hold=0;l.key='';
+          l.target=null;l.phase='idle';l.floor=NF;l.y=LBASE[NF];l.cab.position.y=l.y;/*[tang5]*/l.door=0;l.hold=0;l.key='';
           if(ride)ctx.handoff(ME,tf,l.i,pose);}}}
     else if(l.phase==='idle'){l.hold-=dt;l.door=Math.min(1,Math.max(0,l.door+((want||l.hold>0)?1:-1)*dt*1.3));}
     for(const fl of FLOORS){const o=(fl===l.floor&&(l.phase==='idle'||l.phase==='closing'))?l.door*.68:0,d=l.doors[fl];d.L.position.z=l.z-OW/2-o;d.R.position.z=l.z+OW/2+o;}
@@ -1055,8 +1084,8 @@ root.querySelector('[data-action=climb]').addEventListener('click',()=>enterWalk
 root.querySelector('[data-action=go401]').addEventListener('click',()=>enterWalk(V(-.6,Y4+1.6,-10.2),0));
 const KMAP={KeyW:'f',ArrowUp:'f',KeyS:'b',ArrowDown:'b',KeyA:'l',ArrowLeft:'l',KeyD:'r',ArrowRight:'r'};
 addEventListener('keydown',e=>{if(e.key==='Escape'&&mode==='walk'&&!window.__POTA){setMode('orbit');return;}
-  if(mode!=='walk')return;if(window.__POTA){if(rider&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName||'')&&!e.target?.isContentEditable&&e.key.length===1&&'1234670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);return;}if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;
-  if(rider&&e.key.length===1&&'1234670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);});
+  if(mode!=='walk')return;if(window.__POTA){if(rider&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName||'')&&!e.target?.isContentEditable&&e.key.length===1&&'12345670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);return;}if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;
+  if(rider&&e.key.length===1&&'12345670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);});
 addEventListener('keyup',e=>{if(KMAP[e.code])keys[KMAP[e.code]]=0;if(e.key==='Shift')keys.run=0;});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=0;});
 dpad.querySelectorAll('button').forEach(b=>{const k=b.dataset.k;
@@ -1070,7 +1099,7 @@ canvas.addEventListener('pointermove',e=>{if(!look||mode!=='walk'||window.__POTA
 const endLook=()=>look=null;canvas.addEventListener('pointerup',endLook);canvas.addEventListener('pointercancel',endLook);
 $('#t-night').addEventListener('click',e=>{nightTarget=nightTarget?0:1;e.currentTarget.setAttribute('aria-pressed',!!nightTarget);});
 
-$('#meta').textContent=`Tầng 1–4 · thang máy lên tầng 6, 7, 10 · phòng 401 · phòng mượn sách`;
+$('#meta').textContent=`Tầng 1–5 · thang máy lên tầng 6, 7, 10 · phòng 401, 518 · phòng mượn sách`;/*[tang5]*/
 
 let started=false;
 function intro(){const {p,t}=viewPose('overview');camera.position.copy(p).sub(t).multiplyScalar(1.45).add(t).add(V(0,8,6));controls.target.copy(t);flyTo(p,t,2.2);}
@@ -1100,10 +1129,10 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     if(where()!==lastWhere)setHint();
   }else if(!tween&&mode==='orbit'){controls.update();if(camera.position.y<.4)camera.position.y=.4;}
   updateLifts(dt);
-  const cp=camera.position;ROOM.update(dt,cp.x,cp.z-ROOMZ,mode==='walk');
-  ROOM.ceilingGroup.visible=cp.y<Y4+ROOM.H-.05;
+  const cp=camera.position,lvW=levelOf(base);ROOM.update(dt,cp.x,cp.z-ROOMZ,mode==='walk'&&lvW===4);ROOM5.update(dt,cp.x,cp.z-ROOMZ,mode==='walk'&&lvW===5);/*[tang5]*/
+  ROOM.ceilingGroup.visible=cp.y<Y4+ROOM.H-.05;ROOM5.ceilingGroup.visible=cp.y<Y5+ROOM.H-.05;
   if(Math.abs(nightTarget-night)>.001){night+=(nightTarget-night)*Math.min(1,dt*3);applyNight(night);}
-  cutNow=!fullView&&mode!=='walk'&&cp.y>CH+.5&&cp.z>ZB;UP[3].visible=UP[4].visible=TOP.visible=!cutNow;
+  cutNow=!fullView&&mode!=='walk'&&cp.y>CH+.5&&cp.z>ZB;UP[3].visible=UP[4].visible=UP[5].visible=TOP.visible=!cutNow;
   ME.onFrame&&ME.onFrame(dt,now,camera);ctx.world.background=scene.background;renderer.render(ctx.world,camera);ME.afterFrame&&ME.afterFrame();}
 applyNight(0);
 
@@ -1114,12 +1143,12 @@ function arrive(fl,idx,pose){const l=LIFTS[idx%LIFTS.length];l.floor=fl;l.y=LBAS
   camera.rotation.order='YXZ';camera.rotation.set(-pitch,-yaw,0);
   canvas.classList.add('walk');dpad.hidden=false;walkUI();setHint();}
 const lights=[];scene.traverse(o=>{if(o.isLight)lights.push(o);});
-Object.assign(ME,{api:{camera,controls,scene,roomG,ROOMZ,Y4,FH,viewPose,flyTo,surface,keys,cameraInside,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get base(){return base;},get rider(){return rider;},inLift:()=>mode==='walk'&&LIFTS.some(l=>inCab(l,camera.position.x,camera.position.z)&&(l.phase==='moving'||l.phase==='xfer'?rider===l:Math.abs(l.y-base)<.6)),ext:on=>{if(on){mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw)=>{tween=null;rider=null;mode="walk";base=Math.round((p.y-1.6)/FH)*FH;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode==="walk")setMode("orbit");enterWalk(p,yw);},stopWalk:()=>{if(mode==="walk")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode==="walk")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:FLOORS,group:scene,lights,
+Object.assign(ME,{api:{camera,controls,scene,roomG,roomG5,ROOMZ,Y4,Y5,NF,FH,/*[tang5]*/viewPose,flyTo,surface,keys,cameraInside,get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get base(){return base;},get rider(){return rider;},inLift:()=>mode==='walk'&&LIFTS.some(l=>inCab(l,camera.position.x,camera.position.z)&&(l.phase==='moving'||l.phase==='xfer'?rider===l:Math.abs(l.y-base)<.6)),ext:on=>{if(on){mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},walkNow:(p,yw)=>{tween=null;rider=null;mode="walk";base=Math.round((p.y-1.6)/FH)*FH;eyeY=p.y;controls.enabled=false;yaw=yw;pitch=0;camera.position.copy(p);camera.rotation.order="YXZ";camera.rotation.set(0,-yaw,0);canvas.classList.add("walk");dpad.hidden=false;},setNight:v=>{nightTarget=v;},getMode:()=>mode,walkAt:(p,yw)=>{if(mode==="walk")setMode("orbit");enterWalk(p,yw);},stopWalk:()=>{if(mode==="walk")setMode("orbit");},orbitTo:(p,t,d)=>{if(mode==="walk")setMode("orbit");controls.enabled=true;flyTo(p,t,d==null?1:d);},orbit:(x,y,z)=>{setMode("orbit");controls.enabled=true;controls.target.set(x,y,z);},busy:()=>!!tween},floors:FLOORS,group:scene,lights,
   activate(arr){root.hidden=false;renderer.shadowMap.needsUpdate=true;last=performance.now();
     if(arr&&arr.entrance){mode='walk';base=0;eyeY=1.6;rider=null;tween=null;fullView=false;controls.enabled=false;yaw=0;pitch=0;camera.position.set(0,1.6,11.3);
       camera.rotation.order='YXZ';camera.rotation.set(0,0,0);canvas.classList.add('walk');dpad.hidden=false;walkUI();setHint();}
     else if(arr)arrive(arr.floor,arr.idx,arr.pose);else{controls.enabled=mode==='orbit';if(!started)intro();}started=true;},
-  deactivate(){root.hidden=true;controls.enabled=false;for(const k in keys)keys[k]=0;UP[3].visible=UP[4].visible=TOP.visible=true;ROOM.ceilingGroup.visible=true;
+  deactivate(){root.hidden=true;controls.enabled=false;for(const k in keys)keys[k]=0;UP[3].visible=UP[4].visible=UP[5].visible=TOP.visible=true;ROOM.ceilingGroup.visible=true;ROOM5.ceilingGroup.visible=true;
     for(const l of LIFTS){l.cab.visible=true;if(l.phase!=='idle'){l.phase='idle';l.target=null;l.key='';}}rider=null;},
   hideCab(i,v){LIFTS[i%LIFTS.length].cab.visible=v;},
   otherVisible:()=>!cutNow,
@@ -1391,7 +1420,7 @@ for(const r of [13.2,15.3]){const P=perim(r),n=Math.round(P/2.3);for(let i=0;i<n
 
 
 /* ---------- elevators: three cars running between tầng 6 (y 0) and tầng 7 (y MZ) ---------- */
-const ROOF=CH+1.0,cols10=[];const LBASE={1:-19.4,2:-14.9,3:-10.4,4:-5.9,6:0,7:MZ,10:ROOF},OWN=[6,7,10];
+const ROOF=CH+1.0,cols10=[];const LBASE={1:-23.9,2:-19.4,3:-14.9,4:-10.4,5:-5.9,6:0,/*[tang5] khối B cao hơn 1 tầng*/7:MZ,10:ROOF},OWN=[6,7,10];
 const cabTex=canvasTex(256,256,(g,w,h)=>{const gr=g.createLinearGradient(0,0,w,0);gr.addColorStop(0,'#aeb3bc');gr.addColorStop(.5,'#dadde2');gr.addColorStop(1,'#aab0b9');
   g.fillStyle=gr;g.fillRect(0,0,w,h);for(let i=0;i<260;i++){g.fillStyle=`rgba(255,255,255,${R()*.14})`;g.fillRect(R()*w,0,1,h);}
   g.fillStyle='rgba(90,96,108,.6)';g.fillRect(w/3-1,0,2,h);g.fillRect(2*w/3-1,0,2,h);});
@@ -1762,7 +1791,7 @@ function updateLifts(dt){const p=camera.position;
     if(l.phase==='closing'){l.door=Math.max(0,l.door-dt*1.3);if(l.door===0){l.phase='moving';l.t=0;l.y0=l.y;l.y1=LBASE[l.target];l.dur=1.4+Math.abs(l.y1-l.y0)/2.4;if(!OWN.includes(l.target))ctx.crossStart(ME,l.i);}}
     else if(l.phase==='moving'){l.t=Math.min(1,l.t+dt/l.dur);l.y=l.y0+(l.y1-l.y0)*ease(l.t);l.cab.position.y=l.y;
       if(l.t>=1){if(OWN.includes(l.target)){l.floor=l.target;l.target=null;l.phase='idle';l.hold=2.5;if(rider===l){level=l.floor;setHint();}}
-        else{/* the car has gone down into tầng 1–4: hand the ride over to that part of the building */
+        else{/* the car has gone down into tầng 1–5: hand the ride over to that part of the building */
           const tf=l.target,ride=rider===l,pose={x:camera.position.x,z:camera.position.z,yaw,pitch};
           l.target=null;l.phase='idle';l.floor=6;l.y=0;l.cab.position.y=0;l.door=0;l.hold=0;l.key='';
           if(ride)ctx.handoff(ME,tf,l.i,pose);}}}
@@ -1982,8 +2011,8 @@ $('#m-orbit').addEventListener('click',()=>setMode('orbit'));
 $('#m-walk').addEventListener('click',()=>setMode('walk'));
 const KMAP={KeyW:'f',ArrowUp:'f',KeyS:'b',ArrowDown:'b',KeyA:'l',ArrowLeft:'l',KeyD:'r',ArrowRight:'r'};
 addEventListener('keydown',e=>{if(mode==='piano')return;if(e.key==='Escape'&&mode==='walk'&&!window.__POTA){setMode('orbit');return;}
-  if(mode!=='walk')return;if(window.__POTA){if(rider&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName||'')&&!e.target?.isContentEditable&&e.key.length===1&&'1234670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);return;}if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;
-  if(rider&&e.key.length===1&&'1234670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);});
+  if(mode!=='walk')return;if(window.__POTA){if(rider&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName||'')&&!e.target?.isContentEditable&&e.key.length===1&&'12345670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);return;}if(KMAP[e.code]){keys[KMAP[e.code]]=1;e.preventDefault();}if(e.key==='Shift')keys.run=1;
+  if(rider&&e.key.length===1&&'12345670'.includes(e.key))requestFloor(rider,e.key==='0'?10:+e.key);});
 addEventListener('keyup',e=>{if(KMAP[e.code])keys[KMAP[e.code]]=0;if(e.key==='Shift')keys.run=0;});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=0;});
 dpad.querySelectorAll('button').forEach(b=>{const k=b.dataset.k;
@@ -2403,9 +2432,9 @@ const world=new THREE.Scene();
 const ctx={renderer,canvas,world,cur:null};
 const rootA=document.getElementById('modA'),rootB=document.getElementById('modB'),rootC=document.getElementById('modC'),fade=document.getElementById('fade');
 /* tầng 6–7–10 sit directly on top of tầng 4: their lift shafts line up with the ones below */
-const OFF=new THREE.Vector3(3,19.4,0);
+const OFF=new THREE.Vector3(3,23.9,0);/*[tang5] trước: 19.4 (= STACK của khối A)*/
 const A=moduleA(ctx,rootA),B=moduleB(ctx,rootB),C=moduleC(ctx,rootC);const rootD=document.getElementById("modD"),D=window.moduleD&&rootD?window.moduleD(ctx,rootD):null;
-const other=m=>m===A?B:A,modFor=f=>f<=4?A:B;
+const other=m=>m===A?B:A,modFor=f=>f<=5?A:B;/*[tang5]*/
 let W=0,H=0;
 function size(){const w=Math.max(document.documentElement.clientWidth,innerWidth||0),h=Math.max(document.documentElement.clientHeight,innerHeight||0);
   if(!w||!h)return false;if(w!==W||h!==H){W=w;H=h;renderer.setSize(w,h,false);}if(ctx.cur)ctx.cur.resize(w,h);return true;}

@@ -104,7 +104,7 @@ js = sub_once(js, "if(e.key==='Escape'&&mode==='walk'){setMode('orbit');return;}
 CAMERA_A = r'''function cameraInside(x,z,foot){
   if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(foot))return false;
   const m=.08,lvl=levelOf(foot);
-  if(lvl===4&&z<ZB+1.1)return x>(z>ZB?-XW+m:ROOM.X0+m)&&x<(z>ZB?XW-m:ROOM.X1-m)&&z>ROOMZ+ROOM.Z0+m;
+  if((lvl===4||lvl===5)&&z<ZB+1.1)return x>(z>ZB?-XW+m:ROOM.X0+m)&&x<(z>ZB?XW-m:ROOM.X1-m)&&z>ROOMZ+ROOM.Z0+m;/*[tang5]*/
   if(foot<.3&&x<-XW+m)return x>BRM.x0+m&&z>BRM.z0+m&&z<BRM.z1-m&&!(x>-XW-m&&Math.abs(z)>BRM.open-m);
   if(x<-XW+m||x>XW-m||z<ZB+m||z>ZF-m)return false;
   if(foot>=FH-.3&&inside(x,z,FR+m)){const ax=Math.abs(x);return lvl===2&&ax>LAND.x0+m&&ax<LAND.x1-m&&z>Math.max(LAND.z0,-7.75)+m&&z<LAND.z1-m;}
@@ -121,7 +121,7 @@ if CAMERA_B not in js:
     js = sub_once(js, 'function blocked(x,z,cx,cz){', CAMERA_B + '\nfunction blocked(x,z,cx,cz){', 'biên camera B')
 
 # ---------- móc 4: lộ API của từng module ----------
-API_A = ('api:{camera,controls,scene,roomG,ROOMZ,Y4,FH,viewPose,flyTo,surface,keys,cameraInside,'
+API_A = ('api:{camera,controls,scene,roomG,roomG5,ROOMZ,Y4,Y5,NF,FH,/*[tang5]*/viewPose,flyTo,surface,keys,cameraInside,'
          'get yaw(){return yaw;},set yaw(v){yaw=v;},get pitch(){return pitch;},set pitch(v){pitch=v;},get base(){return base;},get rider(){return rider;},'
          "inLift:()=>mode==='walk'&&LIFTS.some(l=>inCab(l,camera.position.x,camera.position.z)&&(l.phase==='moving'||l.phase==='xfer'?rider===l:Math.abs(l.y-base)<.6)),"
          'ext:on=>{if(on){mode="ext";tween=null;rider=null;controls.enabled=false;dpad.hidden=true;canvas.classList.remove("walk");for(const k in keys)keys[k]=0;}},'

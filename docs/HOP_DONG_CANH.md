@@ -21,9 +21,15 @@ scene/hust3d.js   ← mô hình 3D (tự sinh từ hust-3d/index.html bằng too
 | Không gian | Nguồn | Cách đưa vào web |
 |---|---|---|
 | `campus` — sân trước thư viện | File GLB của bạn: `scene/exterior/thu-vien-ta-quang-buu.glb` | `adapter.js` tải trực tiếp. Lưới đi bộ tính sẵn trong `luoi-di-chuyen.json` |
-| `A` — thư viện tầng 1–4, phòng 401 | `hust-3d/index.html` (module A) | `tools/patch_scene.py` → `scene/hust3d.js` |
+| `A` — thư viện tầng 1–5, phòng 401, 518 | `hust-3d/index.html` (module A) | `tools/patch_scene.py` → `scene/hust3d.js` |
 | `B` — tầng 6–7 (đàn piano) | `hust-3d/index.html` (module B) | như trên |
 | `D` — sân thượng tầng 10 | Trang "Sân thượng tầng 10" | `tools/patch_tang10.py` → `scene/tang10.js` |
+
+> **Tầng 5 (08/11/2026) sửa thẳng trong `scene/hust3d.js`** vì nguồn `hust-3d/index.html` không có trong repo. Mọi chỗ sửa có chú thích `/*[tang5]*/`:
+> `NF=5`, `STACK=5*FH+1.4`, `LBASE[5]`, `FLOORS`, `UP[5]`, `cols5`, hàm `floor5Walls`/`plate5` (biển 509, 511, 518, 525, 526, Phòng học nhóm), nội thất hành lang tầng 5,
+> phòng 518 = `buildRoom401(renderer, roomG5, {num:'518', title})` với nhãn ghế `r518`, `roomOf/roomLv` trong `surface`, `levelOf`, `where`, thang máy (`fl<NF`, `l.floor=NF`, phím `12345670`),
+> khối B: `LBASE` 1–5 và `OFF.y = 23.9`, `modFor = f<=5`. Khi tái tạo từ nguồn mới phải chép lại các chỗ này (hoặc đưa vào nguồn).
+> `scene/hust3d-dom.js`: thêm nút/ô chọn tầng 5. `tools/patch_scene.py` đã cập nhật móc `cameraInside` và `API_A` cho tầng 5.
 
 Mỗi không gian trong `SceneAPI.spaces` có:
 

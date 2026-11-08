@@ -83,7 +83,7 @@
     S.onFrame(frame);
     S.afterFrame(afterFrame);
     S.on('exit-library', () => { if (me.mode === 'walk') go('campus', { from: 'library' }); });
-    S.on('space-changed', id => {            // đi thang máy giữa tầng 1–4 (A) và tầng 6–7 (B)
+    S.on('space-changed', id => {            // đi thang máy giữa tầng 1–5 (A) và tầng 6–7 (B)
       if (me.mode !== 'walk') return;
       const z = Object.keys(ZONES).find(k => ZONES[k].space === id);
       if (!z || z === me.zone) return;

@@ -46,11 +46,11 @@ window.APP = {
 
 /* 3) KHU VỰC (zone). Mỗi khu là một "phòng" để đếm người, nhắn tin, xếp ghế.
    space = phần cảnh 3D dùng để hiển thị (xem scene/adapter.js):
-     campus = sân trước thư viện (file GLB) · A = thư viện tầng 1–4 (có phòng 401) · B = tầng 6–7 · D = sân thượng tầng 10
+     campus = sân trước thư viện (file GLB) · A = thư viện tầng 1–5 (có phòng 401, 518) · B = tầng 6–7 · D = sân thượng tầng 10
    Đợt này chỉ mở thư viện và sân trước; "Dạo sân trường" (cả khuôn viên) sẽ mở sau. */
 window.ZONES = {
   campus: { name: 'Sân trước thư viện', short: 'Sân thư viện', space: 'campus' },
-  lib_a:  { name: 'Thư viện · Tầng 1–4', short: 'Tầng 1–4', space: 'A', building: 'library', walk: true },
+  lib_a:  { name: 'Thư viện · Tầng 1–5', short: 'Tầng 1–5', space: 'A', building: 'library', walk: true },
   lib_b:  { name: 'Thư viện · Tầng 6–7', short: 'Tầng 6–7', space: 'B', building: 'library', walk: true },
   lib_c:  { name: 'Thư viện · Sân thượng tầng 10', short: 'Tầng 10', space: 'D', building: 'library', walk: true }
 };
