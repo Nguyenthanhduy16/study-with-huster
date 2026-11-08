@@ -1,14 +1,14 @@
 # Dựng các phòng tầng 4 (theo sơ đồ thư viện)
 
 Nguồn: sơ đồ tầng chính thức của thư viện (`library.hust.edu.vn/en/node/509`, tệp *2022. Sơ đồ tầng TV.pdf*, trang 4) và ảnh chụp P419.
-Trang thư viện chỉ có ảnh mặt ngoài; ảnh bên trong các phòng tầng 4 chưa tìm được trên mạng. Nếu có ảnh chụp thật của từng phòng, gửi vào để chỉnh chi tiết.
+Ảnh bên trong phòng đọc chuyên ngành lấy từ bài giảng *Hướng dẫn sử dụng thư viện* trên trang hust.edu.vn (tệp `tme-09-02-07-bai-giang-huong-dan-su-dung-thu-vien…pdf`, trang 48–50). Ảnh cho thấy cột tròn lớn đầu loe, quạt trần xanh ngọc, đèn huỳnh quang dạng hộp, bàn dài màu be với ghế xanh, tủ sách gỗ và giá sắt xám, cửa kính có cổng an ninh. Trang thư viện chỉ có ảnh mặt ngoài.
 
 | Phòng | Chức năng (theo thư viện) | Vị trí trên sơ đồ | Trong cảnh 3D (module A) | Trạng thái |
 |---|---|---|---|---|
 | 401 | Phòng tự học / XLTT | dưới, giữa | sau tường `back` (z < −13) | có sẵn |
 | 419 | Phòng đọc chuyên ngành T – TJ | giữa, bên phải | phía `x > 19,5` (sau tường phải, quanh khối thang máy) | **đã làm** |
 | 402 | Phòng đọc chuyên ngành A – P | giữa, bên trái | phía `x < −19,5` (sau tường trái) | **đã làm** |
-| 411 | Phòng đọc chuyên ngành Q – S | trên, giữa (phòng rộng nhất, có hàng cột) | phía `z > 13` (sau tường `front`) | chưa làm |
+| 411 | Phòng đọc chuyên ngành Q – S | trên, giữa (phòng rộng nhất, có hàng cột) | phía `z > 13` (sau tường `front`) | **đã làm** |
 | 404 | Phòng báo, tạp chí / hỗ trợ nghiên cứu | góc trên trái (nhỏ) | góc `x < −19,5`, `z > 9` | chưa làm |
 | 418 | Phòng tự học | góc trên phải (nhỏ) | góc `x > 19,5`, `z > 9` | chưa làm |
 
@@ -44,15 +44,19 @@ Mọi thứ nằm trong `scene/hust3d.js`, module A:
 - Các phòng dùng chung hàm `shelf4`, `table4`, `fan4`, `window4`, `slab4`, `sign4`, nhóm trần `ceil4` và mảng quạt `fans4`. Phòng mới chỉ cần gọi các hàm này.
 - Phòng mượn sách tầng 1 (`BRM`) cũng ở phía tây, nhưng mọi nhánh của P402 đều kiểm `lvl===4`, nên hai phòng không ảnh hưởng nhau.
 
-### P411 (sau tường front, z > 13)
-- Kích thước khoảng 30 × 15 m: `x∈[-15,15]`, `z∈[13, 28]`. Sơ đồ có hàng cột tròn dọc mép phòng giáp sảnh.
-- Tường front tầng 4 cần khoét 1 cửa ở giữa (sơ đồ có cửa giữa, nơi có quầy). Bỏ các ô cửa sổ giả `W('front',x,…winM)` khi `lv===4`.
-- Nới `bz` trong adapter thành `[-40, 30]`. `surface()`/`cameraInside()` hiện chặn `z>ZF-.4`: cần thêm nhánh `lvl===4&&z>ZF-.4` trước dòng chặn.
-- Chú ý mặt tiền ngoài (GLB của khuôn viên): khu A là cảnh riêng, nên không đụng.
+### P411 (đã làm)
+- Hằng số `R11={x0:-15,x1:15,z0:ZF,z1:ZF+15,h:3.9,door:[-1.6,1.6]}` nằm cùng dòng với `BRM`. Cửa duy nhất nằm giữa tường trước của sảnh tầng 4, hai bên là vách kính, có cổng an ninh.
+- Bên trong làm theo ảnh "Phòng đọc chuyên ngành":
+  - 8 cột tròn đầu loe, có quạt treo trên cột;
+  - quạt trần xanh ngọc, đèn huỳnh quang dạng hộp;
+  - 3 hàng bàn dài × 4 bàn (144 chỗ ngồi), chừa lối đi giữa từ cửa vào;
+  - tủ sách gỗ ở tường cuối, giá sắt xám ở hai tường bên, bàn trực cạnh cửa.
+- Phòng không có vỏ ngoài, để góc nhìn "Toàn cảnh" (camera ở phía trước toà nhà) không bị che.
+- Nhánh `surface`/`cameraInside` của P411 kiểm `lvl===4 && z>ZF && |x|<XW`. Trong adapter, `bz` được nới thành `[-40, 30]`.
 
 ### P404 và P418 (hai góc phía trên)
 - Khoảng 9 × 13 m, ví dụ P418: `x∈[XW, XW+9]`, `z∈[10, 23]`. Lối vào từ hành lang của P411 hoặc từ P419. Nếu làm sau P411, có thể mở cửa từ hành lang trong P411.
-- Tường giáp P419 (z = 9,5) phải ghép đúng với `R4.z1`.
+- Tường giáp P419 (z = 9,5) phải ghép đúng với `R4.z1`. P418 nằm ở góc `x > 15`, `z > 13`, nên không đụng P411 (P411 kết thúc ở x = 15).
 
 ### Kiểm tra sau mỗi phòng
 ```bash
