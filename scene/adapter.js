@@ -5,18 +5,18 @@
 
    SceneAPI.ready              Promise — mô hình + sân thư viện đã dựng xong
    SceneAPI.spaces             { campus, A, B }
-     campus: sân thư viện (file GLB)   A: thư viện tầng 1–4 (có phòng 401)   B: tầng 6–7   D: sân thượng tầng 10
+     campus: sân thư viện (file GLB)   A: thư viện tầng 1–5 (phòng 401…419, 509…526, phòng học nhóm)   B: tầng 6–7   D: sân thượng tầng 10
    Mỗi space:
      kind        'campus' | 'room'
      group       nhóm 3D để thêm nhân vật vào
      camera      camera đang dùng
      seats       [{x,y,z,ry,floor,kind}] — mọi chỗ ngồi được (ghế, sofa, ghế đá, đàn piano)
-     floors      danh sách mặt sàn (campus: [0]; A: [0,4.5,9,13.5]; B: [6,7,10])
+     floors      danh sách mặt sàn (campus: [0]; A: [0,4.5,9,13.5,18]; B: [6,7,10])
      grid(floor) lưới đi được của một mặt sàn (Grid, js/grid.js)
      free(x,z,floor)  điểm có đi được không
      ceil(floor)      độ cao trần (để camera không xuyên trần)
      floorOf(y)       mặt sàn ứng với độ cao chân y
-     place(x,y,z)     tên vị trí dễ hiểu ("Phòng 401", "Tầng 6"…)
+     place(x,y,z)     tên vị trí dễ hiểu ("Phòng 401", "Phòng 518", "Tầng 6"…)
      camFree(x,z,base) điểm camera đặt được không (phòng)   solid(x,y,z) điểm nằm trong toà nhà (sân)
    Phòng (A, B) thêm: walkNow(x,y,z,yaw), stopWalk(), isWalking(), eye() — dùng bộ đi bộ có sẵn của mô hình
    SceneAPI.enter(id, text)    chuyển không gian (màn mờ)
@@ -288,6 +288,8 @@
     /* ---- ghế trong thư viện ---- */
     A.group.updateMatrixWorld(true);
     const mA = new THREE.Matrix4().copy(A.group.matrixWorld).invert().multiply(A.api.roomG.matrixWorld);
+    // phòng học nhóm tầng 5 dựng giống hệt phòng 401, ở ngay phía trên
+    const mA5 = A.api.roomG5 ? new THREE.Matrix4().copy(A.group.matrixWorld).invert().multiply(A.api.roomG5.matrixWorld) : null;
     const v = new THREE.Vector3();
     const expand = (s, out, floorOf) => {
       const push = (x, z, kind) => out.push(librarySeat(Object.assign({}, s, { x, z }), kind, floorOf));
@@ -298,7 +300,8 @@
     const seatsA = [];
     for (const s of log) {
       if (s.tag === 'r401') { v.set(s.x, s.y, s.z).applyMatrix4(mA); expand(Object.assign({}, s, { x: v.x, y: v.y, z: v.z }), seatsA, floorA); seatsA[seatsA.length - 1].room = '401'; }
-      else if (/^r4(19|02|11|04|18)$/.test(s.tag)) { expand(s, seatsA, floorA); seatsA[seatsA.length - 1].room = s.tag.slice(1); }
+      else if (s.tag === 'r5hn' && mA5) { v.set(s.x, s.y, s.z).applyMatrix4(mA5); expand(Object.assign({}, s, { x: v.x, y: v.y, z: v.z }), seatsA, floorA); seatsA[seatsA.length - 1].room = 'học nhóm'; }
+      else if (/^r(4(19|02|11|04|18)|5(26|09|18|11|25))$/.test(s.tag)) { expand(s, seatsA, floorA); seatsA[seatsA.length - 1].room = s.tag.slice(1); }
       else if (s.tag === 'A') expand(s, seatsA, floorA);
     }
     /* tầng 6–7(–10) của module B: "mặt sàn" luôn tính bằng ĐỘ CAO (m) như module A; mô hình dùng số tầng 6/7/10 */
@@ -361,15 +364,17 @@
         place(x, y, z) { return y > 1 && z < 5 ? 'Thềm trước thư viện' : z > 29 ? 'Đường trước thư viện' : Math.abs(x) > 36 ? 'Vườn xoài' : z < -24 ? 'Nhà để xe' : 'Sân trước thư viện'; }
       },
       A: roomSpace(A, seatsA, {
-        floors: [0, FH, 2 * FH, 3 * FH], bx: [-38, 38], bz: [-40, 30],
+        floors: [0, FH, 2 * FH, 3 * FH, 4 * FH], bx: [-38, 38], bz: [-40, 30],
         free(x, z, f) { const y = A.api.surface(x, z, f); return y !== null && Math.abs(y - f) < 0.3; },
         ceil: () => 4.2,
         camFree: (x, z, base) => A.api.surface(x, z, base) !== null,
         /* cửa chính tầng 1 (bên trong): bấm vào sàn sát cửa hoặc vào khung cửa */
         doorHit(ray, base) { if (base > 0.5) return false; const o = ray.ray.origin, d = ray.ray.direction; if (Math.abs(d.z) < 1e-3) return false; const t = (12.95 - o.z) / d.z; if (t < 0 || t > 60) return false; const x = o.x + d.x * t, y = o.y + d.y * t; return Math.abs(x) < 2.6 && y > -0.2 && y < 3.2; },
         exitPoint: { x: 0, z: 12.35 },
-        floorOf: y => Math.max(0, Math.min(3, Math.round(y / FH))) * FH,
-        place(x, y, z) { const fl = Math.round(y / FH) + 1; return fl === 4 && z < -13 ? 'Phòng 401' : fl === 4 && z > 13 ? (x > 15.1 ? 'Phòng 418' : x < -15.1 ? 'Phòng 404' : 'Phòng 411') : fl === 4 && x < -19.5 ? 'Phòng 402' : fl === 4 && x > 19.5 && (x > 22 || Math.abs(z) > 3.7) ? 'Phòng 419' : 'Tầng ' + fl; },
+        floorOf: y => Math.max(0, Math.min(4, Math.round(y / FH))) * FH,
+        place(x, y, z) { const fl = Math.round(y / FH) + 1; return fl === 4 && z < -13 ? 'Phòng 401' : fl === 4 && z > 13 ? (x > 15.1 ? 'Phòng 418' : x < -15.1 ? 'Phòng 404' : 'Phòng 411') : fl === 4 && x < -19.5 ? 'Phòng 402' : fl === 4 && x > 19.5 && (x > 22 || Math.abs(z) > 3.7) ? 'Phòng 419' :
+          /* tầng 5 cùng bố cục tầng 4, số phòng theo sơ đồ tầng 5 */
+          fl === 5 && z < -13 ? 'Phòng học nhóm' : fl === 5 && z > 13 ? (x > 15.1 ? 'Phòng 525' : x < -15.1 ? 'Phòng 511' : 'Phòng 518') : fl === 5 && x < -19.5 ? 'Phòng 509' : fl === 5 && x > 19.5 && (x > 22 || Math.abs(z) > 3.7) ? 'Phòng 526' : 'Tầng ' + fl; },
         walkNow(x, y, z, yaw) { A.api.walkNow(V(x, y + 1.6, z), yaw); }
       }),
       B: roomSpace(B, seatsB, {

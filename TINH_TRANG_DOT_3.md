@@ -2,6 +2,12 @@
 
 Đây là tình trạng mã nguồn sau phiên tiếp tục. Kiểm thử tự động không thay thế kiểm tra hình ảnh WebGL và Supabase thật.
 
+## Tầng 5 thư viện (08/11/2026)
+
+- **Đã làm:** tầng 5 giống hệt tầng 4 (gồm các phòng P402–P419 của PR #23–#26), đổi số theo sơ đồ: P526 (TK–Z), P509 (T–TJ), P518, P511, P525, Phòng học nhóm. Thang máy dừng tầng 5; khối tầng 6–7–10 nâng lên 4,5 m. Gộp với `main` (044d778), giải quyết xung đột ở `scene/hust3d.js` và `scene/adapter.js`.
+- **Đã kiểm tra:** `npm run check`, `npm test` (70 bài, 0 lỗi, có thêm kiểm tra biên camera các phòng tầng 5); `npm run test:tang5` trên Chromium + SwiftShader: 21/21 đạt (thang máy 1 → 5, tên 6 phòng tầng 5 và tầng 4 giữ nguyên, lưới đi bộ tầng 5 khớp tầng 4 ở 99,9% ô, số chỗ ngồi từng phòng tầng 5 bằng phòng tầng 4 tương ứng, ngồi/đứng phòng 518, thang máy 5 ⇄ 6, không lỗi JavaScript); xem ảnh bằng mắt.
+- **Chưa làm:** chưa rõ chức năng P511, P525; chưa có ảnh thật bên trong các phòng tầng 5; chưa đo FPS trên máy thật — tầng 5 thêm khoảng 600 chỗ ngồi và 6 phòng nên cảnh nặng hơn (trên đồ hoạ phần mềm khung hình chậm hơn rõ).
+
 ## Hoàn thiện và gộp hai nhánh WIP (04/11/2026)
 
 Hai nhánh `wip/ghe-ngoi-render` (63bcecb) và `wip/giao-dien-render` (3762e4b) được ghép trên nền `main` 3845f67. Giữ bản vá thang máy A ⇄ B và các thay đổi SQL/Supabase đã vào PR #2. Xung đột package.json được giải quyết bằng cách giữ cả lệnh kiểm tra thang máy và render ghế.

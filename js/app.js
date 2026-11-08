@@ -1548,7 +1548,7 @@
     const from = (ZONES[World.me.zone] || {}).space, to = (ZONES[zone] || {}).space;
     const sp = SceneAPI.spaces[to];
     let pl = ''; try { pl = sp && sp.place && at ? sp.place(at.x, at.y || 0, at.z) : ''; } catch (_) { }
-    const fl = to === 'D' ? 'tầng 10 (sân thượng)' : (pl.match(/Tầng \d+/) || [''])[0].toLowerCase() || (/^Phòng 4\d\d$/.test(pl) ? 'tầng 4' : '');
+    const fl = to === 'D' ? 'tầng 10 (sân thượng)' : (pl.match(/Tầng \d+/) || [''])[0].toLowerCase() || ((/^Phòng ([45])\d\d$/.exec(pl) || [])[1] ? 'tầng ' + /^Phòng ([45])\d\d$/.exec(pl)[1] : pl === 'Phòng học nhóm' ? 'tầng 5' : '');
     if (to === 'campus') return from === 'campus' ? '' : 'Xuống sảnh tầng 1 rồi đi ra cửa chính để ra sân nhé.';
     if (from === 'campus') return 'Đi bộ vào cửa chính thư viện' + (fl && fl !== 'tầng 1' ? ', rồi đi thang máy ở sảnh lên ' + fl : '') + ' nhé.';
     return fl ? 'Đi thang máy' + (to === 'A' && from === 'A' ? ' (hoặc cầu thang bộ)' : '') + ' tới ' + fl + ' nhé.' : 'Đi thang máy tới đó nhé.';
