@@ -148,6 +148,13 @@ test('corner rooms 404 and 418 open from the front wall of floor 4', () => {
     assert(!insideA(s * 26.3, 20, 13.5)); assert(!insideA(s * 20, 25.8, 13.5));
   }
 });
+test('floor 5 repeats the floor-4 rooms (509, 526, 518, 511, 525, group study) with the same doorways', () => {
+  assert(insideA(30, 0, 18), 'P526 east'); assert(insideA(-30, 0, 18), 'P509 west'); assert(insideA(0, 20, 18), 'P518 front');
+  for (const s of [-1, 1]) { assert(insideA(s * 20, 20, 18), 'P511 / P525 corners'); assert(insideA(s * 17.3, 13.1, 18), 'corner doorway'); }
+  assert(insideA(19.6, 7.3, 18) && insideA(-19.6, -7.3, 18), 'side doorways'); assert(!insideA(19.6, 5, 18) && !insideA(21, 0, 18), 'wall and lift core');
+  assert(insideA(0, 13.1, 18) && !insideA(5, 13.1, 18), 'P518 central door only');
+  assert(insideA(20, -20, 18), 'group-study room behind the back wall, like 401'); assert(!insideA(0, 0, 18), 'atrium void');
+});
 test('actual B stadium footprint protects rounded corners, upper atrium and near-plane width', () => {
   assert(insideB(16, 0, 0)); assert(!insideB(16, 20, 0));
   assert(insideB(0, 0, 0)); assert(!insideB(0, 0, 5.25)); assert(insideB(0, 0, 10.8));

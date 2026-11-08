@@ -67,3 +67,10 @@ npm run check && npm test
 ```
 Chụp ảnh cảnh bằng Playwright (Chromium có sẵn, cờ `--use-angle=swiftshader`): đăng nhập bằng máy chủ giả `node tools/fake-supabase-server.mjs --port=3177 --offline`, vào khu A, rồi gọi `HUST3D.A.api.walkNow(new THREE.Vector3(x, 3*4.5+1.6, z), yaw)` để đứng trong phòng. Hướng nhìn là `(sin yaw, −cos yaw)`.
 Kiểm `HUST3D.A.api.surface(x,z,3*4.5)` tại khe cửa (phải khác `null`) và trên bàn (phải là `null`), và `SceneAPI.spaces.A.seats.filter(s=>s.room==='419').length`.
+
+## Tầng 5 dùng lại các phòng này
+
+Mỗi khối phòng là một hàm dựng theo tầng: `room419`, `room402`, `room411`, `cornerRoom(..., lv, shell)`. Tầng 4 gọi với số cũ, tầng 5 gọi lại với số theo sơ đồ tầng 5:
+P419 → **P526** (TK – Z), P402 → **P509** (T – TJ), P411 → **P518**, P418 → **P525**, P404 → **P511**, phòng 401 → **Phòng học nhóm**.
+Sửa nội thất một phòng tầng 4 là phòng tầng 5 cùng vị trí đổi theo. Vỏ ngoài chỉ dựng một lần (lần gọi tầng 5, cao từ mặt đất tới trần tầng 5).
+Va chạm của tầng 5 dùng chung danh sách của tầng 4 vì cùng bố cục; nếu sau này cho hai tầng khác nội thất thì phải tách danh sách va chạm theo tầng.
