@@ -565,8 +565,8 @@ function onWall(side,u,y,w,h,m,parent=scene,off=.02){const o=new THREE.Mesh(new 
   else if(side==='left'){o.position.set(-XW+off,y,u);o.rotation.y=PI/2;}else{o.position.set(XW-off,y,u);o.rotation.y=-PI/2;}parent.add(o);return o;}
 const winM=new THREE.MeshStandardMaterial({map:winTex,roughness:.2}),gdM=new THREE.MeshStandardMaterial({map:glassDoorTex,roughness:.2}),
   doorM=new THREE.MeshStandardMaterial({map:doorTex,roughness:.5}),noteM=new THREE.MeshStandardMaterial({map:noticeTex,roughness:.7}),roomM=new THREE.MeshStandardMaterial({map:roomGlassTex,roughness:.25});
-/* BRM: phòng mượn sách tầng 1 · R4: phòng P419 (tầng 4, phía đông sảnh): cửa = khoảng z trên tường phải; core = khối giếng thang máy nhô vào phòng */
-const BRM={x0:-26,x1:-XW,z0:-5,z1:5,h:3.4,open:4.5},R4={x0:XW,x1:XW+17,z0:-9.5,z1:9.5,h:3.6,dh:2.7,doors:[[-8.4,-6.2],[6.2,8.4]],core:{x1:XW+2.45,z:3.6}},inDoor4=(z,m)=>R4.doors.some(([a,b])=>z>a+m&&z<b-m);
+/* BRM: phòng mượn sách tầng 1 · R2: phòng P402 (tầng 4, phía tây sảnh) · R4: phòng P419 (tầng 4, phía đông sảnh): cửa = khoảng z trên tường phải; core = khối giếng thang máy nhô vào phòng */
+const BRM={x0:-26,x1:-XW,z0:-5,z1:5,h:3.4,open:4.5},R4={x0:XW,x1:XW+17,z0:-9.5,z1:9.5,h:3.6,dh:2.7,doors:[[-8.4,-6.2],[6.2,8.4]],core:{x1:XW+2.45,z:3.6}},R2={x0:-XW-17,x1:-XW,z0:-9.5,z1:9.5,h:3.6,dh:2.7,doors:[[-8.4,-6.2],[6.2,8.4]]},inDoorOf=(R,z,m)=>R.doors.some(([a,b])=>z>a+m&&z<b-m),inDoor4=(z,m)=>inDoorOf(R4,z,m);
 for(let lv=1;lv<=NF;lv++){const y0=(lv-1)*FH,par=grp(lv);
   /* right wall: doorways for the three lifts on every floor */
   {const run=(a,b)=>{const cut=lv===4?R4.doors.filter(([d0,d1])=>d0>=a&&d1<=b):[];let u=a;
@@ -576,6 +576,8 @@ for(let lv=1;lv<=NF;lv++){const y0=(lv-1)*FH,par=grp(lv);
     run(z,ZF);}
   /* left wall: on tầng 1 an open shop-front into the book-lending room */
   if(lv===1){const o=BRM.open;onWall('left',(ZB-o)/2,FH/2,-o-ZB,FH,wallMat,par,0);onWall('left',(o+ZF)/2,FH/2,ZF-o,FH,wallMat,par,0);onWall('left',0,(BRM.h+FH)/2,2*o,FH-BRM.h,wallMat,par,0);}
+  else if(lv===4){let u=ZB;for(const [d0,d1] of R2.doors){onWall('left',(u+d0)/2,y0+FH/2,d0-u,FH,wallMat,par,0);onWall('left',(d0+d1)/2,y0+(R2.dh+FH)/2,d1-d0,FH-R2.dh,wallMat,par,0);u=d1;}
+    onWall('left',(u+ZF)/2,y0+FH/2,ZF-u,FH,wallMat,par,0);}
   else onWall('left',0,y0+FH/2,ZF-ZB,FH,wallMat,par,0);
   /* back wall: on tầng 4 it becomes the glass front of room 401 */
   if(lv<4)onWall('back',0,y0+FH/2,2*XW,FH,wallMat,par,0);
@@ -598,7 +600,7 @@ for(let lv=1;lv<=NF;lv++){const y0=(lv-1)*FH,par=grp(lv);
   }else{
     for(const x of [-14,-6,6,14])W('front',x,3.2,1.7,winM,y0+2.0);
     if(lv<4){W('back',-15.5,1.2,2.3,doorM);W('back',-6,4.8,2.6,roomM);W('back',15.5,1.2,2.3,doorM);}
-    W('left',-6,6,2.6,roomM);W('left',6,1.2,2.3,doorM);W('left',10,2.4,1.6,winM,y0+2);
+    if(lv<4){W('left',-6,6,2.6,roomM);W('left',6,1.2,2.3,doorM);W('left',10,2.4,1.6,winM,y0+2);}
     if(lv<4){W('right',-8,1.2,2.3,doorM);W('right',9,2.4,1.6,winM,y0+2);}}
   /* lift sign above the doors */
   panel(4.0,.9,new THREE.MeshBasicMaterial({map:liftSignTex}),XW-.02,y0+3.5,0,-PI/2,par);
@@ -918,69 +920,107 @@ window.__SEATTAG="r401";const ROOM=buildRoom401(renderer,roomG);window.__SEATTAG
   panel(len,h,wm,21.55,h/2,cz,PI/2);panel(len,h,wm,-21.55,h/2,cz,-PI/2);panel(43.1,h,wm,0,h/2,zb,PI);
   panel(2.05,3*FH,wm,20.5,1.5*FH,ZB,0);panel(2.05,3*FH,wm,-20.5,1.5*FH,ZB,0);}
 
+/* ---------- đồ dùng chung cho các phòng đọc tầng 4 (P419, P402…) ---------- */
+const fans4=[],ceil4=new THREE.Group();UP[4].add(ceil4);
+const R4M={top:mat('#e8dcc2',{roughness:.5}),leg:mat('#d9cbb0',{roughness:.55}),fan:mat('#f3f3f1',{roughness:.5}),cur:mat('#2f6db5',{roughness:.85}),ceil:mat('#f3f2ef'),outer:mat('#ece4d8'),skirt:mat('#cfc6b8')};
+/* tủ sách gỗ một mặt (mặt có sách quay về +z cục bộ), sách nạp vào books dùng chung */
+function shelf4(par,y0,sx,sz,len,ry){const g=new THREE.Group();g.position.set(sx,y0,sz);g.rotation.y=ry;par.add(g);
+  mk(box(len,2.1,.42),M.woodLight,0,1.05,0,g);
+  for(const y of [.12,.52,.92,1.32,1.72]){mk(box(len-.04,.03,.4),M.wood,0,y,.02,g,false);let x=-len/2+.05;
+    while(x<len/2-.05){const w=.03+R()*.03,hh=.22+R()*.12;if(R()<.06){x+=.08;continue;}if(x+w>len/2-.05)break;
+      const v=new THREE.Vector3(x+w/2,y+.015+hh/2,.06).applyAxisAngle(V(0,1,0),ry);books.push({m:T(sx+v.x,y0+v.y,sz+v.z,0,ry,0,w,hh,.24),c:bookCols[R()*bookCols.length|0]});x+=w+.003;}}}
+/* bàn dài màu be, 7 ghế xanh mỗi bên (ghế ngồi được) */
+function table4(par,y0,tx,tz,cols,TL=5.4,TW=1.0){mk(box(TL,.05,TW),R4M.top,tx,y0+.745,tz,par);
+  for(const s of [-1,1])mk(box(.06,.72,TW-.1),R4M.leg,tx+s*(TL/2-.12),y0+.36,tz,par);
+  mk(box(TL-.3,.3,.03),R4M.leg,tx,y0+.55,tz,par,false);cols.push([tx-TL/2,tx+TL/2,tz-TW/2,tz+TW/2]);
+  const n=Math.round(TL/.77);for(let k=0;k<n;k++){const x=tx-TL/2+TL/n*(k+.5);place('chairB',x,y0,tz-.66,0);place('chairB',x,y0,tz+.66,PI);}}
+function fan4(x,y,z){const g=new THREE.Group();g.position.set(x,y,z);ceil4.add(g);
+  mk(cyl(.02,.02,.42,8),M.metal,0,.29,0,g,false);mk(cyl(.15,.12,.12,18),R4M.fan,0,0,0,g,false);
+  for(let k=0;k<3;k++){const a=k*PI*2/3,b=mk(box(.95,.02,.18),R4M.fan,Math.cos(a)*.58,.01,-Math.sin(a)*.58,g,false);b.rotation.y=a;}fans4.push(g);}
+/* cửa sổ có rèm xanh trên tường x = wx (dir = hướng vào phòng theo x) */
+function window4(par,y0,wx,z,dir){panel(2.6,1.7,winM,wx+dir*.03,y0+2.0,z,dir>0?PI/2:-PI/2,par);
+  for(const s of [-1,1])mk(box(.06,2.25,.55),R4M.cur,wx+dir*.12,y0+1.95,z+s*1.45,par,false);mk(box(.08,.2,3.4),R4M.cur,wx+dir*.1,y0+3.08,z,par,false);}
+/* sàn gạch trắng (UV theo mét ⇒ mảnh ghép khớp nhau) + trần */
+const floor4M=(()=>{const t=whiteTex.clone();t.needsUpdate=true;t.repeat.set(1/2.4,1/2.4);t.wrapS=t.wrapT=THREE.RepeatWrapping;return new THREE.MeshStandardMaterial({map:t,roughness:.3});})();
+function slab4(par,y0,h,a,b,c,d){const g=new THREE.PlaneGeometry(b-a,d-c),uv=g.attributes.uv;
+  for(let i=0;i<uv.count;i++)uv.setXY(i,(a+uv.getX(i)*(b-a)),(c+uv.getY(i)*(d-c)));
+  const f=new THREE.Mesh(g,floor4M);f.rotation.x=-PI/2;f.position.set((a+b)/2,y0+.003,(c+d)/2);f.receiveShadow=true;par.add(f);
+  const cl=new THREE.Mesh(new THREE.PlaneGeometry(b-a,d-c),R4M.ceil);cl.rotation.x=PI/2;cl.position.set((a+b)/2,y0+h,(c+d)/2);ceil4.add(cl);}
+function sign4(text){const t=canvasTex(512,160,(g,w,hh)=>{g.fillStyle='#1f3f73';g.fillRect(0,0,w,hh);g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';
+    g.font='800 76px "Be Vietnam Pro", system-ui, sans-serif';g.fillText(text,w/2,hh*.42);g.fillStyle='#cfe0ff';g.font='500 30px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('Phòng đọc',w/2,hh*.8);});
+  allText.push(t);return new THREE.MeshStandardMaterial({map:t,roughness:.5});}
+
 /* ---------- phòng P419 trên tầng 4: phía đông sảnh, sau khối thang máy (theo sơ đồ tầng 4 + ảnh chụp) ----------
    Dãy bàn dài màu be, ghế xanh hai bên, tủ sách gỗ dọc tường bắc và nam, cột tròn trắng, quạt trần + đèn LED,
    cửa sổ rèm xanh ở tường đông. Vào từ sảnh qua hai cửa ở tường phải (bắc và nam khối thang máy). */
-const cols419=[],fans419=[],c419=new THREE.Group();UP[4].add(c419);
+const cols419=[];
 {const {x0,x1,z0,z1,h,doors,dh,core}=R4,y0=3*FH,par=UP[4],cx=(x0+x1)/2,cz=(z0+z1)/2,wx=x1-x0,wz=z1-z0;
   window.__SEATTAG="r419";
   /* sàn và trần: ba mảnh, chừa giếng thang máy */
   const rects=[[core.x1,x1,z0,z1],[x0,core.x1,z0,-core.z],[x0,core.x1,core.z,z1]];
-  const ft=whiteTex.clone();ft.needsUpdate=true;ft.repeat.set(1/2.4,1/2.4);ft.wrapS=ft.wrapT=THREE.RepeatWrapping;
-  const fm=new THREE.MeshStandardMaterial({map:ft,roughness:.3}),cm=mat('#f3f2ef');
-  for(const [a,b,c,d] of rects){const g=new THREE.PlaneGeometry(b-a,d-c),uv=g.attributes.uv;
-    for(let i=0;i<uv.count;i++)uv.setXY(i,(a+uv.getX(i)*(b-a)),(c+uv.getY(i)*(d-c)));
-    const f=new THREE.Mesh(g,fm);f.rotation.x=-PI/2;f.position.set((a+b)/2,y0+.003,(c+d)/2);f.receiveShadow=true;par.add(f);
-    const cl=new THREE.Mesh(new THREE.PlaneGeometry(b-a,d-c),cm);cl.rotation.x=PI/2;cl.position.set((a+b)/2,y0+h,(c+d)/2);c419.add(cl);}
+  for(const r of rects)slab4(par,y0,h,...r);
   /* tường trong (một mặt, nhìn từ trong phòng) */
   panel(wz,h,wallMat,x1,y0+h/2,cz,-PI/2,par);panel(wx,h,wallMat,cx,y0+h/2,z0,0,par);panel(wx,h,wallMat,cx,y0+h/2,z1,PI,par);
   {const cuts=[[z0,doors[0][0]],[doors[0][1],-core.z],[core.z,doors[1][0]],[doors[1][1],z1]];
     for(const [a,b] of cuts)panel(b-a,h,wallMat,x0+.01,y0+h/2,(a+b)/2,PI/2,par);
     for(const [a,b] of doors){panel(b-a,h-dh,wallMat,x0+.01,y0+(h+dh)/2,(a+b)/2,PI/2,par);
       mk(box(.16,dh,.1),M.woodLight,x0,y0+dh/2,a,par,false);mk(box(.16,dh,.1),M.woodLight,x0,y0+dh/2,b,par,false);mk(box(.16,.1,b-a+.1),M.woodLight,x0,y0+dh,(a+b)/2,par,false);}}
-  for(const [s,ry,px,pz,len] of [[0,-PI/2,x1-.02,cz,wz],[1,0,cx,z0+.02,wx],[2,PI,cx,z1-.02,wx]]){const p=panel(len,.12,mat('#cfc6b8'),px,y0+.06,pz,ry,par);}
+  for(const [ry,px,pz,len] of [[-PI/2,x1-.02,cz,wz],[0,cx,z0+.02,wx],[PI,cx,z1-.02,wx]])panel(len,.12,R4M.skirt,px,y0+.06,pz,ry,par);
   /* cửa sổ + rèm xanh ở tường đông */
-  const curM=mat('#2f6db5',{roughness:.85}),n=5;
-  for(let i=0;i<n;i++){const z=z0+wz*(i+.5)/n;panel(2.6,1.7,winM,x1-.03,y0+2.0,z,-PI/2,par);
-    for(const s of [-1,1])mk(box(.06,2.25,.55),curM,x1-.12,y0+1.95,z+s*1.45,par,false);
-    mk(box(.08,.2,3.4),curM,x1-.1,y0+3.08,z,par,false);}
+  for(let i=0;i<5;i++)window4(par,y0,x1,z0+wz*(i+.5)/5,-1);
   /* trần: đèn LED tấm và quạt trần */
-  for(let x=x0+4;x<x1-1;x+=4.2)for(let z=z0+2.2;z<z1-1;z+=4.6){mk(box(1.24,.04,.62),M.panel,x,y0+h-.03,z,c419,false);}
-  const fanM=mat('#f3f3f1',{roughness:.5});
-  for(const x of [x0+6.6,x0+14])for(const z of [-6,0,6]){const g=new THREE.Group();g.position.set(x,y0+h-.5,z);c419.add(g);
-    mk(cyl(.02,.02,.42,8),M.metal,0,.29,0,g,false);mk(cyl(.15,.12,.12,18),fanM,0,0,0,g,false);
-    for(let k=0;k<3;k++){const a=k*PI*2/3,b=mk(box(.95,.02,.18),fanM,Math.cos(a)*.58,.01,-Math.sin(a)*.58,g,false);b.rotation.y=a;}fans419.push(g);}
+  for(let x=x0+4;x<x1-1;x+=4.2)for(let z=z0+2.2;z<z1-1;z+=4.6){mk(box(1.24,.04,.62),M.panel,x,y0+h-.03,z,ceil4,false);}
+  for(const x of [x0+6.6,x0+14])for(const z of [-6,0,6])fan4(x,y0+h-.5,z);
   /* cột tròn trắng giữa hai dãy bàn */
   for(const z of [-4.5,4.5]){mk(cyl(.3,.3,h,24),M.column,x0+10.3,y0+h/2,z,par);cols419.push([x0+10.3,z,.3]);}
   /* tủ sách gỗ dọc tường bắc và nam */
-  const shelf=(sx,sz,len,ry)=>{const g=new THREE.Group();g.position.set(sx,y0,sz);g.rotation.y=ry;par.add(g);
-    mk(box(len,2.1,.42),M.woodLight,0,1.05,0,g);
-    for(const y of [.12,.52,.92,1.32,1.72]){mk(box(len-.04,.03,.4),M.wood,0,y,.02,g,false);let x=-len/2+.05;
-      while(x<len/2-.05){const w=.03+R()*.03,hh=.22+R()*.12;if(R()<.06){x+=.08;continue;}if(x+w>len/2-.05)break;
-        const v=new THREE.Vector3(x+w/2,y+.015+hh/2,.06).applyAxisAngle(V(0,1,0),ry);books.push({m:T(sx+v.x,y0+v.y,sz+v.z,0,ry,0,w,hh,.24),c:bookCols[R()*bookCols.length|0]});x+=w+.003;}}};
-  for(let x=x0+3.6;x<x1-1;x+=3.3){shelf(x+1.55,z1-.25,3.1,PI);shelf(x+1.55,z0+.25,3.1,0);}
+  for(let x=x0+3.6;x<x1-1;x+=3.3){shelf4(par,y0,x+1.55,z1-.25,3.1,PI);shelf4(par,y0,x+1.55,z0+.25,3.1,0);}
   cols419.push([x0+3.6,x1,z1-.5,z1],[x0+3.6,x1,z0,z0+.5]);
   /* dãy bàn dài màu be, ghế xanh hai bên */
-  const topM=mat('#e8dcc2',{roughness:.5}),legM=mat('#d9cbb0',{roughness:.55}),TL=5.4,TW=1.0;
-  for(const tz of [-6,-3,0,3,6])for(const tx of [x0+6.6,x0+14]){
-    mk(box(TL,.05,TW),topM,tx,y0+.745,tz,par);
-    for(const s of [-1,1])mk(box(.06,.72,TW-.1),legM,tx+s*(TL/2-.12),y0+.36,tz,par);
-    mk(box(TL-.3,.3,.03),legM,tx,y0+.55,tz,par,false);
-    cols419.push([tx-TL/2,tx+TL/2,tz-TW/2,tz+TW/2]);
-    for(let k=0;k<7;k++){const x=tx-TL/2+.39+k*.77;place('chairB',x,y0,tz-.66,0);place('chairB',x,y0,tz+.66,PI);}}
+  for(const tz of [-6,-3,0,3,6])for(const tx of [x0+6.6,x0+14])table4(par,y0,tx,tz,cols419);
   /* bàn thủ thư cạnh cửa phía nam */
   mk(box(.7,.95,2.2),mat('#2f6db5',{roughness:.5}),x0+3.1,y0+.475,-4.8,par);mk(box(.8,.05,2.3),M.woodLight,x0+3.1,y0+.97,-4.8,par);
   place('monitor',x0+3.15,y0+1.0,-4.8,-PI/2);place('chairB',x0+3.9,y0,-4.8,-PI/2);cols419.push([x0+2.7,x0+3.5,-5.95,-3.65]);
   plant(x0+3.0,y0,z1-1.3,1.4,undefined,par);plant(x1-.7,y0,z1-1.3,1.4,undefined,par);
   window.__SEATTAG="A";
   /* biển phòng trên tường sảnh, trên mỗi cửa */
-  const sign=canvasTex(512,160,(g,w,hh)=>{g.fillStyle='#1f3f73';g.fillRect(0,0,w,hh);g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';
-    g.font='800 76px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('P419',w/2,hh*.42);g.fillStyle='#cfe0ff';g.font='500 30px "Be Vietnam Pro", system-ui, sans-serif';g.fillText('Phòng đọc',w/2,hh*.8);});
-  allText.push(sign);const sm=new THREE.MeshStandardMaterial({map:sign,roughness:.5});
+  const sm=sign4('P419');
   for(const [a,b] of doors)panel(1.5,.47,sm,XW-.03,y0+dh+.45,(a+b)/2,-PI/2,par);
   /* vỏ ngoài của cánh phòng (chỉ thấy từ ngoài toà nhà) */
-  const wm=mat('#ece4d8'),H2=y0+h+.3;
+  const wm=R4M.outer,H2=y0+h+.3;
   panel(wz,H2,wm,x1+.05,H2/2,cz,PI/2);panel(wx,H2,wm,cx,H2/2,z1+.05,0);panel(wx,H2,wm,cx,H2/2,z0-.05,PI);}
+
+/* ---------- phòng P402 trên tầng 4: phía tây sảnh (phòng đọc chuyên ngành A – P, theo sơ đồ tầng 4) ----------
+   Nửa phía tây là các dãy giá sách hai mặt; nửa giáp sảnh là bàn đọc dài. Cửa sổ rèm xanh ở tường tây. */
+const cols402=[];
+{const {x0,x1,z0,z1,h,doors,dh}=R2,y0=3*FH,par=UP[4],cx=(x0+x1)/2,cz=(z0+z1)/2,wx=x1-x0,wz=z1-z0;
+  window.__SEATTAG="r402";
+  slab4(par,y0,h,x0,x1,z0,z1);
+  panel(wz,h,wallMat,x0,y0+h/2,cz,PI/2,par);panel(wx,h,wallMat,cx,y0+h/2,z0,0,par);panel(wx,h,wallMat,cx,y0+h/2,z1,PI,par);
+  {let u=z0;for(const [a,b] of doors){panel(a-u,h,wallMat,x1-.01,y0+h/2,(u+a)/2,-PI/2,par);panel(b-a,h-dh,wallMat,x1-.01,y0+(h+dh)/2,(a+b)/2,-PI/2,par);
+      mk(box(.16,dh,.1),M.woodLight,x1,y0+dh/2,a,par,false);mk(box(.16,dh,.1),M.woodLight,x1,y0+dh/2,b,par,false);mk(box(.16,.1,b-a+.1),M.woodLight,x1,y0+dh,(a+b)/2,par,false);u=b;}
+    panel(z1-u,h,wallMat,x1-.01,y0+h/2,(u+z1)/2,-PI/2,par);}
+  for(const [ry,px,pz,len] of [[PI/2,x0+.02,cz,wz],[0,cx,z0+.02,wx],[PI,cx,z1-.02,wx]])panel(len,.12,R4M.skirt,px,y0+.06,pz,ry,par);
+  for(let i=0;i<5;i++)window4(par,y0,x0,z0+wz*(i+.5)/5,1);
+  for(let x=x0+2.5;x<x1-1;x+=4.2)for(let z=z0+2.2;z<z1-1;z+=4.6)mk(box(1.24,.04,.62),M.panel,x,y0+h-.03,z,ceil4,false);
+  for(const x of [x0+5,x1-5])for(const z of [-6,0,6])fan4(x,y0+h-.5,z);
+  /* dãy giá sách hai mặt ở nửa phía tây (song song trục x), lối đi giữa các dãy */
+  const SL=6,sx=x0+1.4+SL/2;
+  for(const z of [-7.2,-4.3,-1.4,1.4,4.3,7.2]){shelf4(par,y0,sx,z-.21,SL,PI);shelf4(par,y0,sx,z+.21,SL,0);
+    mk(box(.06,2.2,.86),M.wood,sx-SL/2-.03,y0+1.1,z,par);mk(box(.06,2.2,.86),M.wood,sx+SL/2+.03,y0+1.1,z,par);
+    cols402.push([sx-SL/2-.06,sx+SL/2+.06,z-.43,z+.43]);}
+  /* cột tròn trắng giữa khu giá sách và khu bàn đọc */
+  for(const z of [-7.9,7.9]){mk(cyl(.3,.3,h,24),M.column,x0+9.4,y0+h/2,z,par);cols402.push([x0+9.4,z,.3]);}
+  /* bàn đọc dài, ghế xanh hai bên */
+  for(const tz of [-6,-3,0,3,6])table4(par,y0,x1-5.1,tz,cols402,5.4);
+  /* bàn thủ thư cạnh cửa phía bắc, quay ra lối vào */
+  mk(box(.7,.95,2.2),R4M.cur,x1-1.6,y0+.475,4.6,par);mk(box(.8,.05,2.3),M.woodLight,x1-1.6,y0+.97,4.6,par);
+  place('monitor',x1-1.65,y0+1.0,4.6,PI/2);place('chairB',x1-2.4,y0,4.6,PI/2);cols402.push([x1-2.0,x1-1.2,3.45,5.75]);
+  plant(x1-.8,y0,z0+.8,1.4,undefined,par);plant(x1-.8,y0,z1-.8,1.4,undefined,par);
+  window.__SEATTAG="A";
+  const sm=sign4('P402');for(const [a,b] of doors)panel(1.5,.47,sm,-XW+.03,y0+dh+.45,(a+b)/2,PI/2,par);
+  const wm=R4M.outer,H2=y0+h+.3;
+  panel(wz,H2,wm,x0-.05,H2/2,cz,-PI/2);panel(wx,H2,wm,cx,H2/2,z1+.05,0);panel(wx,H2,wm,cx,H2/2,z0-.05,PI);}
 
 buildProps();
 {const im=new THREE.InstancedMesh(box(1,1,1),mat('#ffffff',{roughness:.75}),books.length);books.forEach((b,i)=>{im.setMatrixAt(i,b.m);im.setColorAt(i,b.c);});
@@ -1041,7 +1081,7 @@ const hint=$('#hint'),dpad=$('#dpad');
 const levelOf=y=>Math.max(1,Math.min(4,Math.round(y/FH)+1));
 function where(){const p=camera.position;if(rider)return `Thang máy · tầng ${rider.phase==='moving'?'…':rider.floor}`;
   const f=base/FH;if(Math.abs(f-Math.round(f))>.07)return 'Cầu thang';const lv=levelOf(base);
-  if(lv===4&&p.z<ZB-.1)return 'Phòng 401 · tầng 4';if(lv===4&&p.x>XW&&(p.x>R4.core.x1||Math.abs(p.z)>R4.core.z))return 'Phòng 419 · tầng 4';if(lv===1&&p.x<-XW)return 'Phòng mượn sách · tầng 1';return lv===1?'Sảnh tầng 1':`Tầng ${lv}`;}
+  if(lv===4&&p.z<ZB-.1)return 'Phòng 401 · tầng 4';if(lv===4&&p.x<-XW)return 'Phòng 402 · tầng 4';if(lv===4&&p.x>XW&&(p.x>R4.core.x1||Math.abs(p.z)>R4.core.z))return 'Phòng 419 · tầng 4';if(lv===1&&p.x<-XW)return 'Phòng mượn sách · tầng 1';return lv===1?'Sảnh tầng 1':`Tầng ${lv}`;}
 let lastWhere='';
 function setHint(){lastWhere=where();hint.textContent=mode==='walk'
   ?(`${lastWhere} · `+(touch?'Giữ nút mũi tên để đi · Vuốt để nhìn quanh · Thang máy ở tường bên phải':'W A S D để đi · Kéo để nhìn · Thang máy ở tường bên phải · Esc để thoát'))
@@ -1055,6 +1095,7 @@ function cameraInside(x,z,foot){
   if(!Number.isFinite(x)||!Number.isFinite(z)||!Number.isFinite(foot))return false;
   const m=.08,lvl=levelOf(foot);
   if(lvl===4&&z<ZB+1.1)return x>(z>ZB?-XW+m:ROOM.X0+m)&&x<(z>ZB?XW-m:ROOM.X1-m)&&z>ROOMZ+ROOM.Z0+m;
+  if(lvl===4&&foot>LBASE[4]-.3&&x<-XW+m&&z>ZB){if(x>-XW-.3)return inDoorOf(R2,z,m);return x>R2.x0+m&&z>R2.z0+m&&z<R2.z1-m;}
   if(lvl===4&&foot>LBASE[4]-.3&&x>XW-m&&z>ZB){if(x<XW+.3)return inDoor4(z,m);return x<R4.x1-m&&z>R4.z0+m&&z<R4.z1-m&&!(x<R4.core.x1+m&&Math.abs(z)<R4.core.z+m);}
   if(foot<.3&&x<-XW+m)return x>BRM.x0+m&&z>BRM.z0+m&&z<BRM.z1-m&&!(x>-XW-m&&Math.abs(z)>BRM.open-m);
   if(x<-XW+m||x>XW-m||z<ZB+m||z>ZF-m)return false;
@@ -1068,6 +1109,8 @@ function surface(x,z,cur){const lvl=levelOf(cur),l=liftAt(x,z);
     if(l.floor!==lvl||Math.abs(cur-LBASE[lvl])>.4)return null;if(inCab(l,x,z))return l.y;if(door)return l.door>.85?l.y:null;return null;}
   if(cur>LBASE[2]+1){const y=LBASE[lvl];
     if(lvl===4&&z<ZB+1.1){if(Math.abs(x)>(z>ZB?XW-.35:21.2)||z-ROOMZ<ROOM.Z0+.35)return null;return ROOM.hit(x,z-ROOMZ)?null:y;}
+    if(lvl===4&&x<-XW+.35){if(x>-XW-.35)return inDoorOf(R2,z,.35)?y:null;
+      if(x<R2.x0+.35||z<R2.z0+.35||z>R2.z1-.35)return null;return hit(cols402,x,z)?null:y;}
     if(lvl===4&&x>XW-.35){if(x<XW+.35)return inDoor4(z,.35)?y:null;
       if(x>R4.x1-.35||z<R4.z0+.35||z>R4.z1-.35||(x<R4.core.x1+.35&&Math.abs(z)<R4.core.z+.35))return null;return hit(cols419,x,z)?null:y;}
     if(x<-XW+.35||x>XW-.35||z<ZB+.35||z>ZF-.4)return null;
@@ -1172,7 +1215,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
   }else if(!tween&&mode==='orbit'){controls.update();if(camera.position.y<.4)camera.position.y=.4;}
   updateLifts(dt);
   const cp=camera.position;ROOM.update(dt,cp.x,cp.z-ROOMZ,mode==='walk');
-  ROOM.ceilingGroup.visible=cp.y<Y4+ROOM.H-.05;c419.visible=cp.y<Y4+R4.h-.05;for(const f of fans419)f.rotation.y+=dt*3.2;
+  ROOM.ceilingGroup.visible=cp.y<Y4+ROOM.H-.05;ceil4.visible=cp.y<Y4+R4.h-.05;for(const f of fans4)f.rotation.y+=dt*3.2;
   if(Math.abs(nightTarget-night)>.001){night+=(nightTarget-night)*Math.min(1,dt*3);applyNight(night);}
   cutNow=!fullView&&mode!=='walk'&&cp.y>CH+.5&&cp.z>ZB;UP[3].visible=UP[4].visible=TOP.visible=!cutNow;
   ME.onFrame&&ME.onFrame(dt,now,camera);ctx.world.background=scene.background;renderer.render(ctx.world,camera);ME.afterFrame&&ME.afterFrame();}
@@ -1190,7 +1233,7 @@ Object.assign(ME,{api:{camera,controls,scene,roomG,ROOMZ,Y4,FH,viewPose,flyTo,su
     if(arr&&arr.entrance){mode='walk';base=0;eyeY=1.6;rider=null;tween=null;fullView=false;controls.enabled=false;yaw=0;pitch=0;camera.position.set(0,1.6,11.3);
       camera.rotation.order='YXZ';camera.rotation.set(0,0,0);canvas.classList.add('walk');dpad.hidden=false;walkUI();setHint();}
     else if(arr)arrive(arr.floor,arr.idx,arr.pose);else{controls.enabled=mode==='orbit';if(!started)intro();}started=true;},
-  deactivate(){root.hidden=true;controls.enabled=false;for(const k in keys)keys[k]=0;UP[3].visible=UP[4].visible=TOP.visible=true;ROOM.ceilingGroup.visible=true;c419.visible=true;
+  deactivate(){root.hidden=true;controls.enabled=false;for(const k in keys)keys[k]=0;UP[3].visible=UP[4].visible=TOP.visible=true;ROOM.ceilingGroup.visible=true;ceil4.visible=true;
     for(const l of LIFTS){l.cab.visible=true;if(l.phase!=='idle'){l.phase='idle';l.target=null;l.key='';}}rider=null;},
   hideCab(i,v){LIFTS[i%LIFTS.length].cab.visible=v;},
   otherVisible:()=>!cutNow,

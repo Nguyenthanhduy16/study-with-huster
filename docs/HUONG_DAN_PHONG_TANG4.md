@@ -7,7 +7,7 @@ Trang thư viện chỉ có ảnh mặt ngoài; ảnh bên trong các phòng t�
 |---|---|---|---|---|
 | 401 | Phòng tự học / XLTT | dưới, giữa | sau tường `back` (z < −13) | có sẵn |
 | 419 | Phòng đọc chuyên ngành T – TJ | giữa, bên phải | phía `x > 19,5` (sau tường phải, quanh khối thang máy) | **đã làm** |
-| 402 | Phòng đọc chuyên ngành A – P | giữa, bên trái | phía `x < −19,5` (sau tường trái) | chưa làm |
+| 402 | Phòng đọc chuyên ngành A – P | giữa, bên trái | phía `x < −19,5` (sau tường trái) | **đã làm** |
 | 411 | Phòng đọc chuyên ngành Q – S | trên, giữa (phòng rộng nhất, có hàng cột) | phía `z > 13` (sau tường `front`) | chưa làm |
 | 404 | Phòng báo, tạp chí / hỗ trợ nghiên cứu | góc trên trái (nhỏ) | góc `x < −19,5`, `z > 9` | chưa làm |
 | 418 | Phòng tự học | góc trên phải (nhỏ) | góc `x > 19,5`, `z > 9` | chưa làm |
@@ -38,11 +38,11 @@ Mọi thứ nằm trong `scene/hust3d.js`, module A:
 
 ## Làm tiếp các phòng còn lại
 
-### P402 (đối xứng P419 qua trục x = 0)
-- Hằng số: `R2={x0:-XW-17,x1:-XW,z0:-9.5,z1:9.5,...}`. Phía tường trái không có thang máy, nên không cần `core`.
-- **Xung đột**: phòng mượn sách tầng 1 (`BRM`) cũng ở phía `x < −XW`, nhưng chỉ ở tầng 1. Các nhánh `surface`/`cameraInside` của P402 phải kiểm `lvl===4` (BRM kiểm `cur<.3`, nên không đụng nhau).
-- Tường trái tầng 4 hiện là một tấm liền: `onWall('left',0,y0+FH/2,ZF-ZB,FH,...)`. Cần tách thành nhiều đoạn chừa cửa (làm giống `run`), và bỏ các mảng trang trí `W('left',-6,…roomM)`, `W('left',6,…doorM)`, `W('left',10,…winM)` ở `lv===4`.
-- Nội thất: phòng đọc chuyên ngành, nhiều giá sách (có thể đặt 3–4 hàng giá đứng song song giữa phòng) và bàn đọc.
+### P402 (đã làm)
+- Hằng số `R2` nằm cùng dòng với `BRM` và `R4`. Phòng ở `x∈[−36,5; −19,5]`, `z∈[−9,5; 9,5]`, có hai cửa ở tường trái của sảnh tầng 4.
+- Nửa phía tây có 6 dãy giá sách hai mặt, nửa giáp sảnh có 5 bàn đọc dài. Bàn thủ thư đặt cạnh cửa bắc, cửa sổ rèm xanh ở tường tây.
+- Các phòng dùng chung hàm `shelf4`, `table4`, `fan4`, `window4`, `slab4`, `sign4`, nhóm trần `ceil4` và mảng quạt `fans4`. Phòng mới chỉ cần gọi các hàm này.
+- Phòng mượn sách tầng 1 (`BRM`) cũng ở phía tây, nhưng mọi nhánh của P402 đều kiểm `lvl===4`, nên hai phòng không ảnh hưởng nhau.
 
 ### P411 (sau tường front, z > 13)
 - Kích thước khoảng 30 × 15 m: `x∈[-15,15]`, `z∈[13, 28]`. Sơ đồ có hàng cột tròn dọc mép phòng giáp sảnh.
