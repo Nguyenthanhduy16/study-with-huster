@@ -4,11 +4,11 @@
    Chạy:   node tools/kiem_tra_tang5.mjs [--port=3150] [--out=thu-muc-anh] [--headed]
    Cần:    gói playwright + Chromium (tự bật máy chủ ngoại tuyến nếu cổng còn trống).
    Kiểm:   · đi thang máy từ tầng 1 lên tầng 5 (phím 5 trong cabin), bước ra hành lang tầng 5
-           · tên vị trí theo sơ đồ tầng 5 (509, 511, 518, 525, 526, Phòng học nhóm), mặt sàn tầng 5 = 4 × 4,5 m
+           · tên vị trí theo sơ đồ tầng 5 (509, 511, 518, 525, 526, 501), mặt sàn tầng 5 = 4 × 4,5 m
            · các phòng tầng 5 có đúng số chỗ ngồi như phòng tầng 4 cùng vị trí (402→509, 404→511, 411→518, 418→525,
-             419→526, 401→học nhóm); ngồi ghế phòng 518 bằng luồng thật goSit, đứng dậy
+             419→526, 401→501); ngồi ghế phòng 518 bằng luồng thật goSit, đứng dậy
            · thang máy tầng 5 → tầng 6 (chuyển sang khối B) và tầng 6 → tầng 5 (về khối A)
-           · ảnh chụp: cửa 518, bên trong 518 / 526 / 509, phòng học nhóm, giếng trời 5 tầng
+           · ảnh chụp: cửa 518, bên trong 518 / 526 / 509, phòng 501, giếng trời 5 tầng
    ===================================================================== */
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -91,7 +91,7 @@ try {
       f5: [at(0, 18, -20), at(0, 18, 20), at(-20, 18, 20), at(20, 18, 20), at(-30, 18, 0), at(30, 18, 0)],
       f4: [at(0, 13.5, -20), at(0, 13.5, 20), at(-20, 13.5, 20), at(20, 13.5, 20), at(-30, 13.5, 0), at(30, 13.5, 0)] }; });
   ok(pl.mode === 'walk' && Math.abs(pl.y - 18) < 0.1, `đứng trên hành lang tầng 5 (y = ${pl.y})`);
-  ok(pl.here === 'Tầng 5' && pl.fo === 18 && pl.f5.join() === 'Phòng học nhóm,Phòng 518,Phòng 511,Phòng 525,Phòng 509,Phòng 526', `tên vị trí tầng 5: ${pl.f5.join(' · ')}`);
+  ok(pl.here === 'Tầng 5' && pl.fo === 18 && pl.f5.join() === 'Phòng 501,Phòng 518,Phòng 511,Phòng 525,Phòng 509,Phòng 526', `tên vị trí tầng 5: ${pl.f5.join(' · ')}`);
   ok(pl.f4.join() === 'Phòng 401,Phòng 411,Phòng 404,Phòng 418,Phòng 402,Phòng 419', `tầng 4 giữ nguyên: ${pl.f4.join(' · ')}`);
   /* so mặt sàn đi được của tầng 5 với tầng 4 trên cả hai lưới (hành lang + phòng 518 / 401 có cùng bố cục) */
   const cmp = await page.evaluate(() => { const s = World.sp(); let same = 0, diff = [], n = 0, walk5 = 0;
@@ -108,8 +108,8 @@ try {
 
   /* ---------- ngồi ghế phòng 518 ---------- */
   const cnt = await page.evaluate(() => { const c = {}; for (const s of World.sp().seats) if (s.room) { c[s.room] = c[s.room] || { n: 0, fl: new Set() }; c[s.room].n++; c[s.room].fl.add(s.floor); } return Object.fromEntries(Object.entries(c).map(([k, v]) => [k, { n: v.n, fl: [...v.fl] }])); });
-  for (const [a, b] of [['402', '509'], ['404', '511'], ['411', '518'], ['418', '525'], ['419', '526'], ['401', 'học nhóm']])
-    ok(cnt[a] && cnt[b] && cnt[a].n === cnt[b].n && cnt[b].fl.join() === '18', `${b === 'học nhóm' ? 'phòng học nhóm' : 'phòng ' + b}: ${cnt[b] ? cnt[b].n : 0} chỗ ngồi ở mặt sàn 18 m (phòng ${a}: ${cnt[a] ? cnt[a].n : 0})`);
+  for (const [a, b] of [['402', '509'], ['404', '511'], ['411', '518'], ['418', '525'], ['419', '526'], ['401', '501']])
+    ok(cnt[a] && cnt[b] && cnt[a].n === cnt[b].n && cnt[b].fl.join() === '18', `phòng ${b}: ${cnt[b] ? cnt[b].n : 0} chỗ ngồi ở mặt sàn 18 m (phòng ${a}: ${cnt[a] ? cnt[a].n : 0})`);
   const seats = await page.evaluate(() => World.sp().seats.map((s, i) => ({ i, room: s.room })).filter(s => s.room === '518'));
   if (seats.length) {
     const i = seats[Math.floor(seats.length / 2)].i;

@@ -28,7 +28,7 @@ scene/hust3d.js   ← mô hình 3D (tự sinh từ hust-3d/index.html bằng too
 > **Tầng 5 (08/11/2026) sửa thẳng trong `scene/hust3d.js`** vì nguồn `hust-3d/index.html` không có trong repo. Mọi chỗ sửa có chú thích `/*[tang5]*/`:
 > `NF=5`, `STACK=5*FH+1.4`, `LBASE[5]`, `FLOORS`, `UP[5]`, `cols5`, tường tầng ≥ 4 khoét cửa như tầng 4; các phòng tầng 4 thành hàm dựng theo tầng
 > `room419/room402/room411(lv,tag,biển,dòng phụ,va chạm,vỏ)` và `cornerRoom(...,lv,shell)` rồi gọi thêm cho tầng 5 (nhãn ghế `r526`, `r509`, `r518`, `r525`, `r511`);
-> trần/quạt tầng 5 vào nhóm `ceil5` (`ceilFor(lv)`); phòng học nhóm = `buildRoom401(renderer, roomG5, {num:'HỌC NHÓM', title})`, nhãn ghế `r5hn`;
+> trần/quạt tầng 5 vào nhóm `ceil5` (`ceilFor(lv)`); phòng 501 (học nhóm) = `buildRoom401(renderer, roomG5, {num:'501', title})`, nhãn ghế `r5hn`;
 > `surface`/`cameraInside` dùng chung nhánh phòng cho tầng 4 và 5 (cùng bố cục ⇒ chung danh sách va chạm); `levelOf`, `where`, thang máy (`fl<NF`, `l.floor=NF`, phím `12345670`);
 > khối B: `LBASE` 1–5 và `OFF.y = 23.9`, `modFor = f<=5`. Khi tái tạo từ nguồn mới phải chép lại các chỗ này (hoặc đưa vào nguồn).
 > `scene/hust3d-dom.js`: thêm nút/ô chọn tầng 5. `tools/patch_scene.py` đã cập nhật móc `cameraInside` và `API_A`.
