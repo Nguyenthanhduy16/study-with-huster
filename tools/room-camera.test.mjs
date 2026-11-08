@@ -135,6 +135,11 @@ test('room 402 on floor 4 mirrors 419 on the west side and leaves the floor-1 le
   assert(!insideA(-30, 9.8, 13.5)); assert(!insideA(-37, 0, 13.5));
   assert(insideA(-23, 0, 0), 'lending room still reachable on floor 1');
 });
+test('room 411 on floor 4 sits behind the front wall, entered only through its central door', () => {
+  assert(insideA(0, 20, 13.5)); assert(insideA(-14, 27, 13.5)); assert(!insideA(0, 20, 9)); assert(!insideA(0, 20, 0));
+  assert(insideA(0, 13.1, 13.5), 'central doorway'); assert(!insideA(5, 13.1, 13.5), 'wall/glass beside the door');
+  assert(!insideA(16, 20, 13.5)); assert(!insideA(0, 28.5, 13.5));
+});
 test('actual B stadium footprint protects rounded corners, upper atrium and near-plane width', () => {
   assert(insideB(16, 0, 0)); assert(!insideB(16, 20, 0));
   assert(insideB(0, 0, 0)); assert(!insideB(0, 0, 5.25)); assert(insideB(0, 0, 10.8));
