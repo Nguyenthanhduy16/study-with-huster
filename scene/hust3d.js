@@ -869,7 +869,7 @@ function roundSet(par,list,x,y,z,top,n,cols){mk(cyl(.62,.62,.04,36),mat(top,{rou
 {const y=2*FH;for(const [x,z] of [[-18.6,11.8],[18.6,11.8],[-18.6,-11.8],[0,-12.2],[0,12.2],[18.6,-11.8]])plant(x,y,z,1.9,cols3,UP[3]);
   for(const s of [-1,1]){mk(box(2.6,.42,.55),mat('#d9dbe0'),s*8,y+.21,11.9,UP[3]);mk(box(2.62,.06,.57),M.woodLight,s*8,y+.47,11.9,UP[3]);cols3.push([s*8-1.3,s*8+1.3,11.6,12.2]);}
   for(const z of [-2.6,2.6])roundSet(UP[3],cols3,-17.2,y,z,'#3a3e48',3,['#9cb0c6']);}
-{const y=3*FH;for(const [x,z] of [[-18.6,11.8],[18.6,11.8],[-18.6,-11.8],[18.6,-11.8],[0,12.2]])plant(x,y,z,1.9,cols4,UP[4]);
+{const y=3*FH;for(const [x,z] of [[-18.6,11.8],[18.6,11.8],[-18.6,-11.8],[18.6,-11.8],[-2.6,12.2],[2.6,12.2]])plant(x,y,z,x&&Math.abs(x)<3?1.5:1.9,cols4,UP[4]);   // hai chậu cây hai bên cửa P411
   for(const [x,z] of [[-15,10.3],[-9.5,10.3],[9.5,10.3],[15,10.3],[-17.2,-3],[-17.2,3]])roundSet(UP[4],cols4,x,y,z,'#f2f2f0',4,['#9cb0c6','#2c3759']);}
 /* coffee and drinks vending machine on the tầng 4 corridor, outside room 401 */
 const coffeeTex=canvasTex(256,512,(g,w,h)=>{g.fillStyle='#2b1d17';g.fillRect(0,0,w,h);const gr=g.createLinearGradient(0,0,0,h*.5);gr.addColorStop(0,'#6b3f26');gr.addColorStop(1,'#3a2418');g.fillStyle=gr;g.fillRect(12,12,w-24,h*.48);
@@ -1047,7 +1047,7 @@ const cols411=[];
   for(const x of [-11.4,-5.8,5.8,11.4])for(const z of [z0+3.0,z0+7.7,z0+12.4])fan4(x,y0+h-.5,z,teal);
   /* cột tròn lớn đầu loe, quạt treo trên cột */
   for(const x of [-8.6,-3.0,3.0,8.6])for(const z of [z0+5.35,z0+10.05]){mk(cyl(.38,.38,h,28),M.column,x,y0+h/2,z,par);mk(cyl(.62,.4,.45,28),M.column,x,y0+h-.22,z,par);
-    mk(cyl(.44,.44,.1,28),mat('#e9e2d6'),x,y0+.05,z,par);const wf=mk(cyl(.2,.2,.06,16),M.metal,x,y0+2.55,z-.42,par,false);wf.rotation.x=PI/2;cols411.push([x,z,.38]);}
+    mk(cyl(.44,.44,.1,28),mat('#e9e2d6'),x,y0+.05,z,par);const wf=mk(cyl(.2,.2,.06,16),mat('#5b616b',{roughness:.5}),x,y0+2.55,z-.41,par,false);wf.rotation.x=PI/2;mk(cyl(.05,.05,.07,10),M.white,x,y0+2.55,z-.45,par,false).rotation.x=PI/2;cols411.push([x,z,.38]);}
   /* bàn dài màu be + ghế xanh, lối đi giữa từ cửa vào tới tủ sách */
   for(const tz of [z0+3.0,z0+7.7,z0+12.4])for(const tx of [-11.4,-5.8,5.8,11.4])table4(par,y0,tx,tz,cols411,5.0);
   /* tủ sách gỗ ở tường cuối, giá sắt xám dọc hai tường bên */
