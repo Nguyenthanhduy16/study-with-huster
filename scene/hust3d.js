@@ -420,6 +420,9 @@ const faceTo=(x,z,tx,tz)=>Math.atan2(tx-x,tz-z);
 const V=(x,y,z)=>new THREE.Vector3(x,y,z);
 /* a flat plane facing a given direction (ry: 0 → +z, PI → −z, PI/2 → +x, −PI/2 → −x) */
 function panel(w,h,m,x,y,z,ry,parent=scene){const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);p.position.set(x,y,z);p.rotation.y=ry;p.receiveShadow=true;parent.add(p);return p;}
+/* khung tủ/kệ hở mặt trước (mặt trước quay về +z cục bộ): tấm lưng, hai vách bên, nóc, chân — sách đặt bên trong vẫn nhìn thấy */
+function carcass(g,len,H,D,m,zc=0){const zb=zc-D/2;mk(box(len,H,.04),m,0,H/2,zb+.02,g);
+  for(const s of [-1,1])mk(box(.04,H,D),m,s*(len/2-.02),H/2,zc,g);mk(box(len,.04,D),m,0,H-.02,zc,g);mk(box(len,.1,D),m,0,.05,zc,g);}
 function tiled(tex,w,tileW,o={}){const t=tex.clone();t.needsUpdate=true;t.wrapS=THREE.RepeatWrapping;t.repeat.set(w/tileW,1);return new THREE.MeshStandardMaterial(Object.assign({map:t,roughness:.5},o));}
 /* colliders: circles [x,z,r] or rectangles [x0,x1,z0,z1]; G = tầng 1 floor, M = tầng 2 */
 const colsG=[],colsM=[];
@@ -838,7 +841,7 @@ allText.push(vendTex);
 
 /* ---------- tầng 2: a full ring of seating like tầng 7 ---------- */
 const bookCols=['#e2463f','#2f6fd6','#3cae55','#f2b632','#f07c2e','#f4f4f6','#36a7c9','#8b5bd6','#1f4aa8'].map(lin);const books=[];
-function shelfRun(x0,x1){const z=ZB+.25,len=x1-x0,cx=(x0+x1)/2;mk(box(len,2.2,.42),M.woodLight,cx,MZ+1.1,z);
+function shelfRun(x0,x1){const z=ZB+.25,len=x1-x0,cx=(x0+x1)/2;{const g=new THREE.Group();g.position.set(cx,MZ,z);scene.add(g);carcass(g,len,2.2,.42,M.woodLight);}
   for(const y of [.12,.55,.98,1.41,1.84]){mk(box(len-.04,.03,.4),M.wood,cx,MZ+y,z+.02,scene,false);
     let x=x0+.05;while(x<x1-.05){const w=.03+R()*.03,h=.24+R()*.13;if(R()<.05){x+=.08;continue;}if(x+w>x1-.05)break;
       books.push({m:T(x+w/2,MZ+y+.015+h/2,z+.06,0,0,0,w,h,.24),c:bookCols[R()*bookCols.length|0]});x+=w+.003;}}
@@ -901,7 +904,7 @@ const brCols=[];
   for(const z of [-2.5,0,2.5])mk(box(1.5,.04,.5),M.panel,cx,h-.03,z,scene,false);
   /* shelves on the three walls */
   const shelfAt=(sx,sz,len,ry)=>{const g=new THREE.Group();g.position.set(sx,0,sz);g.rotation.y=ry;scene.add(g);
-    mk(box(len,2.3,.42),M.woodLight,0,1.15,0,g);
+    carcass(g,len,2.3,.42,M.woodLight);
     for(const y of [.12,.56,1.0,1.44,1.88]){mk(box(len-.04,.03,.4),M.wood,0,y,.02,g,false);let x=-len/2+.05;
       while(x<len/2-.05){const w=.03+R()*.03,hh=.24+R()*.14;if(R()<.05){x+=.08;continue;}if(x+w>len/2-.05)break;
         const v=new THREE.Vector3(x+w/2,y+.015+hh/2,.06).applyAxisAngle(V(0,1,0),ry);books.push({m:T(sx+v.x,v.y,sz+v.z,0,ry,0,w,hh,.24),c:bookCols[R()*bookCols.length|0]});x+=w+.003;}}};
@@ -936,7 +939,7 @@ const ceil5=new THREE.Group();UP[5].add(ceil5);let ceilCur=ceil4;const ceilFor=l
 const R4M={top:mat('#e8dcc2',{roughness:.5}),leg:mat('#d9cbb0',{roughness:.55}),fan:mat('#f3f3f1',{roughness:.5}),cur:mat('#2f6db5',{roughness:.85}),ceil:mat('#f3f2ef'),outer:mat('#ece4d8'),skirt:mat('#cfc6b8')};
 /* tủ sách gỗ một mặt (mặt có sách quay về +z cục bộ), sách nạp vào books dùng chung */
 function shelf4(par,y0,sx,sz,len,ry,frame=M.woodLight,board=M.wood){const g=new THREE.Group();g.position.set(sx,y0,sz);g.rotation.y=ry;par.add(g);
-  mk(box(len,2.1,.42),frame,0,1.05,0,g);
+  carcass(g,len,2.1,.42,frame);
   for(const y of [.12,.52,.92,1.32,1.72]){mk(box(len-.04,.03,.4),board,0,y,.02,g,false);let x=-len/2+.05;
     while(x<len/2-.05){const w=.03+R()*.03,hh=.22+R()*.12;if(R()<.06){x+=.08;continue;}if(x+w>len/2-.05)break;
       const v=new THREE.Vector3(x+w/2,y+.015+hh/2,.06).applyAxisAngle(V(0,1,0),ry);books.push({m:T(sx+v.x,y0+v.y,sz+v.z,0,ry,0,w,hh,.24),c:bookCols[R()*bookCols.length|0]});x+=w+.003;}}}
@@ -1104,7 +1107,7 @@ cornerRoom(R18,'r418','P418','Phòng tự học',fill418,4,false);cornerRoom(R18
 /* P404 – phòng báo, tạp chí: kệ trưng bày tạp chí dọc tường, giá báo, bàn đọc ngắn */
 const fill404=({x0,x1,z0,z1,y0,par,cols})=>{
   const rack=(sx,sz,len,ry)=>{const g=new THREE.Group();g.position.set(sx,y0,sz);g.rotation.y=ry;par.add(g);
-    mk(box(len,1.9,.32),M.woodLight,0,.95,-.06,g);
+    carcass(g,len,1.9,.32,M.woodLight,-.06);
     for(let r=0;r<4;r++){const y=.35+r*.42;const sh=mk(box(len-.06,.02,.3),M.wood,0,y,.06,g,false);
       for(let x=-len/2+.2;x<len/2-.1;x+=.26){const v=new THREE.Vector3(x,y+.16,.1).applyAxisAngle(V(0,1,0),ry);
         books.push({m:new THREE.Matrix4().compose(V(sx+v.x,y0+v.y,sz+v.z),new THREE.Quaternion().setFromEuler(new THREE.Euler(-.22,ry,0,'YXZ')),V(.21,.29,.012)),c:bookCols[R()*bookCols.length|0]});}}};
