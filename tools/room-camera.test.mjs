@@ -123,6 +123,12 @@ test('actual A footprint preserves room401/lending wings, separating walls and t
   assert(insideA(0, 0, 0)); assert(!insideA(0, 0, 4.5)); assert(!insideA(0, 0, 9));
   assert(insideA(19.1, 10, 13.5), 'camera footprint uses physical margin rather than avatar furniture clearance');
 });
+test('room 419 on floor 4: through its doorways only, outside the lift core, not on lower floors', () => {
+  assert(insideA(30, 0, 13.5)); assert(!insideA(30, 0, 9)); assert(!insideA(30, 0, 0));
+  assert(insideA(19.6, 7.3, 13.5), 'doorway north of the lifts'); assert(insideA(19.6, -7.3, 13.5), 'doorway south of the lifts');
+  assert(!insideA(19.6, 5, 13.5), 'solid wall between door and lifts'); assert(!insideA(21, 0, 13.5), 'lift core');
+  assert(!insideA(30, 11, 13.5)); assert(!insideA(37, 0, 13.5));
+});
 test('actual B stadium footprint protects rounded corners, upper atrium and near-plane width', () => {
   assert(insideB(16, 0, 0)); assert(!insideB(16, 20, 0));
   assert(insideB(0, 0, 0)); assert(!insideB(0, 0, 5.25)); assert(insideB(0, 0, 10.8));
