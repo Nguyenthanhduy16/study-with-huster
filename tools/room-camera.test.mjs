@@ -91,8 +91,9 @@ function nearCorners(camera) {
   camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
   return [-1, 1].flatMap(x => [-1, 1].map(y => new THREE.Vector3(x, y, -1).unproject(camera)));
 }
-test('floor-4 outer corner keeps centre and all near-plane corners inside its floor footprint', () => {
-  const f = floorCamera(18.8, 12, 13.5, Math.PI / 4, .32, 3.4);
+test('floor-4 outer wall keeps centre and all near-plane corners inside its floor footprint', () => {
+  // tường phải giữa P419 (z < 9,5) và P418 (z > 13): phía sau không có phòng nào
+  const f = floorCamera(18.8, 11.2, 13.5, Math.PI / 2, .32, 3.4);
   assert.equal(f.free(f.old.x, f.old.y, f.old.z), false, 'old camera leaves library through corner');
   assert(f.free(f.camera.position.x, f.camera.position.y, f.camera.position.z), 'new camera near plane remains fully inside');
   assert(f.camera.position.distanceTo(f.focus) < 3.4);
@@ -122,6 +123,37 @@ test('actual A footprint preserves room401/lending wings, separating walls and t
   assert(!insideA(21.6, -20, 13.5)); assert(!insideA(0, -39, 13.5));
   assert(insideA(0, 0, 0)); assert(!insideA(0, 0, 4.5)); assert(!insideA(0, 0, 9));
   assert(insideA(19.1, 10, 13.5), 'camera footprint uses physical margin rather than avatar furniture clearance');
+});
+test('room 419 on floor 4: through its doorways only, outside the lift core, not on lower floors', () => {
+  assert(insideA(30, 0, 13.5)); assert(!insideA(30, 0, 9)); assert(!insideA(30, 0, 0));
+  assert(insideA(19.6, 7.3, 13.5), 'doorway north of the lifts'); assert(insideA(19.6, -7.3, 13.5), 'doorway south of the lifts');
+  assert(!insideA(19.6, 5, 13.5), 'solid wall between door and lifts'); assert(!insideA(21, 0, 13.5), 'lift core');
+  assert(!insideA(30, 11, 13.5)); assert(!insideA(37, 0, 13.5));
+});
+test('room 402 on floor 4 mirrors 419 on the west side and leaves the floor-1 lending room alone', () => {
+  assert(insideA(-30, 0, 13.5)); assert(!insideA(-30, 0, 9)); assert(!insideA(-30, 0, 0), 'floor 1 west of the lending room');
+  assert(insideA(-19.6, 7.3, 13.5)); assert(insideA(-19.6, -7.3, 13.5)); assert(!insideA(-19.6, 0, 13.5), 'solid wall between the doors');
+  assert(!insideA(-30, 9.8, 13.5)); assert(!insideA(-37, 0, 13.5));
+  assert(insideA(-23, 0, 0), 'lending room still reachable on floor 1');
+});
+test('room 411 on floor 4 sits behind the front wall, entered only through its central door', () => {
+  assert(insideA(0, 20, 13.5)); assert(insideA(-14, 27, 13.5)); assert(!insideA(0, 20, 9)); assert(!insideA(0, 20, 0));
+  assert(insideA(0, 13.1, 13.5), 'central doorway'); assert(!insideA(5, 13.1, 13.5), 'wall/glass beside the door');
+  assert(!insideA(15.1, 20, 13.5), 'between the walls of 411 and 418'); assert(!insideA(0, 28.5, 13.5));
+});
+test('corner rooms 404 and 418 open from the front wall of floor 4', () => {
+  for (const s of [-1, 1]) {
+    assert(insideA(s * 20, 20, 13.5)); assert(!insideA(s * 20, 20, 9));
+    assert(insideA(s * 17.3, 13.1, 13.5), 'doorway'); assert(!insideA(s * 19.2, 13.1, 13.5), 'wall beside the door');
+    assert(!insideA(s * 26.3, 20, 13.5)); assert(!insideA(s * 20, 25.8, 13.5));
+  }
+});
+test('floor 5 repeats the floor-4 rooms (509, 526, 518, 511, 525, group study) with the same doorways', () => {
+  assert(insideA(30, 0, 18), 'P526 east'); assert(insideA(-30, 0, 18), 'P509 west'); assert(insideA(0, 20, 18), 'P518 front');
+  for (const s of [-1, 1]) { assert(insideA(s * 20, 20, 18), 'P511 / P525 corners'); assert(insideA(s * 17.3, 13.1, 18), 'corner doorway'); }
+  assert(insideA(19.6, 7.3, 18) && insideA(-19.6, -7.3, 18), 'side doorways'); assert(!insideA(19.6, 5, 18) && !insideA(21, 0, 18), 'wall and lift core');
+  assert(insideA(0, 13.1, 18) && !insideA(5, 13.1, 18), 'P518 central door only');
+  assert(insideA(20, -20, 18), 'group-study room behind the back wall, like 401'); assert(!insideA(0, 0, 18), 'atrium void');
 });
 test('actual B stadium footprint protects rounded corners, upper atrium and near-plane width', () => {
   assert(insideB(16, 0, 0)); assert(!insideB(16, 20, 0));

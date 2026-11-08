@@ -8,21 +8,22 @@ Bản demo web ôn thi cộng đồng: sinh viên học ở nhà nhưng vẫn th
 
 ## Tầng 5 thư viện (08/11/2026)
 
-Dựng theo sơ đồ "Tầng 5 - Tòa nhà Thư viện Tạ Quang Bửu", thiết kế giống tầng 4, chỉ đổi số phòng bên ngoài cho đúng:
+Dựng theo sơ đồ "Tầng 5 - Tòa nhà Thư viện Tạ Quang Bửu", **giống hệt tầng 4** (gồm các phòng P402–P419 đã làm), chỉ đổi số phòng. Sơ đồ tầng 4 và tầng 5 cùng hướng nên mỗi phòng tầng 5 nằm đúng trên phòng tầng 4 cùng vị trí:
 
-| Vị trí (theo sơ đồ) | Trong cảnh |
-|---|---|
-| Phía sau giếng trời: **518** | Phòng đọc lớn dựng giống phòng 401 (cùng bàn ghế, giá sách, quầy, 162 chỗ ngồi), biển "PHÒNG 518". Đi vào, ngồi được. |
-| Góc sau trái: **511** · Giữa trái: **509** (phòng đọc chuyên ngành T – TJ) | Cửa gỗ có biển 511; phòng kính có biển "509 · Phòng đọc T – TJ". |
-| Góc sau phải: **525** · Giữa phải: **526** (phòng đọc chuyên ngành TK – Z) | Cửa gỗ có biển 525; phòng kính có biển "526 · Phòng đọc TK – Z" (cửa thang máy vẫn ở giữa tường phải). |
-| Phía trước: **Phòng học nhóm** | Phòng kính giữa hai cửa sổ, biển xanh "Phòng học nhóm". |
-| Hành lang | Bàn tròn, chậu cây như tầng 4 (không có máy cà phê). |
+| Vị trí trên sơ đồ | Tầng 4 | Tầng 5 | Trong cảnh |
+|---|---|---|---|
+| Trên, giữa | P411 | **P518** · phòng đọc | sau tường trước sảnh, cửa giữa có cổng an ninh |
+| Góc trên trái | P404 | **P511** | góc trước bên trái |
+| Góc trên phải | P418 | **P525** | góc trước bên phải |
+| Giữa, bên trái | P402 | **P509** · phòng đọc chuyên ngành T – TJ | phía tây sảnh, hai cửa |
+| Giữa, bên phải | P419 | **P526** · phòng đọc chuyên ngành TK – Z | phía đông sảnh, sau khối thang máy |
+| Dưới, giữa | 401 | **Phòng học nhóm** | sau giếng trời (dựng như phòng 401) |
 
-- Thang máy chạy tầng 1 · 2 · 3 · 4 · **5** · 6 · 7 · 10 (bảng bấm, phím số 5 trong cabin, ô "Đến tầng"). Khối tầng 6–7–10 được nâng lên đúng một tầng (4,5 m) để nằm trên tầng 5.
-- Bản đồ nhỏ, tên vị trí ("Tầng 5", "Phòng 518"), chỉ đường tới bạn ở tầng 5, khu "Thư viện · Tầng 1–5".
-- 509, 511, 525, 526 và phòng học nhóm là mặt tiền (cửa/kính + biển số), chưa đi vào bên trong được.
-- Nguồn tham khảo: sơ đồ tầng 5 do bạn gửi; tài liệu hướng dẫn thư viện của ĐHBK (phòng 509 T–TJ, 526 TK–Z là phòng đọc chuyên ngành). Không tìm được ảnh chụp bên trong các phòng tầng 5 nên nội thất phòng 518 giữ như phòng 401.
-- Kiểm tra: `npm run test:tang5` (Chromium + WebGL phần mềm) — đi thang máy 1 → 5, hành lang và lưới đi bộ tầng 5, tên vị trí, ngồi/đứng ở phòng 518, thang máy 5 ⇄ 6, ảnh chụp các mặt tường.
+- Mọi phòng đi vào và ngồi được, số chỗ ngồi bằng phòng tầng 4 tương ứng. Hành lang tầng 5 có bàn tròn, chậu cây như tầng 4 (không có máy cà phê).
+- Thang máy chạy tầng 1 · 2 · 3 · 4 · **5** · 6 · 7 · 10 (bảng bấm, phím 5 trong cabin, ô "Đến tầng"). Khối tầng 6–7–10 nâng lên đúng một tầng (4,5 m).
+- Bản đồ nhỏ, tên vị trí ("Phòng 518"…), chỉ đường tới bạn ở tầng 5, khu "Thư viện · Tầng 1–5".
+- Chưa rõ chức năng P511, P525 (biển chỉ ghi "Tầng 5"); nội thất lấy theo P404, P418. Có ảnh thật thì chỉnh trong `scene/hust3d.js` (hàm `fill404`/`fill418` dùng chung — muốn khác thì tách hàm riêng).
+- Kiểm tra: `npm run test:tang5` (Chromium + WebGL phần mềm), `npm test` có thêm kiểm tra biên camera các phòng tầng 5.
 
 ## Đợt 3 — tiếp tục từ mã đã push (04/11/2026)
 
