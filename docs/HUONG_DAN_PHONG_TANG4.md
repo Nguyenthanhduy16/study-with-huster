@@ -9,8 +9,8 @@ Nguồn: sơ đồ tầng chính thức của thư viện (`library.hust.edu.vn/
 | 419 | Phòng đọc chuyên ngành T – TJ | giữa, bên phải | phía `x > 19,5` (sau tường phải, quanh khối thang máy) | **đã làm** |
 | 402 | Phòng đọc chuyên ngành A – P | giữa, bên trái | phía `x < −19,5` (sau tường trái) | **đã làm** |
 | 411 | Phòng đọc chuyên ngành Q – S | trên, giữa (phòng rộng nhất, có hàng cột) | phía `z > 13` (sau tường `front`) | **đã làm** |
-| 404 | Phòng báo, tạp chí / hỗ trợ nghiên cứu | góc trên trái (nhỏ) | góc `x < −19,5`, `z > 9` | chưa làm |
-| 418 | Phòng tự học | góc trên phải (nhỏ) | góc `x > 19,5`, `z > 9` | chưa làm |
+| 404 | Phòng báo, tạp chí / hỗ trợ nghiên cứu | góc trên trái (nhỏ) | `x∈[−26; −15,2]`, `z∈[13; 25,6]` | **đã làm** |
+| 418 | Phòng tự học | góc trên phải (nhỏ) | `x∈[15,2; 26]`, `z∈[13; 25,6]` | **đã làm** |
 
 Tỉ lệ: sảnh trong cảnh rộng 39 m ứng với khoảng 350 px trên sơ đồ, tức khoảng **0,11 m/px**. Vì vậy 402 và 419 có kích thước khoảng 17 × 19 m, 411 khoảng 30 × 15 m, còn 404 và 418 khoảng 9 × 13 m.
 
@@ -54,9 +54,12 @@ Mọi thứ nằm trong `scene/hust3d.js`, module A:
 - Phòng không có vỏ ngoài, để góc nhìn "Toàn cảnh" (camera ở phía trước toà nhà) không bị che.
 - Nhánh `surface`/`cameraInside` của P411 kiểm `lvl===4 && z>ZF && |x|<XW`. Trong adapter, `bz` được nới thành `[-40, 30]`.
 
-### P404 và P418 (hai góc phía trên)
-- Khoảng 9 × 13 m, ví dụ P418: `x∈[XW, XW+9]`, `z∈[10, 23]`. Lối vào từ hành lang của P411 hoặc từ P419. Nếu làm sau P411, có thể mở cửa từ hành lang trong P411.
-- Tường giáp P419 (z = 9,5) phải ghép đúng với `R4.z1`. P418 nằm ở góc `x > 15`, `z > 13`, nên không đụng P411 (P411 kết thúc ở x = 15).
+### P404 và P418 (đã làm)
+- `R04` và `R18` đặt cạnh `R11`. `FRONT4=[R04,R11,R18]` là danh sách các phòng có cửa trên tường trước tầng 4. Tường trước được cắt theo danh sách này, và các nhánh `surface`/`cameraInside` cũng duyệt danh sách này. Muốn thêm phòng phía trước, chỉ cần thêm vào `FRONT4`.
+- Hàm `cornerRoom(R,tag,ký_hiệu,dòng_phụ,fill)` dựng sàn, trần, tường, cửa, cửa sổ, đèn, quạt, biển phòng và vỏ ngoài. Hàm `fill` đặt đồ đạc riêng cho từng phòng.
+- **P418 (tự học):** 4 bàn dài với ghế xanh (56 chỗ), giá để cặp sách cạnh cửa.
+- **P404 (báo, tạp chí):** kệ trưng bày tạp chí (bìa màu, nghiêng) dọc tường tây và tường cuối, 2 giá treo báo, 4 bàn đọc ngắn.
+- Chưa có ảnh thật bên trong hai phòng này; nội thất dựng theo chức năng phòng. Có ảnh thì chỉnh lại trong hàm `fill`.
 
 ### Kiểm tra sau mỗi phòng
 ```bash
