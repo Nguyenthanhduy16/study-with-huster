@@ -71,6 +71,6 @@ Kiểm `HUST3D.A.api.surface(x,z,3*4.5)` tại khe cửa (phải khác `null`) v
 ## Tầng 5 dùng lại các phòng này
 
 Mỗi khối phòng là một hàm dựng theo tầng: `room419`, `room402`, `room411`, `cornerRoom(..., lv, shell)`. Tầng 4 gọi với số cũ, tầng 5 gọi lại với số theo sơ đồ tầng 5:
-P419 → **P526** (TK – Z), P402 → **P509** (T – TJ), P411 → **P518**, P418 → **P525**, P404 → **P511**, phòng 401 → **Phòng học nhóm**.
+P419 → **P526** (TK – Z), P402 → **P509** (T – TJ), P411 → **P518**, P418 → **P525**, P404 → **P511**, phòng 401 → **Phòng 501** (phòng học nhóm).
 Sửa nội thất một phòng tầng 4 là phòng tầng 5 cùng vị trí đổi theo. Vỏ ngoài chỉ dựng một lần (lần gọi tầng 5, cao từ mặt đất tới trần tầng 5).
 Va chạm của tầng 5 dùng chung danh sách của tầng 4 vì cùng bố cục; nếu sau này cho hai tầng khác nội thất thì phải tách danh sách va chạm theo tầng.

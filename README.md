@@ -17,7 +17,7 @@ Dựng theo sơ đồ "Tầng 5 - Tòa nhà Thư viện Tạ Quang Bửu", **gi�
 | Góc trên phải | P418 | **P525** | góc trước bên phải |
 | Giữa, bên trái | P402 | **P509** · phòng đọc chuyên ngành T – TJ | phía tây sảnh, hai cửa |
 | Giữa, bên phải | P419 | **P526** · phòng đọc chuyên ngành TK – Z | phía đông sảnh, sau khối thang máy |
-| Dưới, giữa | 401 | **Phòng học nhóm** | sau giếng trời (dựng như phòng 401) |
+| Dưới, giữa | 401 | **Phòng 501** (phòng học nhóm) | sau giếng trời (dựng như phòng 401) |
 
 - Mọi phòng đi vào và ngồi được, số chỗ ngồi bằng phòng tầng 4 tương ứng. Hành lang tầng 5 có bàn tròn, chậu cây như tầng 4 (không có máy cà phê).
 - Thang máy chạy tầng 1 · 2 · 3 · 4 · **5** · 6 · 7 · 10 (bảng bấm, phím 5 trong cabin, ô "Đến tầng"). Khối tầng 6–7–10 nâng lên đúng một tầng (4,5 m).

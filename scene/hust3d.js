@@ -923,9 +923,9 @@ const brCols=[];
 /* ---------- room 401 on tầng 4, behind the back wall ---------- */
 const roomG=new THREE.Group();roomG.position.set(0,3*FH,ROOMZ);UP[4].add(roomG);
 window.__SEATTAG="r401";const ROOM=buildRoom401(renderer,roomG);window.__SEATTAG="A";
-/* [tang5] tầng 5, ngay trên phòng 401: PHÒNG HỌC NHÓM (vị trí "dưới, giữa" trên sơ đồ tầng 5, như 401 trên sơ đồ tầng 4) */
+/* [tang5] tầng 5, ngay trên phòng 401: PHÒNG 501 (phòng học nhóm) (vị trí "dưới, giữa" trên sơ đồ tầng 5, như 401 trên sơ đồ tầng 4) */
 const roomG5=new THREE.Group();roomG5.position.set(0,4*FH,ROOMZ);UP[5].add(roomG5);
-window.__SEATTAG="r5hn";const ROOM5=buildRoom401(renderer,roomG5,{num:'HỌC NHÓM',title:'Phòng học nhóm · Tầng 5'});window.__SEATTAG="A";
+window.__SEATTAG="r5hn";const ROOM5=buildRoom401(renderer,roomG5,{num:'501',title:'Phòng 501 · Phòng học nhóm'});window.__SEATTAG="A";
 const roomOf=lv=>lv===5?ROOM5:ROOM;
 /* the wing that holds room 401, seen from outside */
 {const wm=mat('#ece4d8'),zb=ROOMZ+ROOM.Z0-.05,len=ZB-zb,cz=(ZB+zb)/2,h=4*FH+ROOM.H+.3;/*[tang5] cánh nhà chứa 401 + phòng học nhóm*/
@@ -1184,7 +1184,7 @@ const hint=$('#hint'),dpad=$('#dpad');
 const levelOf=y=>Math.max(1,Math.min(NF,Math.round(y/FH)+1));/*[tang5]*/
 function where(){const p=camera.position;if(rider)return `Thang máy · tầng ${rider.phase==='moving'?'…':rider.floor}`;
   const f=base/FH;if(Math.abs(f-Math.round(f))>.07)return 'Cầu thang';const lv=levelOf(base);
-  if(lv===4&&p.z<ZB-.1)return 'Phòng 401 · tầng 4';if(lv===4&&p.z>ZF)return `Phòng ${p.x>R18.x0?418:p.x<R04.x1?404:411} · tầng 4`;if(lv===4&&p.x<-XW)return 'Phòng 402 · tầng 4';if(lv===4&&p.x>XW&&(p.x>R4.core.x1||Math.abs(p.z)>R4.core.z))return 'Phòng 419 · tầng 4';if(lv===5){/*[tang5] sơ đồ tầng 5: 401→học nhóm, 404→511, 411→518, 418→525, 402→509, 419→526*/if(p.z<ZB-.1)return 'Phòng học nhóm · tầng 5';if(p.z>ZF)return `Phòng ${p.x>R18.x0?525:p.x<R04.x1?511:518} · tầng 5`;if(p.x<-XW)return 'Phòng 509 · tầng 5';if(p.x>XW&&(p.x>R4.core.x1||Math.abs(p.z)>R4.core.z))return 'Phòng 526 · tầng 5';}if(lv===1&&p.x<-XW)return 'Phòng mượn sách · tầng 1';return lv===1?'Sảnh tầng 1':`Tầng ${lv}`;}
+  if(lv===4&&p.z<ZB-.1)return 'Phòng 401 · tầng 4';if(lv===4&&p.z>ZF)return `Phòng ${p.x>R18.x0?418:p.x<R04.x1?404:411} · tầng 4`;if(lv===4&&p.x<-XW)return 'Phòng 402 · tầng 4';if(lv===4&&p.x>XW&&(p.x>R4.core.x1||Math.abs(p.z)>R4.core.z))return 'Phòng 419 · tầng 4';if(lv===5){/*[tang5] sơ đồ tầng 5: 401→501, 404→511, 411→518, 418→525, 402→509, 419→526*/if(p.z<ZB-.1)return 'Phòng 501 · tầng 5';if(p.z>ZF)return `Phòng ${p.x>R18.x0?525:p.x<R04.x1?511:518} · tầng 5`;if(p.x<-XW)return 'Phòng 509 · tầng 5';if(p.x>XW&&(p.x>R4.core.x1||Math.abs(p.z)>R4.core.z))return 'Phòng 526 · tầng 5';}if(lv===1&&p.x<-XW)return 'Phòng mượn sách · tầng 1';return lv===1?'Sảnh tầng 1':`Tầng ${lv}`;}
 let lastWhere='';
 function setHint(){lastWhere=where();hint.textContent=mode==='walk'
   ?(`${lastWhere} · `+(touch?'Giữ nút mũi tên để đi · Vuốt để nhìn quanh · Thang máy ở tường bên phải':'W A S D để đi · Kéo để nhìn · Thang máy ở tường bên phải · Esc để thoát'))

@@ -5,7 +5,7 @@
 
    SceneAPI.ready              Promise — mô hình + sân thư viện đã dựng xong
    SceneAPI.spaces             { campus, A, B }
-     campus: sân thư viện (file GLB)   A: thư viện tầng 1–5 (phòng 401…419, 509…526, phòng học nhóm)   B: tầng 6–7   D: sân thượng tầng 10
+     campus: sân thư viện (file GLB)   A: thư viện tầng 1–5 (phòng 401…419, 501…526)   B: tầng 6–7   D: sân thượng tầng 10
    Mỗi space:
      kind        'campus' | 'room'
      group       nhóm 3D để thêm nhân vật vào
@@ -288,7 +288,7 @@
     /* ---- ghế trong thư viện ---- */
     A.group.updateMatrixWorld(true);
     const mA = new THREE.Matrix4().copy(A.group.matrixWorld).invert().multiply(A.api.roomG.matrixWorld);
-    // phòng học nhóm tầng 5 dựng giống hệt phòng 401, ở ngay phía trên
+    // phòng 501 (phòng học nhóm) tầng 5 dựng giống hệt phòng 401, ở ngay phía trên
     const mA5 = A.api.roomG5 ? new THREE.Matrix4().copy(A.group.matrixWorld).invert().multiply(A.api.roomG5.matrixWorld) : null;
     const v = new THREE.Vector3();
     const expand = (s, out, floorOf) => {
@@ -300,7 +300,7 @@
     const seatsA = [];
     for (const s of log) {
       if (s.tag === 'r401') { v.set(s.x, s.y, s.z).applyMatrix4(mA); expand(Object.assign({}, s, { x: v.x, y: v.y, z: v.z }), seatsA, floorA); seatsA[seatsA.length - 1].room = '401'; }
-      else if (s.tag === 'r5hn' && mA5) { v.set(s.x, s.y, s.z).applyMatrix4(mA5); expand(Object.assign({}, s, { x: v.x, y: v.y, z: v.z }), seatsA, floorA); seatsA[seatsA.length - 1].room = 'học nhóm'; }
+      else if (s.tag === 'r5hn' && mA5) { v.set(s.x, s.y, s.z).applyMatrix4(mA5); expand(Object.assign({}, s, { x: v.x, y: v.y, z: v.z }), seatsA, floorA); seatsA[seatsA.length - 1].room = '501'; }
       else if (/^r(4(19|02|11|04|18)|5(26|09|18|11|25))$/.test(s.tag)) { expand(s, seatsA, floorA); seatsA[seatsA.length - 1].room = s.tag.slice(1); }
       else if (s.tag === 'A') expand(s, seatsA, floorA);
     }
@@ -374,7 +374,7 @@
         floorOf: y => Math.max(0, Math.min(4, Math.round(y / FH))) * FH,
         place(x, y, z) { const fl = Math.round(y / FH) + 1; return fl === 4 && z < -13 ? 'Phòng 401' : fl === 4 && z > 13 ? (x > 15.1 ? 'Phòng 418' : x < -15.1 ? 'Phòng 404' : 'Phòng 411') : fl === 4 && x < -19.5 ? 'Phòng 402' : fl === 4 && x > 19.5 && (x > 22 || Math.abs(z) > 3.7) ? 'Phòng 419' :
           /* tầng 5 cùng bố cục tầng 4, số phòng theo sơ đồ tầng 5 */
-          fl === 5 && z < -13 ? 'Phòng học nhóm' : fl === 5 && z > 13 ? (x > 15.1 ? 'Phòng 525' : x < -15.1 ? 'Phòng 511' : 'Phòng 518') : fl === 5 && x < -19.5 ? 'Phòng 509' : fl === 5 && x > 19.5 && (x > 22 || Math.abs(z) > 3.7) ? 'Phòng 526' : 'Tầng ' + fl; },
+          fl === 5 && z < -13 ? 'Phòng 501' : fl === 5 && z > 13 ? (x > 15.1 ? 'Phòng 525' : x < -15.1 ? 'Phòng 511' : 'Phòng 518') : fl === 5 && x < -19.5 ? 'Phòng 509' : fl === 5 && x > 19.5 && (x > 22 || Math.abs(z) > 3.7) ? 'Phòng 526' : 'Tầng ' + fl; },
         walkNow(x, y, z, yaw) { A.api.walkNow(V(x, y + 1.6, z), yaw); }
       }),
       B: roomSpace(B, seatsB, {
